@@ -21,7 +21,8 @@
         </div>
       </div>
       <nav class="tabs" id="tabs">
-        <button class="tab is-active" data-tab="inspire">영감 얻기</button>
+        <button class="tab tab-producer is-active" data-tab="producer">🎬 영상 만들기</button>
+        <button class="tab" data-tab="inspire">영감 얻기</button>
         <button class="tab" data-tab="write">이야기 짓기</button>
         <button class="tab" data-tab="library">이야기 서재 <span class="count" id="libCount">0</span></button>
         <button class="tab tab-studio" data-tab="studio">대본 공방 ✦</button>
@@ -29,8 +30,60 @@
     </header>
 
     <main>
+      <!-- ============ 영상 만들기 (제작 마법사) ============ -->
+      <section class="panel is-active" id="panel-producer">
+        <div class="prod">
+          <div class="prod-topbar">
+            <div class="prod-stepper" id="prodStepper"></div>
+            <div class="prod-topbtns">
+              <button class="btn btn-ghost sm" id="prodProjects">내 프로젝트</button>
+              <button class="btn btn-ghost sm" id="prodSettings">⚙ 키 설정</button>
+            </div>
+          </div>
+
+          <!-- 키 설정 패널 -->
+          <div class="settings-panel" id="prodKeyPanel" hidden>
+            <label class="field">
+              <span class="field-label">Anthropic API 키 <small>(대본·주제·프롬프트 생성)</small></span>
+              <input type="password" id="prodClaudeKey" placeholder="sk-ant-..." autocomplete="off" />
+            </label>
+            <label class="field">
+              <span class="field-label">Google AI(Gemini) API 키 <small>(나노 바나나 이미지 생성)</small></span>
+              <input type="password" id="prodGeminiKey" placeholder="AIza..." autocomplete="off" />
+            </label>
+            <div class="editor-row">
+              <label class="field" style="flex:1">
+                <span class="field-label">대본 생성 모델</span>
+                <input type="text" id="prodModel" list="modelList" placeholder="claude-opus-5" />
+              </label>
+              <label class="field" style="flex:1">
+                <span class="field-label">이미지 모델</span>
+                <input type="text" id="prodImgModel" list="imgModelList" placeholder="gemini-2.5-flash-image" />
+                <datalist id="imgModelList">
+                  <option value="gemini-2.5-flash-image"></option>
+                  <option value="gemini-2.5-flash-image-preview"></option>
+                  <option value="gemini-2.0-flash-preview-image-generation"></option>
+                </datalist>
+              </label>
+            </div>
+            <p class="settings-note">키는 이 브라우저에만 저장됩니다. Anthropic: <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> · Google AI: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></p>
+            <button class="btn btn-primary sm" id="prodSaveKeys">저장</button>
+          </div>
+
+          <!-- 프로젝트 목록 패널 -->
+          <div class="settings-panel" id="prodProjPanel" hidden>
+            <span class="field-label">저장된 프로젝트</span>
+            <div id="prodProjList" class="proj-list"></div>
+          </div>
+
+          <div class="prod-body" id="prodBody"></div>
+
+          <div class="prod-nav" id="prodNav"></div>
+        </div>
+      </section>
+
       <!-- ============ 영감 얻기 ============ -->
-      <section class="panel is-active" id="panel-inspire">
+      <section class="panel" id="panel-inspire">
         <div class="panel-head">
           <h2>이야기 씨앗 뽑기</h2>
           <p class="hint">주사위를 굴리듯 옛이야기 재료를 뽑아 보세요. 마음에 드는 조합이 나오면 <b>이 씨앗으로 이야기 짓기</b>를 눌러 바로 글을 쓸 수 있어요.</p>
@@ -223,5 +276,6 @@
   <script src="prompts.js"></script>
   <script src="app.js"></script>
   <script src="studio.js"></script>
+  <script src="producer.js"></script>
 </body>
 </html>
