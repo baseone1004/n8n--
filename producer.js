@@ -630,67 +630,86 @@ ${TITLE_PATTERNS}
     navBtn("이 주제로 대본 만들기 →", loadScript, true);
   }
 
+  // 대본: 1시간 30분~2시간(약 35,000~40,000자). 뼈대 → 장면별 긴 나레이션 배치 생성.
+  const SCENE_COUNT = 32;   // 장면 수 (이미지 컷 수)
+  const BATCH = 4;          // 배치당 장면 수
+
   async function loadScript() {
     if (project.topicIdx < 0) { toast("주제를 하나 고르세요"); return; }
     const body = $("#prodBody");
-    busy = true; loading(body, "제목·태그·설명·대본을 짓는 중… (조금 걸려요)"); renderNav();
+    const ja = project.lang === "ja";
+    const topic = project.topics[project.topicIdx];
+    busy = true; loading(body, "이야기 뼈대(제목·설명·장면 흐름)를 잡는 중…"); renderNav();
     try {
-      const topic = project.topics[project.topicIdx];
-      const ja = project.lang === "ja";
-      const sys = `너는 ${LANG[project.lang].audience} 대본 작가다. 낭독용 옛이야기체로 장면이 눈에 그려지게 쓴다. 규칙:
-- 결말·정체·반전은 제목과 인트로에서 절대 미리 노출하지 않는다.
-- 나레이션은 '~습니다'와 '~지요'를 섞고, 같은 어미를 3문장 이상 연속하지 않는다.${ja ? " (일본어면 정중한 낭독체 です/ます를 자연스럽게 섞는다.)" : ""}
-- 요약 나레이션보다 인물 대사를 자주 넣는다. 수사 질문('그런데 이게 웬일입니까?')·짧은 전환 문장('그때였습니다')으로 리듬을 만든다.
-- 문장은 15~25자로 짧게. ${ja ? "쉬운 일본어로 쓴다." : "한자 없이 순 한글로 쓴다."} 비하 호칭은 전체 2회 이하.
-- 반드시 유효한 JSON만 출력.`;
-      const usr =
+      // ── 1단계: 패키지 + 장면 개요 ──
+      const sysO = `너는 ${LANG[project.lang].audience} 대본 기획자다. 결말·정체는 제목/인트로에서 노출하지 않는다. 반드시 유효한 JSON만 출력.`;
+      const usrO =
 `카테고리: ${project.category}
 선택한 주제: ${topic.title}
 훅: ${topic.hook || ""}
-
-이 주제로 유튜브 영상 한 편 분량의 패키지를 만들어줘.${langDirective()}
-
-[제목] 아래 패턴 중 하나로(결말·정체 노출 금지):
-${TITLE_PATTERNS}
-
-[인트로 = 첫 장면(isIntro:true), 6문장 포맷]
-1) 파격적인 대사 한 줄(큰따옴표, 날것의 감정, 구체적 숫자·물건)
-2~4) 상황을 압축해서. 결과·결말 절대 금지. '지금 이 순간'만
-5) '그런데…'로 시작하는 궁금증(닫힌 질문 금지)
-6) 고정 구독 유도 문구: "${ja ? "→ 위 문장을 자연스러운 일본어로" : CTA_KO}"
-
-[본문 = 7단계 골격으로 장면 전개]
-발단(옛날 옛적 구체적 지역, 주인공의 결핍) → 일상과 갈등의 씨앗 → 사건 발생 → 시련(가장 길게, 장소·상대 다른 에피소드 여럿) → 위기(밑바닥) → 반전·해결(증표로 정체·결백 증명, 악인 몰락, 보상) → 마무리.
-초반에 심은 결핍·물건·증표를 후반에 회수한다.
-
-[마지막 장면 = 마무리]
-이 이야기에만 맞는 주제 한 문장(뻔한 교훈 금지) + 이어서 고정 마무리 멘트: "${ja ? "→ 아래를 자연스러운 일본어로: " + OUTRO_KO : OUTRO_KO}"
-
+${langDirective()}
+1시간 30분~2시간짜리 긴 영상의 뼈대를 만들어줘. 7단계 골격(발단→일상·갈등씨앗→사건→시련(가장 길게, 에피소드 여럿)→위기→반전·해결→마무리)을 ${SCENE_COUNT}개 장면으로 촘촘히 나눠라.
+제목은 아래 패턴 중 하나(결말 노출 금지): ${TITLE_PATTERNS}
 JSON만:
 {
-  "title": "최종 영상 제목(호기심 자극, 30자 내외, 결말 노출 금지)",
-  "titleTag": "제목 옆 태그/키워드 2~4개 (${ja ? "#日本昔話 등" : "#야담 #실화 등"})",
-  "description": "유튜브 설명란 글 (4~6문장, 이야기 소개 + 구독 유도)",
-  "tags": ["설명 아래 태그", "8~12개"],
-  "scenes": [
-    {"text":"장면1 = 인트로(위 6문장 포맷)", "isIntro": true},
-    {"text":"장면2 ...", "isIntro": false}
-  ]
+ "title":"영상 제목(호기심, 결말 노출 금지)",
+ "titleTag":"제목 옆 태그 2~4개 (${ja ? "#日本昔話 등" : "#야담 #실화 등"})",
+ "description":"유튜브 설명란 (4~6문장 + 구독 유도)",
+ "tags":["태그","8~12개"],
+ "scenes":[ {"beat":"장면1 한 줄 요약(=인트로 도입)","isIntro":true}, {"beat":"장면2 한 줄 요약","isIntro":false} ]
 }
-장면(scenes)은 14~18개. 각 장면은 한 컷 이미지로 그릴 수 있는 한 순간. 전체가 자연스럽게 이어지는 완결된 이야기.`;
-      const pkg = await claudeJSON(sys, usr, 12000);
+scenes는 정확히 ${SCENE_COUNT}개. 각 beat는 한 컷 이미지로 그릴 수 있는 한 장면. 전체가 이어지는 완결된 이야기.`;
+      const pkg = await claudeJSON(sysO, usrO, 6000);
       project.title = pkg.title || topic.title;
       project.titleTag = pkg.titleTag || "";
       project.description = pkg.description || "";
       project.tags = Array.isArray(pkg.tags) ? pkg.tags : [];
-      project.scenes = (pkg.scenes || []).map((s, i) => ({
-        text: s.text || "", isIntro: !!s.isIntro,
+      let beats = (pkg.scenes || []).map((s) => ({ beat: s.beat || "", isIntro: !!s.isIntro }));
+      if (!beats.length) throw new Error("장면 개요를 만들지 못했어요.");
+      if (!beats.some((b) => b.isIntro)) beats[0].isIntro = true;
+      project.scenes = beats.map((b, i) => ({
+        text: "", beat: b.beat, isIntro: b.isIntro,
         imagePrompt: "", imageDataUrl: "", audioDataUrl: "", durationSec: 0,
-        zoom: s.isIntro ? "in" : (i % 2 ? "out" : "in")
+        zoom: b.isIntro ? "in" : (i % 2 ? "out" : "in")
       }));
-      if (project.scenes.length && !project.scenes.some((s) => s.isIntro)) project.scenes[0].isIntro = true;
       saveProject();
+
+      // ── 2단계: 장면별 긴 나레이션 배치 생성 ──
+      const outline = beats.map((b, i) => `${i + 1}. ${b.beat}`).join("\n");
+      const sysN = `너는 ${LANG[project.lang].audience} 낭독 대본 작가다. 규칙:
+- '~습니다'와 '~지요'를 섞고 같은 어미를 3문장 이상 연속 금지.${ja ? " (일본어면 です/ます체)" : ""}
+- 요약 대신 인물 대사를 자주. 수사 질문('그런데 이게 웬일입니까?')·전환 문장('그때였습니다')으로 리듬.
+- 문장은 짧게. ${ja ? "쉬운 일본어." : "한자 없이 순 한글."} 결말·정체는 인트로에서 노출 금지.
+- 반드시 JSON 배열(문자열들)만 출력. 항목 수는 요청한 장면 수와 정확히 일치.`;
+      const n = project.scenes.length;
+      for (let b = 0; b < n; b += BATCH) {
+        const end = Math.min(b + BATCH, n);
+        loading(body, `장면 대본 작성 중… (${end}/${n})  ⏳ 길이가 길어 시간이 걸려요`);
+        const prev = b > 0 ? project.scenes[b - 1].text.slice(-200) : "";
+        const targets = [];
+        for (let i = b; i < end; i++) targets.push(`${i + 1}${project.scenes[i].isIntro ? "(인트로)" : ""}: ${project.scenes[i].beat}`);
+        const usrN =
+`제목: ${project.title}
+전체 장면 개요:
+${outline}
+
+${prev ? "직전 장면 마지막 부분(자연스럽게 이어서):\n" + prev + "\n\n" : ""}지금은 아래 장면들의 '완성된 낭독 대본'만 순서대로 써라. 각 장면은 넉넉히 길게(각 900~1400자), 대사와 묘사를 풍부하게.
+${targets.map((t) => "- " + t).join("\n")}
+${b === 0 ? `\n첫 장면(인트로)은 6문장 포맷: 파격 대사→압축 상황(결말 금지)→'그런데…' 궁금증→마지막에 "${ja ? "구독 유도 문구를 일본어로" : CTA_KO}". (인트로만 250자 내외로 짧게)` : ""}
+${end === n ? `\n마지막 장면은 이 이야기에 맞는 주제 한 문장 + 고정 마무리 멘트: "${ja ? OUTRO_KO + " (일본어로)" : OUTRO_KO}"` : ""}
+${langDirective()}
+JSON 배열만, 정확히 ${end - b}개: ["장면 대본", ...]`;
+        try {
+          const arr = await claudeJSON(sysN, usrN, 12000);
+          (arr || []).forEach((t, k) => { if (project.scenes[b + k]) project.scenes[b + k].text = String(t); });
+        } catch (e) {
+          for (let i = b; i < end; i++) if (!project.scenes[i].text) project.scenes[i].text = "(이 장면 생성 실패 — 편집에서 직접 쓰거나 다시 시도)";
+        }
+        saveProject();
+      }
+      const total = project.scenes.reduce((a, s) => a + (s.text || "").replace(/\s/g, "").length, 0);
       busy = false; goStep("script");
+      toast(`대본 완성 · 약 ${total.toLocaleString()}자 (~${Math.round(total / 270)}분)`);
     } catch (e) {
       busy = false; renderTopic(body); showErr(body, keyMissingMsg(e));
     } finally { busy = false; }
@@ -1352,6 +1371,15 @@ JSON만: {"image":"...","video":"..."}`;
       `장면 <b>${project.scenes.length}</b>개 · 이미지 <b>${nImg}</b>개 · 음성 <b>${nAud}</b>개 준비됨`));
     body.appendChild(stat);
 
+    // 유튜브 업로드 정보 (복사용)
+    const yt = el("div", "scene");
+    yt.appendChild(el("div", "scene-no", "유튜브 업로드 정보 (복사해서 붙여넣기)"));
+    yt.appendChild(copyRow("제목", project.title || ""));
+    yt.appendChild(copyRow("제목 옆 태그", project.titleTag || ""));
+    yt.appendChild(copyRow("설명", project.description || "", true));
+    yt.appendChild(copyRow("설명 아래 태그", (project.tags || []).join(", "), true));
+    body.appendChild(yt);
+
     const guide = el("div", "scene");
     guide.innerHTML =
       "<div class='scene-no'>캡컷 사용법 (초보자용)</div>" +
@@ -1369,6 +1397,22 @@ JSON만: {"image":"...","video":"..."}`;
     navBtn("📦 캡컷용 ZIP 내려받기", doExport, true);
   }
 
+  function copyRow(label, value, multiline) {
+    const f = el("div", "pkg-field");
+    const lab = el("div", "pkg-label");
+    lab.appendChild(el("span", null, label));
+    const copy = el("button", "copy-mini", "복사");
+    copy.onclick = () => { navigator.clipboard.writeText(value); copy.textContent = "복사됨 ✓"; setTimeout(() => (copy.textContent = "복사"), 1200); };
+    lab.appendChild(copy);
+    f.appendChild(lab);
+    const box = multiline ? el("textarea") : el("input");
+    if (!multiline) box.type = "text";
+    box.value = value; box.readOnly = true;
+    if (multiline) box.style.minHeight = "64px";
+    box.onclick = () => box.select();
+    f.appendChild(box);
+    return f;
+  }
   function strBytes(s) { return new TextEncoder().encode(s); }
   async function doExport() {
     const files = [];

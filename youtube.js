@@ -271,29 +271,43 @@
     }
   }
 
-  let autoRan = false;
-  function autoRun() {
-    if (autoRan || !ytKey()) return;
-    autoRan = true;
-    if (localStorage.getItem("yeti_yt_channel")) analyzeChannel();
-    searchBenchmark();
+  // 메뉴 열면 자동 실행 (이미 결과 있으면 재실행 안 함)
+  function autoRunFor(tab) {
+    if (tab === "benchmark") {
+      if (ytKey() && !$("#ytBenchResult").children.length) searchBenchmark();
+    } else if (tab === "otherchannel") {
+      if (ytKey() && localStorage.getItem("yeti_yt_channel") && !$("#ytChannelResult").children.length) analyzeChannel();
+    } else if (tab === "mychannel") {
+      if (accessToken && !$("#ytMineResult").children.length) fetchMine();
+    }
+  }
+
+  function syncKeyInputs() {
+    if ($("#ytKey")) $("#ytKey").value = ytKey();
+    if ($("#ytKey2")) $("#ytKey2").value = ytKey();
   }
 
   function init() {
-    if (!$("#panel-youtube")) return;
-    $("#ytKey").value = ytKey();
+    if (!$("#panel-benchmark")) return;
+    syncKeyInputs();
     $("#ytClientId").value = localStorage.getItem(LS_CID) || "";
-    // 저장된 입력 복원 (없으면 기본 검색어)
     $("#ytChannel").value = localStorage.getItem("yeti_yt_channel") || "";
     $("#ytQuery").value = localStorage.getItem("yeti_yt_query") || "야담 옛날이야기";
     const savedRegion = localStorage.getItem("yeti_yt_region"); if (savedRegion) $("#ytRegion").value = savedRegion;
-    // 유튜브 탭 열면 자동 실행(입력 없이)
+
+    // 사이드바 메뉴 열면 자동 실행
     const tabs = document.getElementById("tabs");
-    if (tabs) tabs.addEventListener("click", (e) => { if (e.target.closest('.tab[data-tab="youtube"]')) setTimeout(autoRun, 50); });
-    if (document.querySelector('#panel-youtube.is-active')) setTimeout(autoRun, 100);
-    $("#ytLogin").onclick = ytLogin;
-    $("#ytLogout").onclick = () => { accessToken = ""; $("#ytLogout").hidden = true; $("#ytMineResult").innerHTML = ""; try { window.google.accounts.oauth2.revoke && 0; } catch (e) {} toast("로그아웃"); };
-    $("#ytSaveKey").onclick = () => { localStorage.setItem(LS_KEY, $("#ytKey").value.trim()); toast("YouTube 키를 저장했어요"); };
+    if (tabs) tabs.addEventListener("click", (e) => {
+      const t = e.target.closest(".tab"); if (!t) return;
+      const d = t.dataset.tab;
+      if (d === "mychannel" || d === "otherchannel" || d === "benchmark") setTimeout(() => autoRunFor(d), 60);
+    });
+
+    $("#ytLogin").onclick = () => ytLogin();
+    $("#ytLogout").onclick = () => { accessToken = ""; $("#ytLogout").hidden = true; $("#ytMineResult").innerHTML = ""; toast("로그아웃"); };
+    const saveKey = (inputId) => { localStorage.setItem(LS_KEY, $(inputId).value.trim()); syncKeyInputs(); toast("YouTube 키를 저장했어요"); };
+    $("#ytSaveKey").onclick = () => saveKey("#ytKey");
+    $("#ytSaveKey2").onclick = () => saveKey("#ytKey2");
     $("#ytAnalyze").onclick = analyzeChannel;
     $("#ytChannel").addEventListener("keydown", (e) => { if (e.key === "Enter") analyzeChannel(); });
     $("#ytSearch").onclick = searchBenchmark;
