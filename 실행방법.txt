@@ -1,0 +1,22 @@
+[옛이야기 스튜디오 실행 방법]
+
+■ 그냥 쓰기 (가장 간단, 명령창 없음)
+  - index.html 을 더블클릭하세요.
+  - 대본·이미지·썸네일·음성·편집·캡컷 내보내기 전부 됩니다.
+  - (필요한 API 키는 ⚙에서 입력)
+
+■ "수익/분석(구글 로그인)"까지 쓰고 싶을 때
+  구글은 file:// 에서 로그인을 막습니다. 아래 둘 중 하나:
+
+  1) GitHub Pages (추천 · 명령창 전혀 없음 · 항상 켜져 있음)
+     - GitHub 저장소 → Settings → Pages
+     - Source: Deploy from a branch → Branch: claude/webpage-program-dev-c5tjos / (root) → Save
+     - 1~2분 뒤 주소: https://<아이디>.github.io/n8n--/
+     - 이 주소로 열면 로그인까지 다 됩니다.
+     - (OAuth 클라이언트 ID의 '승인된 자바스크립트 원본'에 https://<아이디>.github.io 추가)
+
+  2) 로컬 서버 (파이썬 필요)
+     - Windows: 실행하기_윈도우.bat 더블클릭 (검은 창 하나 뜸, 켜 두기)
+     - Mac: 실행하기_맥.command 더블클릭
+     - 자동으로 http://localhost:8000/index.html 이 열립니다.
+     - (OAuth '승인된 원본'에 http://localhost:8000 추가)
