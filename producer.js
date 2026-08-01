@@ -1466,6 +1466,18 @@ JSON만: {"image":"...","video":"..."}`;
       syncLang();
     }
 
+    // 유튜브 벤치마킹 제목 → 대본 시작 (외부 연결)
+    window.prodStartFromTitle = function (title) {
+      const t = document.querySelector('.tab[data-tab="producer"]');
+      if (t) t.click();
+      project = newProject(project.lang);
+      project.category = "벤치마킹";
+      project.topics = [{ title: title, hook: "유튜브 벤치마킹 주제", why: "" }];
+      project.topicIdx = 0;
+      goStep("topic");
+      toast("이 제목으로 대본을 만들 수 있어요");
+    };
+
     render();
     // 키가 없으면 처음부터 입력창을 열어 눈에 띄게
     if (!claudeKey()) openKeys();
