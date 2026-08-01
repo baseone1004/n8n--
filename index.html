@@ -24,6 +24,7 @@
         <button class="tab is-active" data-tab="inspire">영감 얻기</button>
         <button class="tab" data-tab="write">이야기 짓기</button>
         <button class="tab" data-tab="library">이야기 서재 <span class="count" id="libCount">0</span></button>
+        <button class="tab tab-studio" data-tab="studio">대본 공방 ✦</button>
       </nav>
     </header>
 
@@ -128,6 +129,71 @@
         <div id="libraryList" class="library-list"></div>
         <p class="empty" id="libEmpty">아직 지은 이야기가 없어요. <b>이야기 짓기</b>에서 첫 이야기를 남겨 보세요.</p>
       </section>
+      <!-- ============ 대본 공방 (AI) ============ -->
+      <section class="panel" id="panel-studio">
+        <div class="studio">
+          <div class="studio-bar">
+            <div class="mode-picker" id="modePicker">
+              <button class="mode is-active" data-mode="daebon">① 야담 대본</button>
+              <button class="mode" data-mode="flow">② 이미지 프롬프트</button>
+              <button class="mode" data-mode="thumb">③ 썸네일</button>
+            </div>
+            <div class="studio-tools">
+              <button class="btn btn-ghost sm" id="styleBtn" hidden>화풍 프리셋</button>
+              <button class="btn btn-ghost sm" id="newChat">새 대화</button>
+              <button class="btn btn-ghost sm" id="exportChat">대화 내보내기</button>
+              <button class="btn btn-ghost sm" id="settingsBtn">⚙ 설정</button>
+            </div>
+          </div>
+
+          <p class="mode-desc" id="modeDesc"></p>
+
+          <!-- 설정 패널 -->
+          <div class="settings-panel" id="settingsPanel" hidden>
+            <label class="field">
+              <span class="field-label">Anthropic API 키 <small>(브라우저에만 저장, 서버 전송 없음)</small></span>
+              <input type="password" id="apiKey" placeholder="sk-ant-..." autocomplete="off" />
+            </label>
+            <div class="editor-row">
+              <label class="field" style="flex:1">
+                <span class="field-label">모델</span>
+                <input type="text" id="model" list="modelList" placeholder="claude-opus-5" />
+                <datalist id="modelList">
+                  <option value="claude-opus-5"></option>
+                  <option value="claude-sonnet-5"></option>
+                  <option value="claude-haiku-4-5-20251001"></option>
+                  <option value="claude-opus-4-1"></option>
+                  <option value="claude-sonnet-4-5"></option>
+                </datalist>
+              </label>
+              <label class="field" style="width:150px">
+                <span class="field-label">응답 최대 길이</span>
+                <input type="number" id="maxTokens" value="16000" min="1024" max="64000" step="1024" />
+              </label>
+            </div>
+            <p class="settings-note">Opus판 프롬프트는 <b>opus</b> 모델, 가벼운 진행은 <b>sonnet</b> 모델을 추천합니다. 키는 <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>에서 발급.</p>
+            <button class="btn btn-primary sm" id="saveSettings">저장</button>
+          </div>
+
+          <!-- 화풍 프리셋 패널 -->
+          <div class="settings-panel" id="stylePanel" hidden>
+            <span class="field-label">화풍 프리셋 (선택하면 입력창에 삽입)</span>
+            <div class="style-list" id="styleList"></div>
+          </div>
+
+          <!-- 채팅 -->
+          <div class="chat-log" id="chatLog">
+            <div class="chat-hello" id="chatHello"></div>
+          </div>
+
+          <div class="chat-input-row">
+            <button class="btn sm" id="continueBtn" title="이어서 작성">계속</button>
+            <textarea id="chatInput" rows="2" placeholder="메시지를 입력하세요. (Enter 전송 · Shift+Enter 줄바꿈)"></textarea>
+            <button class="btn btn-primary" id="sendBtn">보내기</button>
+            <button class="btn" id="stopBtn" hidden>중지</button>
+          </div>
+        </div>
+      </section>
     </main>
 
     <footer class="site-footer">
@@ -154,6 +220,8 @@
   <div class="toast" id="toast" hidden></div>
 
   <script src="data.js"></script>
+  <script src="prompts.js"></script>
   <script src="app.js"></script>
+  <script src="studio.js"></script>
 </body>
 </html>
