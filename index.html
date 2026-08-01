@@ -64,15 +64,18 @@
               <input type="password" id="prodClaudeKey" placeholder="sk-ant-..." autocomplete="off" />
             </label>
             <label class="field">
-              <span class="field-label">Google AI(Gemini) API 키 <small>(나노 바나나 이미지 생성)</small></span>
-              <input type="password" id="prodGeminiKey" placeholder="AIza..." autocomplete="off" />
+              <span class="field-label">이미지 생성 방식</span>
+              <select id="prodProvider">
+                <option value="gemini">Google Gemini 직접 (장당 과금)</option>
+                <option value="kie">KIE.ai (크레딧 사용)</option>
+              </select>
             </label>
-            <div class="editor-row">
-              <label class="field" style="flex:1">
-                <span class="field-label">대본 생성 모델</span>
-                <input type="text" id="prodModel" list="modelList" placeholder="claude-opus-5" />
+            <div id="geminiFields">
+              <label class="field">
+                <span class="field-label">Google AI(Gemini) API 키 <small>(나노 바나나 이미지)</small></span>
+                <input type="password" id="prodGeminiKey" placeholder="AIza..." autocomplete="off" />
               </label>
-              <label class="field" style="flex:1">
+              <label class="field">
                 <span class="field-label">이미지 모델</span>
                 <input type="text" id="prodImgModel" list="imgModelList" placeholder="gemini-2.5-flash-image" />
                 <datalist id="imgModelList">
@@ -82,7 +85,27 @@
                 </datalist>
               </label>
             </div>
-            <p class="settings-note">키는 이 브라우저에만 저장됩니다. Anthropic: <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> · Google AI: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></p>
+            <div id="kieFields" hidden>
+              <label class="field">
+                <span class="field-label">KIE.ai API 키 <small>(크레딧으로 이미지 생성)</small></span>
+                <input type="password" id="prodKieKey" placeholder="KIE API Key" autocomplete="off" />
+              </label>
+              <label class="field">
+                <span class="field-label">KIE 이미지 모델</span>
+                <input type="text" id="prodKieModel" list="kieModelList" placeholder="nano-banana-2" />
+                <datalist id="kieModelList">
+                  <option value="nano-banana-2"></option>
+                  <option value="nano-banana-pro"></option>
+                  <option value="nano-banana-2-lite"></option>
+                </datalist>
+              </label>
+              <p class="settings-note">⚠ KIE API는 서버용이라 브라우저에서 막힐(CORS) 수 있어요. 안 되면 KIE 웹에서 이미지를 뽑아 <b>이미지 올리기</b>로 넣으세요.</p>
+            </div>
+            <label class="field">
+              <span class="field-label">대본 생성 모델</span>
+              <input type="text" id="prodModel" list="modelList" placeholder="claude-opus-5" />
+            </label>
+            <p class="settings-note">키는 이 브라우저에만 저장됩니다. Anthropic: <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> · Google AI: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> · KIE: <a href="https://kie.ai" target="_blank" rel="noopener">kie.ai</a></p>
             <button class="btn btn-primary sm" id="prodSaveKeys">저장</button>
           </div>
 

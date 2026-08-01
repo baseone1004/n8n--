@@ -5,11 +5,16 @@
   const CLAUDE_URL = "https://api.anthropic.com/v1/messages";
   const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models/";
   const TTS_MODEL = "gemini-2.5-flash-preview-tts";
+  const KIE_CREATE = "https://api.kie.ai/api/v1/jobs/createTask";
+  const KIE_RECORD = "https://api.kie.ai/api/v1/jobs/recordInfo?taskId=";
   const LS = {
     claude: "yeti_api_key",          // 대본 공방과 공유
     gemini: "yeti_gemini_key",
     model: "yeti_model_daebon",      // 대본 공방과 공유
     imgModel: "yeti_img_model",
+    provider: "yeti_img_provider",   // 'gemini' | 'kie'
+    kie: "yeti_kie_key",
+    kieModel: "yeti_kie_model",
     projects: "yeti_projects"
   };
 
@@ -94,6 +99,10 @@
   const geminiKey = () => localStorage.getItem(LS.gemini) || "";
   const claudeModel = () => localStorage.getItem(LS.model) || "claude-opus-5";
   const imgModel = () => localStorage.getItem(LS.imgModel) || "gemini-2.5-flash-image";
+  const imgProvider = () => localStorage.getItem(LS.provider) || "gemini";
+  const kieKey = () => localStorage.getItem(LS.kie) || "";
+  const kieModel = () => localStorage.getItem(LS.kieModel) || "nano-banana-2";
+  const imgKeyOk = () => imgProvider() === "kie" ? !!kieKey() : !!geminiKey();
 
   // ============ 토스트 ============
   let tT;
@@ -145,8 +154,55 @@
     return JSON.parse(cut);
   }
 
-  // ============ Gemini 이미지 ============
+  // ============ 이미지 생성 (제공자 분기) ============
   async function genImage(prompt) {
+    return imgProvider() === "kie" ? genImageKIE(prompt) : genImageGemini(prompt);
+  }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  function blobToDataURL(blob) {
+    return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
+  }
+
+  // ---- KIE.ai (createTask → recordInfo 폴링) ----
+  async function genImageKIE(prompt) {
+    const key = kieKey();
+    if (!key) throw new Error("NO_KIE_KEY");
+    const create = await fetch(KIE_CREATE, {
+      method: "POST",
+      headers: { "content-type": "application/json", "authorization": "Bearer " + key },
+      body: JSON.stringify({
+        model: kieModel(),
+        input: { prompt: prompt + " . 16:9 widescreen cinematic composition, no text, no watermark, no letters.", aspect_ratio: "16:9", output_format: "png" }
+      })
+    });
+    if (!create.ok) {
+      let d = ""; try { d = (await create.json()).msg; } catch (e) { d = await create.text(); }
+      throw new Error(`KIE ${create.status}: ${d}`);
+    }
+    const cj = await create.json();
+    const taskId = cj.data?.taskId || cj.data?.id || cj.taskId;
+    if (!taskId) throw new Error("KIE: taskId 없음 " + JSON.stringify(cj).slice(0, 120));
+    for (let n = 0; n < 90; n++) {
+      await sleep(2000);
+      const q = await fetch(KIE_RECORD + encodeURIComponent(taskId), { headers: { "authorization": "Bearer " + key } });
+      if (!q.ok) continue;
+      const qj = await q.json();
+      const st = qj.data?.state;
+      if (st === "success") {
+        let rj = qj.data.resultJson;
+        if (typeof rj === "string") { try { rj = JSON.parse(rj); } catch (e) { rj = {}; } }
+        const url = rj.resultUrls?.[0] || rj.result_urls?.[0] || (Array.isArray(rj.resultUrls) ? rj.resultUrls[0] : null);
+        if (!url) throw new Error("KIE: 결과 URL 없음");
+        try { const r = await fetch(url); return await blobToDataURL(await r.blob()); }
+        catch (e) { return url; } // CORS로 바이트 못 가져오면 URL 그대로(미리보기는 됨, ZIP 제외)
+      }
+      if (st === "fail") throw new Error("KIE 실패: " + (qj.data.failMsg || "알 수 없음"));
+    }
+    throw new Error("KIE 시간 초과(3분). 나중에 다시 시도하세요.");
+  }
+
+  // ---- Google Gemini 직접 ----
+  async function genImageGemini(prompt) {
     const key = geminiKey();
     if (!key) throw new Error("NO_GEMINI_KEY");
     const model = imgModel();
@@ -311,13 +367,14 @@
   }
 
   function keyBar(body) {
-    const needC = !claudeKey(), needG = !geminiKey();
-    if (!needC && !needG) return;
+    const needC = !claudeKey(), needI = !imgKeyOk();
+    if (!needC && !needI) return;
+    const imgLabel = imgProvider() === "kie" ? "KIE.ai 키" : "Google AI 키";
     const bar = el("div", "keybar");
     const txt = el("div", null,
       "🔑 시작하려면 API 키가 필요해요 — " +
-      (needC ? "<b>Anthropic 키</b>" : "") + (needC && needG ? " · " : "") +
-      (needG ? "<b>Google AI 키</b>" : ""));
+      (needC ? "<b>Anthropic 키</b>" : "") + (needC && needI ? " · " : "") +
+      (needI ? `<b>${imgLabel}</b>` : ""));
     bar.appendChild(txt);
     const b = el("button", "btn sm btn-primary", "여기에 API 키 입력하기");
     b.onclick = openKeys;
@@ -369,6 +426,7 @@
   function keyMissingMsg(e) {
     if (String(e.message).includes("NO_CLAUDE_KEY")) return "⚙ 키 설정에서 <b>Anthropic API 키</b>를 먼저 넣어주세요.";
     if (String(e.message).includes("NO_GEMINI_KEY")) return "⚙ 키 설정에서 <b>Google AI(Gemini) 키</b>를 먼저 넣어주세요.";
+    if (String(e.message).includes("NO_KIE_KEY")) return "⚙ 키 설정에서 <b>KIE.ai 키</b>를 먼저 넣어주세요.";
     if (String(e.message).includes("Failed to fetch")) return "네트워크/CORS 오류. 인터넷 연결과 키를 확인하세요. (게시본이 아닌 로컬 파일에서 실행해야 합니다.)";
     return "오류: " + esc(e.message);
   }
@@ -581,7 +639,14 @@ ${scenes}`;
   // ---- 5. 이미지 생성 ----
   function renderImage(body) {
     body.appendChild(el("h2", "prod-h", "이미지 생성"));
-    body.appendChild(el("p", "prod-sub", "나노 바나나(Gemini)로 장면 이미지를 만듭니다. 마음에 안 들면 <b>다시 생성</b>을 누르세요."));
+    const prov = imgProvider() === "kie" ? "KIE.ai 크레딧" : "Google Gemini(장당 과금)";
+    body.appendChild(el("p", "prod-sub", `현재 이미지 생성 방식: <b>${prov}</b> (⚙ 키 설정에서 변경). 또는 다른 데서 만든 이미지를 <b>올리기</b>로 넣어도 돼요.`));
+
+    const tip = el("div", "keybar");
+    tip.style.marginBottom = "18px";
+    tip.innerHTML = "💰 비용 팁 — <b>KIE.ai 크레딧</b> 또는 <b>드롭샷 Pro(나노 바나나 무제한)</b>에서 뽑아 <b>이미지 올리기</b>로 넣으면 저렴/무료. 앱에서 Google 직접 생성은 장당 약 50~60원.";
+    body.appendChild(tip);
+
     const pkg = el("div", "pkg");
     project.scenes.forEach((s, i) => pkg.appendChild(sceneImageCard(s, i)));
     body.appendChild(pkg);
@@ -604,9 +669,16 @@ ${scenes}`;
     ta.oninput = () => { s.imagePrompt = ta.value; saveDebounced(); };
     right.appendChild(ta);
     const acts = el("div", "scene-actions");
-    const one = el("button", "btn sm", "이 장면 생성");
+    const one = el("button", "btn sm", "🍌 나노바나나 생성");
     one.onclick = () => genOneImage(i);
     acts.appendChild(one);
+
+    const up = el("label", "btn sm btn-ghost", "🖼 이미지 올리기");
+    const file = el("input"); file.type = "file"; file.accept = "image/*"; file.style.display = "none";
+    file.onchange = () => { if (file.files[0]) loadImageFile(i, file.files[0]); };
+    up.appendChild(file);
+    acts.appendChild(up);
+
     if (s.imageDataUrl) {
       const dl = el("button", "btn sm", "다운로드");
       dl.onclick = () => downloadOneImage(i);
@@ -618,9 +690,23 @@ ${scenes}`;
     return c;
   }
 
+  function loadImageFile(i, fileObj) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      project.scenes[i].imageDataUrl = reader.result;
+      saveProject();
+      const box = $("#img-" + i);
+      if (box) { box.innerHTML = ""; const im = el("img"); im.src = reader.result; box.appendChild(im); }
+      render();
+      toast(`장면 ${i + 1} 이미지 업로드`);
+    };
+    reader.readAsDataURL(fileObj);
+  }
+
   function downloadOneImage(i) {
     const s = project.scenes[i];
     if (!s.imageDataUrl) return;
+    if (/^https?:\/\//.test(s.imageDataUrl)) { window.open(s.imageDataUrl, "_blank"); return; }
     const m = s.imageDataUrl.match(/^data:(image\/\w+);base64,(.*)$/);
     if (!m) return;
     const ext = m[1].split("/")[1].replace("jpeg", "jpg");
@@ -649,11 +735,12 @@ ${scenes}`;
       if (box) { box.innerHTML = ""; const im = el("img"); im.src = s.imageDataUrl; box.appendChild(im); }
     } catch (e) {
       if (box) { box.innerHTML = ""; box.textContent = "실패"; }
-      toast("이미지 실패: " + (String(e.message).includes("NO_GEMINI_KEY") ? "Gemini 키 필요" : e.message.slice(0, 60)));
+      const m = String(e.message);
+      toast("이미지 실패: " + (/NO_(GEMINI|KIE)_KEY/.test(m) ? "이미지 키 필요" : /Failed to fetch/.test(m) ? "CORS/네트워크(로컬 실행 확인)" : m.slice(0, 60)));
     }
   }
   async function genAllImages() {
-    if (!geminiKey()) { toast("⚙ 키 설정에서 Google AI 키를 넣어주세요"); openKeys(); return; }
+    if (!imgKeyOk()) { toast("⚙ 이미지 생성용 키를 먼저 넣어주세요"); openKeys(); return; }
     for (let i = 0; i < project.scenes.length; i++) { await genOneImage(i); }
     toast("이미지 생성 완료");
   }
@@ -990,6 +1077,10 @@ ${scenes}`;
       $("#prodGeminiKey").value = geminiKey();
       $("#prodModel").value = claudeModel();
       $("#prodImgModel").value = imgModel();
+      const provSel = $("#prodProvider");
+      if (provSel) { provSel.value = imgProvider(); provSel.dispatchEvent(new Event("change")); }
+      $("#prodKieKey").value = kieKey();
+      $("#prodKieModel").value = kieModel();
     }
   }
 
@@ -1005,11 +1096,22 @@ ${scenes}`;
 
     $("#prodSettings").onclick = openKeys;
     $("#prodProjects").onclick = () => { $("#prodKeyPanel").hidden = true; const p = $("#prodProjPanel"); p.hidden = !p.hidden; if (!p.hidden) renderProjList(); };
+    const provSel = $("#prodProvider");
+    const syncProvFields = () => {
+      const kie = provSel.value === "kie";
+      $("#kieFields").hidden = !kie;
+      $("#geminiFields").hidden = kie;
+    };
+    if (provSel) provSel.onchange = syncProvFields;
+
     $("#prodSaveKeys").onclick = () => {
       localStorage.setItem(LS.claude, $("#prodClaudeKey").value.trim());
       localStorage.setItem(LS.gemini, $("#prodGeminiKey").value.trim());
       localStorage.setItem(LS.model, $("#prodModel").value.trim() || "claude-opus-5");
       localStorage.setItem(LS.imgModel, $("#prodImgModel").value.trim() || "gemini-2.5-flash-image");
+      localStorage.setItem(LS.provider, provSel ? provSel.value : "gemini");
+      localStorage.setItem(LS.kie, $("#prodKieKey").value.trim());
+      localStorage.setItem(LS.kieModel, $("#prodKieModel").value.trim() || "nano-banana-2");
       $("#prodKeyPanel").hidden = true;
       render();
       toast("키를 저장했어요");
