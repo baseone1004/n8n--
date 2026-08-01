@@ -741,6 +741,14 @@ ${scenes}`;
 
   // ============ 초기화 ============
   function init() {
+    // 상단 제목을 활성 탭에 맞춰 갱신
+    const tabsEl = document.getElementById("tabs");
+    const topTitle = document.getElementById("topTitle");
+    if (tabsEl && topTitle) tabsEl.addEventListener("click", (e) => {
+      const t = e.target.closest(".tab");
+      if (t && t.dataset.title) topTitle.textContent = t.dataset.title;
+    });
+
     $("#prodSettings").onclick = openKeys;
     $("#prodProjects").onclick = () => { $("#prodKeyPanel").hidden = true; const p = $("#prodProjPanel"); p.hidden = !p.hidden; if (!p.hidden) renderProjList(); };
     $("#prodSaveKeys").onclick = () => {

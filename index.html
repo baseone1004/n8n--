@@ -10,24 +10,36 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="paper">
-    <!-- 머리말 -->
-    <header class="site-header">
-      <div class="brand">
-        <span class="seal">古</span>
-        <div>
-          <h1>옛이야기 곳간</h1>
-          <p class="subtitle">민담 · 야담 · 옛날이야기 창작 프로그램</p>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="side-brand">
+        <span class="brand-orb">古</span>
+        <div class="brand-text">
+          <h1>옛이야기 스튜디오</h1>
+          <p>야담 영상 제작</p>
         </div>
       </div>
+      <div class="side-label">워크스페이스</div>
       <nav class="tabs" id="tabs">
-        <button class="tab tab-producer is-active" data-tab="producer">🎬 영상 만들기</button>
-        <button class="tab" data-tab="inspire">영감 얻기</button>
-        <button class="tab" data-tab="write">이야기 짓기</button>
-        <button class="tab" data-tab="library">이야기 서재 <span class="count" id="libCount">0</span></button>
-        <button class="tab tab-studio" data-tab="studio">대본 공방 ✦</button>
+        <button class="tab tab-producer is-active" data-tab="producer" data-title="영상 만들기"><span class="tab-ico">🎬</span><span class="tab-txt">영상 만들기</span></button>
+        <button class="tab tab-studio" data-tab="studio" data-title="대본 공방"><span class="tab-ico">✦</span><span class="tab-txt">대본 공방</span></button>
+        <button class="tab" data-tab="inspire" data-title="영감 얻기"><span class="tab-ico">🎲</span><span class="tab-txt">영감 얻기</span></button>
+        <button class="tab" data-tab="write" data-title="이야기 짓기"><span class="tab-ico">✍️</span><span class="tab-txt">이야기 짓기</span></button>
+        <button class="tab" data-tab="library" data-title="이야기 서재"><span class="tab-ico">📚</span><span class="tab-txt">이야기 서재</span><span class="count" id="libCount">0</span></button>
       </nav>
-    </header>
+      <div class="side-foot">
+        <div class="side-foot-label">저장 위치</div>
+        <div class="side-foot-name">이 브라우저 · localStorage</div>
+      </div>
+    </aside>
+
+    <div class="workarea">
+      <header class="topbar">
+        <div>
+          <div class="topbar-title" id="topTitle">영상 만들기</div>
+          <div class="topbar-sub">브라우저에서 바로 만드는 AI 야담 영상 스튜디오</div>
+        </div>
+      </header>
 
     <main>
       <!-- ============ 영상 만들기 (제작 마법사) ============ -->
@@ -249,9 +261,10 @@
       </section>
     </main>
 
-    <footer class="site-footer">
-      <p>모든 이야기는 이 브라우저 안(localStorage)에만 저장됩니다. · 옛이야기 곳간</p>
-    </footer>
+      <footer class="site-footer">
+        <p>모든 자료는 이 브라우저 안(localStorage)에만 저장됩니다 · 옛이야기 스튜디오</p>
+      </footer>
+    </div>
   </div>
 
   <!-- 이야기 읽기 창 -->
