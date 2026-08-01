@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>옛이야기 곳간 · 민담·야담 창작 프로그램</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&family=Gaegu:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="paper">
+    <!-- 머리말 -->
+    <header class="site-header">
+      <div class="brand">
+        <span class="seal">古</span>
+        <div>
+          <h1>옛이야기 곳간</h1>
+          <p class="subtitle">민담 · 야담 · 옛날이야기 창작 프로그램</p>
+        </div>
+      </div>
+      <nav class="tabs" id="tabs">
+        <button class="tab is-active" data-tab="inspire">영감 얻기</button>
+        <button class="tab" data-tab="write">이야기 짓기</button>
+        <button class="tab" data-tab="library">이야기 서재 <span class="count" id="libCount">0</span></button>
+      </nav>
+    </header>
+
+    <main>
+      <!-- ============ 영감 얻기 ============ -->
+      <section class="panel is-active" id="panel-inspire">
+        <div class="panel-head">
+          <h2>이야기 씨앗 뽑기</h2>
+          <p class="hint">주사위를 굴리듯 옛이야기 재료를 뽑아 보세요. 마음에 드는 조합이 나오면 <b>이 씨앗으로 이야기 짓기</b>를 눌러 바로 글을 쓸 수 있어요.</p>
+        </div>
+
+        <div class="seed-grid">
+          <article class="seed-card" data-key="opening">
+            <div class="seed-label">시작하는 말</div>
+            <div class="seed-value" id="seed-opening">—</div>
+            <button class="reroll" data-reroll="opening" title="다시 뽑기">↻</button>
+          </article>
+          <article class="seed-card" data-key="character">
+            <div class="seed-label">등장인물</div>
+            <div class="seed-value" id="seed-character">—</div>
+            <button class="reroll" data-reroll="character" title="다시 뽑기">↻</button>
+          </article>
+          <article class="seed-card" data-key="setting">
+            <div class="seed-label">때와 곳</div>
+            <div class="seed-value" id="seed-setting">—</div>
+            <button class="reroll" data-reroll="setting" title="다시 뽑기">↻</button>
+          </article>
+          <article class="seed-card" data-key="event">
+            <div class="seed-label">일어나는 일</div>
+            <div class="seed-value" id="seed-event">—</div>
+            <button class="reroll" data-reroll="event" title="다시 뽑기">↻</button>
+          </article>
+          <article class="seed-card" data-key="item">
+            <div class="seed-label">신묘한 물건</div>
+            <div class="seed-value" id="seed-item">—</div>
+            <button class="reroll" data-reroll="item" title="다시 뽑기">↻</button>
+          </article>
+          <article class="seed-card" data-key="moral">
+            <div class="seed-label">전하는 교훈</div>
+            <div class="seed-value" id="seed-moral">—</div>
+            <button class="reroll" data-reroll="moral" title="다시 뽑기">↻</button>
+          </article>
+        </div>
+
+        <div class="seed-actions">
+          <button class="btn btn-primary" id="rollAll">🎲 전부 새로 뽑기</button>
+          <button class="btn" id="useSeed">✍️ 이 씨앗으로 이야기 짓기</button>
+        </div>
+      </section>
+
+      <!-- ============ 이야기 짓기 ============ -->
+      <section class="panel" id="panel-write">
+        <div class="editor">
+          <div class="editor-row">
+            <label class="field genre-field">
+              <span class="field-label">갈래</span>
+              <select id="genre">
+                <option>민담</option>
+                <option>야담</option>
+                <option>전설</option>
+                <option>신화</option>
+                <option>우화</option>
+                <option>옛날이야기</option>
+              </select>
+            </label>
+            <label class="field title-field">
+              <span class="field-label">제목</span>
+              <input type="text" id="title" placeholder="예) 은혜 갚은 호랑이" maxlength="60" />
+            </label>
+          </div>
+
+          <div class="seed-strip" id="seedStrip" hidden>
+            <span class="strip-label">뽑은 씨앗</span>
+            <div class="strip-chips" id="seedChips"></div>
+            <button class="chip-insert" id="insertSeed" title="본문 앞에 살짝 넣기">본문에 넣기</button>
+          </div>
+
+          <label class="field">
+            <span class="field-label">본문</span>
+            <textarea id="body" placeholder="옛날 옛적, 호랑이 담배 피우던 시절에…"></textarea>
+          </label>
+
+          <div class="editor-foot">
+            <span class="meta" id="wordCount">0자</span>
+            <div class="editor-buttons">
+              <button class="btn" id="newStory">새 이야기</button>
+              <button class="btn btn-primary" id="saveStory">저장하기</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 이야기 서재 ============ -->
+      <section class="panel" id="panel-library">
+        <div class="panel-head library-head">
+          <h2>이야기 서재</h2>
+          <div class="lib-tools">
+            <input type="search" id="search" placeholder="제목·내용 찾기" />
+            <button class="btn btn-ghost" id="exportAll" title="모든 이야기를 백업 파일로 내려받기">전체 내보내기</button>
+          </div>
+        </div>
+        <div id="libraryList" class="library-list"></div>
+        <p class="empty" id="libEmpty">아직 지은 이야기가 없어요. <b>이야기 짓기</b>에서 첫 이야기를 남겨 보세요.</p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>모든 이야기는 이 브라우저 안(localStorage)에만 저장됩니다. · 옛이야기 곳간</p>
+    </footer>
+  </div>
+
+  <!-- 이야기 읽기 창 -->
+  <div class="modal" id="readerModal" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-box scroll-paper">
+      <button class="modal-close" data-close title="닫기">✕</button>
+      <div class="reader-genre" id="readerGenre"></div>
+      <h2 class="reader-title" id="readerTitle"></h2>
+      <div class="reader-date" id="readerDate"></div>
+      <div class="reader-body" id="readerBody"></div>
+      <div class="reader-actions">
+        <button class="btn" id="editFromReader">고쳐 쓰기</button>
+        <button class="btn btn-ghost" id="exportOne">글로 내보내기</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
