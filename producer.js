@@ -20,8 +20,30 @@
     { key: "prompt", name: "이미지 프롬프트" },
     { key: "image", name: "이미지 생성" },
     { key: "voice", name: "음성·자막" },
+    { key: "edit", name: "편집·미리보기" },
     { key: "export", name: "캡컷 내보내기" }
   ];
+
+  // 언어별 설정 (한국 야담 / 일본 괴담·옛이야기)
+  const LANG = {
+    ko: {
+      name: "한국어", flag: "🇰🇷",
+      audience: "한국 시니어(50~70대) 대상 '야담·옛날이야기' 유튜브",
+      setting: "Korean, Joseon-era, wearing historically accurate hanbok",
+      watermark: "AI로 제작되었습니다",
+      style: "semi-realistic Korean manhwa illustration, painterly rendering, refined detailed eyes, clean confident linework, soft cinematic shading, mature historical drama tone"
+    },
+    ja: {
+      name: "日本語", flag: "🇯🇵",
+      audience: "일본 시니어(50~70대) 대상 '괴담·옛이야기(昔話)' 유튜브",
+      setting: "Japanese, Edo-era, wearing historically accurate kimono",
+      watermark: "AIで制作されました",
+      style: "semi-realistic Japanese historical manga illustration, painterly rendering, refined detailed eyes, clean confident linework, soft cinematic shading, mature period drama tone"
+    }
+  };
+  const langDirective = () => project.lang === "ja"
+    ? "\n\n중요: 결과의 모든 텍스트(제목·설명·태그·대본 등)는 반드시 자연스러운 '일본어'로 작성한다."
+    : "";
 
   const CATEGORIES = [
     { key: "권선징악", emoji: "⚖️", desc: "착한 이는 복 받고 악한 이는 벌 받는 통쾌한 이야기" },
@@ -35,18 +57,17 @@
     { key: "복수·응징", emoji: "⚔️", desc: "짓밟힌 이가 통쾌하게 되갚는 사이다 이야기" }
   ];
 
-  const STYLE_TAIL_DEFAULT =
-    "semi-realistic Korean manhwa illustration, painterly rendering, refined detailed eyes, clean confident linework, soft cinematic shading, mature historical drama tone";
-
   // ============ 상태 ============
   let stepIdx = 0;
   let busy = false;
   let project = newProject();
 
-  function newProject() {
+  function newProject(lang) {
+    lang = lang || "ko";
     return {
       id: "p" + Date.now(),
       createdAt: Date.now(),
+      lang: lang,
       category: "",
       topics: [],
       topicIdx: -1,
@@ -54,9 +75,9 @@
       titleTag: "",
       description: "",
       tags: [],
-      style: STYLE_TAIL_DEFAULT,
-      scenes: [],       // {text, imagePrompt, imageDataUrl, audioDataUrl, durationSec, isIntro}
-      watermark: "AI로 제작되었습니다"
+      style: LANG[lang].style,
+      scenes: [],       // {text, imagePrompt, imageDataUrl, audioDataUrl, durationSec, isIntro, zoom}
+      watermark: LANG[lang].watermark
     };
   }
 
@@ -280,11 +301,28 @@
     const body = $("#prodBody");
     body.innerHTML = "";
     renderNav();
+    keyBar(body);
     const key = STEPS[stepIdx].key;
     ({
       category: renderCategory, topic: renderTopic, script: renderScript,
-      prompt: renderPrompt, image: renderImage, voice: renderVoice, export: renderExport
+      prompt: renderPrompt, image: renderImage, voice: renderVoice,
+      edit: renderEdit, export: renderExport
     }[key])(body);
+  }
+
+  function keyBar(body) {
+    const needC = !claudeKey(), needG = !geminiKey();
+    if (!needC && !needG) return;
+    const bar = el("div", "keybar");
+    const txt = el("div", null,
+      "🔑 시작하려면 API 키가 필요해요 — " +
+      (needC ? "<b>Anthropic 키</b>" : "") + (needC && needG ? " · " : "") +
+      (needG ? "<b>Google AI 키</b>" : ""));
+    bar.appendChild(txt);
+    const b = el("button", "btn sm btn-primary", "여기에 API 키 입력하기");
+    b.onclick = openKeys;
+    bar.appendChild(b);
+    body.appendChild(bar);
   }
 
   function renderStepper() {
@@ -362,17 +400,17 @@
     const body = $("#prodBody");
     busy = true; loading(body, "떡상할 만한 주제 10개를 뽑는 중…"); renderNav();
     try {
-      const sys = "너는 한국 시니어(50~70대) 대상 '야담·옛날이야기' 유튜브 채널 기획 전문가다. 조회수가 잘 나오는(떡상하는) 주제를 잘 안다. 반드시 유효한 JSON만 출력한다. 설명·군더더기 금지.";
+      const sys = `너는 ${LANG[project.lang].audience} 채널 기획 전문가다. 조회수가 잘 나오는(떡상하는) 주제를 잘 안다. 반드시 유효한 JSON만 출력한다. 설명·군더더기 금지.`;
       const usr =
 `카테고리: "${project.category}"
 
-이 카테고리로 시니어 야담 유튜브에서 클릭률·조회수가 높을 만한 이야기 주제 10개를 추천해줘.
+이 카테고리로 ${LANG[project.lang].audience}에서 클릭률·조회수가 높을 만한 이야기 주제 10개를 추천해줘.
 자극적이되 흔한 클리셰의 반복은 피하고, 서로 소재가 겹치지 않게 분산해줘.
 각 주제는 아래 JSON 배열 형식으로만:
 [
   {"title":"영상 제목 후보(호기심 유발, 25자 내외)","hook":"왜 끌리는지 한 줄 훅","why":"떡상 포인트 한 줄"},
   ... (정확히 10개)
-]`;
+]${langDirective()}`;
       const arr = await claudeJSON(sys, usr, 4000);
       project.topics = Array.isArray(arr) ? arr.slice(0, 10) : [];
       project.topicIdx = -1;
@@ -411,13 +449,14 @@
     busy = true; loading(body, "제목·태그·설명·대본을 짓는 중… (조금 걸려요)"); renderNav();
     try {
       const topic = project.topics[project.topicIdx];
-      const sys = "너는 한국 시니어 대상 야담 유튜브 대본 작가다. 몰입되는 옛이야기체(옛날 옛적…)로, 장면이 눈에 그려지게 쓴다. 반드시 유효한 JSON만 출력한다.";
+      const sys = `너는 ${LANG[project.lang].audience} 대본 작가다. 몰입되는 옛이야기체로, 장면이 눈에 그려지게 쓴다. 반드시 유효한 JSON만 출력한다.`;
       const usr =
 `카테고리: ${project.category}
 선택한 주제: ${topic.title}
 훅: ${topic.hook || ""}
 
-이 주제로 유튜브 영상 한 편 분량의 패키지를 만들어줘. JSON만:
+이 주제로 유튜브 영상 한 편 분량의 패키지를 만들어줘.${langDirective()}
+JSON만:
 {
   "title": "최종 영상 제목(호기심 자극, 30자 내외)",
   "titleTag": "제목 옆에 붙일 태그/키워드 (예: #야담 #실화 형태, 2~4개)",
@@ -434,9 +473,10 @@
       project.titleTag = pkg.titleTag || "";
       project.description = pkg.description || "";
       project.tags = Array.isArray(pkg.tags) ? pkg.tags : [];
-      project.scenes = (pkg.scenes || []).map((s) => ({
+      project.scenes = (pkg.scenes || []).map((s, i) => ({
         text: s.text || "", isIntro: !!s.isIntro,
-        imagePrompt: "", imageDataUrl: "", audioDataUrl: "", durationSec: 0
+        imagePrompt: "", imageDataUrl: "", audioDataUrl: "", durationSec: 0,
+        zoom: s.isIntro ? "in" : (i % 2 ? "out" : "in")
       }));
       if (project.scenes.length && !project.scenes.some((s) => s.isIntro)) project.scenes[0].isIntro = true;
       saveProject();
@@ -500,13 +540,13 @@
     const body = $("#prodBody");
     busy = true; loading(body, "각 장면의 이미지 프롬프트를 만드는 중…"); renderNav();
     try {
-      const sys = "너는 대본을 Google 이미지 생성 모델(나노 바나나)용 영어 프롬프트로 바꾸는 전문가다. 조선시대 배경·한복 고증을 지키고, 각 장면을 한 컷으로 그릴 수 있게 시각적으로 구체화한다. 색상·조명 단어는 최소화하고 인물/구도/행동 중심. 반드시 유효한 JSON만 출력.";
+      const sys = "너는 대본을 Google 이미지 생성 모델(나노 바나나)용 영어 프롬프트로 바꾸는 전문가다. 시대 배경·복식 고증을 지키고, 각 장면을 한 컷으로 그릴 수 있게 시각적으로 구체화한다. 색상·조명 단어는 최소화하고 인물/구도/행동 중심. 반드시 유효한 JSON만 출력.";
       const scenes = project.scenes.map((s, i) => `${i + 1}${s.isIntro ? "(인트로)" : ""}: ${s.text}`).join("\n");
       const usr =
 `화풍(STYLE_TAIL): ${project.style}
 
 아래 장면들 각각을 위 화풍으로 그릴 영어 이미지 프롬프트로 만들어줘.
-인물은 Korean, Joseon-era, 한복 명사를 명시. 장면 흐름상 같은 인물은 일관되게 묘사.
+인물은 ${LANG[project.lang].setting} 를 반드시 명시. 장면 흐름상 같은 인물은 일관되게 묘사.
 JSON 배열만, 장면 순서대로 정확히 ${project.scenes.length}개:
 ["english image prompt for scene 1", "...", ...]
 
@@ -546,6 +586,7 @@ ${scenes}`;
     project.scenes.forEach((s, i) => pkg.appendChild(sceneImageCard(s, i)));
     body.appendChild(pkg);
     navBtn("전체 다시 생성", genAllImages);
+    navBtn("이미지 전체 다운로드", downloadImagesZip);
     navBtn("음성·자막 만들기 →", () => { stepIdx = 5; render(); }, true);
   }
 
@@ -566,10 +607,36 @@ ${scenes}`;
     const one = el("button", "btn sm", "이 장면 생성");
     one.onclick = () => genOneImage(i);
     acts.appendChild(one);
+    if (s.imageDataUrl) {
+      const dl = el("button", "btn sm", "다운로드");
+      dl.onclick = () => downloadOneImage(i);
+      acts.appendChild(dl);
+    }
     right.appendChild(acts);
     row.appendChild(right);
     c.appendChild(row);
     return c;
+  }
+
+  function downloadOneImage(i) {
+    const s = project.scenes[i];
+    if (!s.imageDataUrl) return;
+    const m = s.imageDataUrl.match(/^data:(image\/\w+);base64,(.*)$/);
+    if (!m) return;
+    const ext = m[1].split("/")[1].replace("jpeg", "jpg");
+    download(new Blob([base64ToBytes(m[2])], { type: m[1] }), `scene_${String(i + 1).padStart(2, "0")}.${ext}`);
+  }
+  function downloadImagesZip() {
+    const files = [];
+    project.scenes.forEach((s, i) => {
+      if (s.imageDataUrl) {
+        const m = s.imageDataUrl.match(/^data:(image\/\w+);base64,(.*)$/);
+        if (m) files.push({ name: `scene_${String(i + 1).padStart(2, "0")}.${m[1].split("/")[1].replace("jpeg", "jpg")}`, bytes: base64ToBytes(m[2]) });
+      }
+    });
+    if (!files.length) { toast("먼저 이미지를 생성하세요"); return; }
+    download(makeZip(files), `${(project.title || "images").replace(/[\\/:*?"<>|]/g, "_")}_이미지.zip`);
+    toast(files.length + "개 이미지를 내려받았어요");
   }
 
   async function genOneImage(i) {
@@ -594,29 +661,69 @@ ${scenes}`;
   // ---- 6. 음성·자막 ----
   function renderVoice(body) {
     body.appendChild(el("h2", "prod-h", "음성 · 자막"));
-    body.appendChild(el("p", "prod-sub", "Gemini TTS로 장면별 나레이션을 만들고, 그 길이에 맞춰 <b>자막(SRT)</b>을 자동으로 맞춥니다."));
+    body.appendChild(el("p", "prod-sub", "타입캐스트에서 만든 <b>음성 파일을 장면마다 업로드</b>하면 그 길이에 맞춰 자막(SRT)을 자동으로 맞춥니다. (내장 Gemini 음성도 사용 가능)"));
+
+    const tip = el("div", "scene");
+    tip.innerHTML =
+      "<div class='scene-no'>타입캐스트(Typecast) 사용법</div>" +
+      "<ol style='margin:8px 0 0;padding-left:20px;line-height:1.9;font-size:14px'>" +
+      "<li>타입캐스트에서 아래 각 장면 대본을 붙여 넣고 원하는 성우로 음성을 만듭니다.</li>" +
+      "<li>만든 음성(mp3/wav)을 다운로드해, 같은 장면의 <b>음성 올리기</b>로 업로드하세요.</li>" +
+      "<li>업로드하면 음성 길이에 맞춰 자막 싱크가 자동으로 맞춰집니다.</li></ol>";
+    body.appendChild(tip);
+
     const pkg = el("div", "pkg");
     project.scenes.forEach((s, i) => {
       const c = el("div", "scene");
       const head = el("div", "scene-head");
-      head.appendChild(el("div", "scene-no", `장면 ${i + 1}`));
-      head.appendChild(el("span", "pi-meta", s.durationSec ? `${s.durationSec.toFixed(1)}초` : "미생성"));
+      head.appendChild(el("div", "scene-no", `장면 ${i + 1}${s.isIntro ? " · 인트로" : ""}`));
+      head.appendChild(el("span", "pi-meta", s.durationSec ? `${s.durationSec.toFixed(1)}초` : "음성 없음"));
       c.appendChild(head);
       c.appendChild(el("div", null, esc(s.text)));
       const acts = el("div", "scene-actions");
-      const gen = el("button", "btn sm", "음성 생성");
+
+      const up = el("label", "btn sm", "🎙 타입캐스트 음성 올리기");
+      const file = el("input"); file.type = "file"; file.accept = "audio/*"; file.style.display = "none";
+      file.onchange = () => { if (file.files[0]) loadAudioFile(i, file.files[0]); };
+      up.appendChild(file);
+      acts.appendChild(up);
+
+      const gen = el("button", "btn sm btn-ghost", "또는 Gemini 음성");
       gen.onclick = () => genOneVoice(i, gen);
       acts.appendChild(gen);
+
       if (s.audioDataUrl) {
-        const au = el("audio"); au.controls = true; au.src = s.audioDataUrl; au.style.height = "34px";
+        const au = el("audio"); au.controls = true; au.src = s.audioDataUrl; au.style.height = "34px"; au.style.maxWidth = "220px";
         acts.appendChild(au);
       }
       c.appendChild(acts);
       pkg.appendChild(c);
     });
     body.appendChild(pkg);
-    navBtn("전체 음성 생성", genAllVoices);
-    navBtn("캡컷 내보내기 →", () => { stepIdx = 6; render(); }, true);
+    navBtn("전체 Gemini 음성 생성", genAllVoices);
+    navBtn("편집·미리보기 →", () => { stepIdx = 6; render(); }, true);
+  }
+
+  function loadAudioFile(i, fileObj) {
+    const s = project.scenes[i];
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      const au = new Audio();
+      au.onloadedmetadata = () => {
+        s.audioDataUrl = dataUrl;
+        s.durationSec = isFinite(au.duration) ? au.duration : estDur(s.text);
+        saveProject(); render();
+        toast(`장면 ${i + 1} 음성 업로드 (${s.durationSec.toFixed(1)}초)`);
+      };
+      au.onerror = () => {
+        s.audioDataUrl = dataUrl; s.durationSec = estDur(s.text);
+        saveProject(); render();
+        toast(`장면 ${i + 1} 음성 업로드`);
+      };
+      au.src = dataUrl;
+    };
+    reader.readAsDataURL(fileObj);
   }
   async function genOneVoice(i, btn) {
     const s = project.scenes[i];
@@ -641,7 +748,150 @@ ${scenes}`;
     toast("음성 생성 완료");
   }
 
-  // ---- 7. 캡컷 내보내기 ----
+  // ---- 7. 편집 · 미리보기 (캡컷 스타일) ----
+  function renderEdit(body) {
+    body.appendChild(el("h2", "prod-h", "편집 · 미리보기"));
+    body.appendChild(el("p", "prod-sub", "장면별 <b>줌 방향·자막·길이</b>를 다듬고 <b>▶ 재생</b>으로 미리보세요. 인트로는 영상처럼 강조돼요. 최종 컷 편집은 캡컷에서."));
+
+    const wm = field("왼쪽 상단 워터마크 문구", () => project.watermark, false, (v) => { project.watermark = v; saveDebounced(); });
+    body.appendChild(wm);
+
+    const pkg = el("div", "pkg");
+    project.scenes.forEach((s, i) => pkg.appendChild(sceneEditCard(s, i)));
+    body.appendChild(pkg);
+
+    navBtn("▶ 전체 미리보기", () => openPlayer(0, false));
+    navBtn("캡컷 내보내기 →", () => { stepIdx = 7; render(); }, true);
+  }
+
+  function sceneEditCard(s, i) {
+    const c = el("div", "scene");
+    const head = el("div", "scene-head");
+    head.appendChild(el("div", "scene-no", `장면 ${i + 1}`));
+    const badge = el("span", "scene-badge", s.isIntro ? "인트로" : "일반");
+    badge.style.cursor = "pointer"; badge.title = "인트로 여부 전환";
+    badge.onclick = () => { s.isIntro = !s.isIntro; saveDebounced(); render(); };
+    head.appendChild(badge);
+    c.appendChild(head);
+
+    const row = el("div", "scene-img-row");
+    const imgBox = el("div", "scene-img");
+    if (s.imageDataUrl) { const im = el("img"); im.src = s.imageDataUrl; imgBox.appendChild(im); }
+    else imgBox.textContent = "이미지 없음";
+    row.appendChild(imgBox);
+
+    const right = el("div", "scene-prompt");
+    right.appendChild(el("div", "field-label", "자막 (음성 내용)"));
+    const ta = el("textarea"); ta.value = s.text; ta.style.minHeight = "54px";
+    ta.oninput = () => { s.text = ta.value; saveDebounced(); };
+    right.appendChild(ta);
+
+    const ctl = el("div", "edit-ctl");
+    const zsel = el("select");
+    [["in", "줌 인"], ["out", "줌 아웃"], ["none", "고정"]].forEach(([v, l]) => {
+      const o = el("option", null, l); o.value = v; if ((s.zoom || "in") === v) o.selected = true; zsel.appendChild(o);
+    });
+    zsel.onchange = () => { s.zoom = zsel.value; saveDebounced(); };
+    const zwrap = el("label", "edit-mini"); zwrap.appendChild(el("span", null, "줌")); zwrap.appendChild(zsel);
+    ctl.appendChild(zwrap);
+
+    const dur = el("input"); dur.type = "number"; dur.min = "1"; dur.step = "0.5";
+    dur.value = (s.durationSec || estDur(s.text)).toFixed(1); dur.style.width = "76px";
+    dur.onchange = () => { s.durationSec = parseFloat(dur.value) || estDur(s.text); saveDebounced(); };
+    const dwrap = el("label", "edit-mini"); dwrap.appendChild(el("span", null, "길이(초)")); dwrap.appendChild(dur);
+    ctl.appendChild(dwrap);
+
+    const play = el("button", "btn sm", "▶ 이 장면");
+    play.onclick = () => openPlayer(i, true);
+    ctl.appendChild(play);
+
+    if (s.isIntro && s.imageDataUrl) {
+      const rec = el("button", "btn sm", "🎬 인트로 영상 저장");
+      rec.onclick = () => recordIntroClip(i);
+      ctl.appendChild(rec);
+    }
+    right.appendChild(ctl);
+    row.appendChild(right);
+    c.appendChild(row);
+    return c;
+  }
+
+  function openPlayer(startIdx, single) {
+    let idx = startIdx || 0;
+    let audio = null, timer = null, stopped = false;
+    const overlay = el("div", "player");
+    overlay.innerHTML =
+      "<div class='player-box'><div class='player-stage'><img class='player-img' id='pImg' alt=''></div>" +
+      "<div class='player-wm' id='pWm'></div><div class='player-cap' id='pCap'></div>" +
+      "<button class='player-x' id='pX' title='닫기'>✕</button></div>";
+    document.body.appendChild(overlay);
+    $("#pWm").textContent = project.watermark;
+    function cleanup() { stopped = true; if (timer) clearTimeout(timer); if (audio) audio.pause(); overlay.remove(); }
+    $("#pX").onclick = cleanup;
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) cleanup(); });
+    document.addEventListener("keydown", function esc(e) { if (e.key === "Escape") { cleanup(); document.removeEventListener("keydown", esc); } });
+
+    function playScene() {
+      if (stopped) return;
+      if (idx >= project.scenes.length) { cleanup(); return; }
+      const s = project.scenes[idx];
+      const im = $("#pImg");
+      const dur = s.durationSec || estDur(s.text);
+      const big = s.isIntro ? 1.22 : 1.12;
+      const z = s.zoom || "in";
+      im.style.transition = "none";
+      im.src = s.imageDataUrl || "";
+      im.style.opacity = s.imageDataUrl ? "1" : "0.2";
+      if (z === "in") { im.style.transform = "scale(1)"; requestAnimationFrame(() => { im.style.transition = `transform ${dur}s linear`; im.style.transform = `scale(${big})`; }); }
+      else if (z === "out") { im.style.transform = `scale(${big})`; requestAnimationFrame(() => { im.style.transition = `transform ${dur}s linear`; im.style.transform = "scale(1)"; }); }
+      else { im.style.transform = "scale(1.04)"; }
+      $("#pCap").textContent = s.text;
+      if (audio) { audio.pause(); audio = null; }
+      if (s.audioDataUrl) { audio = new Audio(s.audioDataUrl); audio.play().catch(() => {}); }
+      timer = setTimeout(() => { idx++; if (single) { cleanup(); return; } playScene(); }, dur * 1000);
+    }
+    playScene();
+  }
+
+  async function recordIntroClip(i) {
+    const s = project.scenes[i];
+    if (!s.imageDataUrl) { toast("인트로 이미지가 없어요"); return; }
+    if (typeof MediaRecorder === "undefined") { toast("이 브라우저는 영상 저장을 지원하지 않아요"); return; }
+    try {
+      const img = new Image(); img.src = s.imageDataUrl; await img.decode();
+      const W = 1280, H = 720;
+      const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+      const ctx = cv.getContext("2d");
+      const stream = cv.captureStream(30);
+      const rec = new MediaRecorder(stream, { mimeType: "video/webm" });
+      const chunks = [];
+      rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+      const done = new Promise((r) => (rec.onstop = r));
+      const dur = (s.durationSec || 5);
+      const ir = img.width / img.height, cr = W / H;
+      let sw, sh; if (ir > cr) { sh = img.height; sw = sh * cr; } else { sw = img.width; sh = sw / cr; }
+      const sx = (img.width - sw) / 2, sy = (img.height - sh) / 2;
+      rec.start();
+      const t0 = performance.now();
+      (function draw() {
+        const p = Math.min(1, (performance.now() - t0) / (dur * 1000));
+        const zoom = 1 - 0.18 * p;              // push-in by cropping tighter
+        const zw = sw * zoom, zh = sh * zoom;
+        ctx.drawImage(img, sx + (sw - zw) / 2, sy + (sh - zh) / 2, zw, zh, 0, 0, W, H);
+        ctx.font = "bold 26px sans-serif"; ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.shadowColor = "rgba(0,0,0,0.6)"; ctx.shadowBlur = 6;
+        ctx.fillText(project.watermark, 26, 46);
+        ctx.shadowBlur = 0;
+        if (p < 1 && !document.hidden) requestAnimationFrame(draw); else rec.stop();
+      })();
+      toast("인트로 영상 만드는 중…");
+      await done;
+      download(new Blob(chunks, { type: "video/webm" }), `intro_scene_${i + 1}.webm`);
+      toast("인트로 영상(webm) 저장 완료");
+    } catch (e) { toast("인트로 영상 실패: " + e.message.slice(0, 50)); }
+  }
+
+  // ---- 8. 캡컷 내보내기 ----
   function renderExport(body) {
     body.appendChild(el("h2", "prod-h", "캡컷으로 내보내기"));
     body.appendChild(el("p", "prod-sub", "아래 버튼을 누르면 <b>이미지 · 음성 · 자막(SRT) · 대본 · 유튜브 정보</b>를 한 폴더(ZIP)로 내려받습니다. 압축을 풀고 캡컷에 불러오세요."));
@@ -680,12 +930,16 @@ ${scenes}`;
         if (m) files.push({ name: `images/scene_${pad(i)}.${m[1].split("/")[1].replace("jpeg", "jpg")}`, bytes: base64ToBytes(m[2]) });
       }
       if (s.audioDataUrl) {
-        const m = s.audioDataUrl.match(/^data:audio\/\w+;base64,(.*)$/);
-        if (m) files.push({ name: `audio/scene_${pad(i)}.wav`, bytes: base64ToBytes(m[1]) });
+        const m = s.audioDataUrl.match(/^data:audio\/([\w.+-]+);base64,(.*)$/);
+        if (m) {
+          let ext = m[1].split(";")[0].replace("mpeg", "mp3").replace("x-wav", "wav").replace("wave", "wav");
+          if (!/^(mp3|wav|m4a|aac|ogg|opus)$/.test(ext)) ext = "mp3";
+          files.push({ name: `audio/scene_${pad(i)}.${ext}`, bytes: base64ToBytes(m[2]) });
+        }
       }
     });
     files.push({ name: "subtitles.srt", bytes: strBytes(buildSRT()) });
-    files.push({ name: "script.txt", bytes: strBytes(project.scenes.map((s, i) => `[장면 ${i + 1}${s.isIntro ? " 인트로" : ""}]\n${s.text}`).join("\n\n")) });
+    files.push({ name: "script.txt", bytes: strBytes(project.scenes.map((s, i) => `[장면 ${i + 1}${s.isIntro ? " 인트로" : ""} · 줌:${s.zoom || "in"} · ${(s.durationSec || estDur(s.text)).toFixed(1)}초]\n${s.text}`).join("\n\n")) });
     files.push({
       name: "youtube_info.txt",
       bytes: strBytes(`■ 제목\n${project.title}\n\n■ 제목 옆 태그\n${project.titleTag}\n\n■ 설명\n${project.description}\n\n■ 태그\n${project.tags.join(", ")}\n\n■ 워터마크(왼쪽 위 문구)\n${project.watermark}`)
@@ -757,9 +1011,30 @@ ${scenes}`;
       localStorage.setItem(LS.model, $("#prodModel").value.trim() || "claude-opus-5");
       localStorage.setItem(LS.imgModel, $("#prodImgModel").value.trim() || "gemini-2.5-flash-image");
       $("#prodKeyPanel").hidden = true;
+      render();
       toast("키를 저장했어요");
     };
+
+    // 언어 전환 (한국어 / 日本語)
+    const langT = $("#langToggle");
+    if (langT) {
+      const syncLang = () => langT.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.lang === project.lang));
+      langT.addEventListener("click", (e) => {
+        const b = e.target.closest("button[data-lang]");
+        if (!b) return;
+        const started = project.scenes.length > 0 || project.topics.length > 0;
+        if (started && b.dataset.lang !== project.lang &&
+            !confirm("언어를 바꾸면 새 프로젝트로 시작합니다. 계속할까요?")) return;
+        if (started && b.dataset.lang !== project.lang) { project = newProject(b.dataset.lang); stepIdx = 0; }
+        else { project.lang = b.dataset.lang; if (!project.scenes.length) { project.style = LANG[project.lang].style; project.watermark = LANG[project.lang].watermark; } }
+        syncLang(); render();
+      });
+      syncLang();
+    }
+
     render();
+    // 키가 없으면 처음부터 입력창을 열어 눈에 띄게
+    if (!claudeKey()) openKeys();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
