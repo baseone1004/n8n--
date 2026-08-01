@@ -433,6 +433,8 @@ textarea {
   transition: all .12s;
 }
 .style-chip:hover { border-color: var(--seal); background: var(--paper); }
+.style-chip.sel { border-color: var(--seal); background: rgba(139,92,246,0.14); box-shadow: 0 0 0 2px rgba(139,92,246,0.35); }
+.style-chip.sel b::before { content: "✓ "; }
 .style-chip b { display: block; color: var(--seal); margin-bottom: 3px; font-size: 13px; }
 .style-chip span { font-size: 12px; color: var(--ink-soft); line-height: 1.4; }
 

@@ -50,6 +50,25 @@
     ? "\n\n중요: 결과의 모든 텍스트(제목·설명·태그·대본 등)는 반드시 자연스러운 '일본어'로 작성한다."
     : "";
 
+  // 언어별 그림체 프리셋 — 한국: 반실사 웹툰(만화)풍 / 일본: 부드러운 애니 셀화풍
+  const STYLE_PRESETS = {
+    ko: [
+      { name: "반실사 웹툰 (기본)", desc: "정제된 실사 얼굴 + 웹툰 채색, 차분한 색감", tail: "semi-realistic Korean webtoon manhwa illustration, detailed painterly rendering, refined realistic faces, muted earthy color palette, soft cinematic lighting, mature historical drama mood" },
+      { name: "반실사 웹툰 · 진한 명암", desc: "강한 그림자·대비, 묵직한 분위기", tail: "semi-realistic Korean webtoon manhwa illustration, detailed rendering, refined realistic faces, strong dramatic chiaroscuro shadows, high contrast, deep moody color grading, cinematic" },
+      { name: "반실사 웹툰 · 부드러운 톤", desc: "은은한 파스텔, 따뜻하고 잔잔", tail: "semi-realistic Korean webtoon manhwa illustration, soft gentle rendering, refined realistic faces, muted soft pastel palette, warm diffused lighting, calm nostalgic mood" },
+      { name: "반실사 웹툰 · 디테일 강화", desc: "정교한 선·질감, 섬세한 묘사", tail: "highly detailed semi-realistic Korean manhwa illustration, intricate linework and textures, refined realistic faces, rich painterly detail, natural muted colors, cinematic depth" },
+      { name: "반실사 웹툰 · 수채 느낌", desc: "수채화로 물든 부드러운 채색", tail: "semi-realistic Korean manhwa illustration with watercolor-washed coloring, refined realistic faces, soft blended tones, delicate linework, gentle painterly mood" }
+    ],
+    ja: [
+      { name: "애니 셀화 (기본)", desc: "깔끔한 셀 채색, 정겨운 옛이야기 느낌", tail: "traditional Japanese folktale anime illustration, clean cel shading, flat soft colors, gentle rounded faces, hand-painted rural scenery, warm nostalgic wholesome mood" },
+      { name: "애니 셀화 · 밝고 따뜻", desc: "화사하고 따뜻한 햇살 색감", tail: "Japanese folktale anime illustration, clean cel shading, bright warm sunny palette, soft gentle faces, lush hand-painted countryside, cheerful nostalgic mood" },
+      { name: "애니 셀화 · 차분한 톤", desc: "가라앉은 색, 애틋한 분위기", tail: "Japanese folktale anime illustration, cel shading, muted calm subdued palette, gentle faces, quiet melancholic atmosphere, soft hand-painted background" },
+      { name: "애니 셀화 · 배경 디테일", desc: "정교하게 그린 풍경 배경", tail: "Japanese folktale anime illustration, clean cel shading, richly detailed hand-painted scenic backgrounds, soft gentle characters, atmospheric depth, warm tones" },
+      { name: "우키요에풍", desc: "전통 목판화 느낌, 굵은 외곽선", tail: "ukiyo-e Japanese woodblock print style, flat colors, bold outlines, traditional patterns, Edo period aesthetic, elegant composition" }
+    ]
+  };
+  const stylePresetsFor = (lang) => STYLE_PRESETS[lang] || STYLE_PRESETS.ko;
+
   const CATEGORIES = [
     { key: "권선징악", emoji: "⚖️", desc: "착한 이는 복 받고 악한 이는 벌 받는 통쾌한 이야기" },
     { key: "귀신·괴담", emoji: "👻", desc: "밤에 오싹해지는 처녀귀신·도깨비·저주 이야기" },
@@ -80,7 +99,7 @@
       titleTag: "",
       description: "",
       tags: [],
-      style: LANG[lang].style,
+      style: STYLE_PRESETS[lang][0].tail,
       scenes: [],       // {text, imagePrompt, imageDataUrl, audioDataUrl, durationSec, isIntro, zoom}
       watermark: LANG[lang].watermark
     };
@@ -621,8 +640,20 @@ ${scenes}`;
 
   function renderPrompt(body) {
     body.appendChild(el("h2", "prod-h", "이미지 프롬프트"));
-    body.appendChild(el("p", "prod-sub", `화풍: <b>${esc(project.style)}</b> · 프롬프트를 다듬고 다음에서 실제 이미지를 만듭니다.`));
-    const styleF = field("화풍(STYLE_TAIL) — 영어", () => project.style, true, (v) => { project.style = v; saveDebounced(); });
+    body.appendChild(el("p", "prod-sub", `그림체를 고르면 모든 장면에 적용돼요. ${project.lang === "ja" ? "일본 민담용 애니 셀화풍" : "한국 야담용 반실사 웹툰풍"} 중에서 선택하세요.`));
+
+    body.appendChild(el("div", "field-label", "그림체 고르기"));
+    const grid = el("div", "style-list");
+    stylePresetsFor(project.lang).forEach((preset) => {
+      const chip = el("button", "style-chip" + (project.style === preset.tail ? " sel" : ""));
+      chip.innerHTML = `<b>${esc(preset.name)}</b><span>${esc(preset.desc)}</span>`;
+      chip.onclick = () => { project.style = preset.tail; saveDebounced(); render(); };
+      grid.appendChild(chip);
+    });
+    body.appendChild(grid);
+
+    const styleF = field("직접 다듬기 (STYLE_TAIL · 영어)", () => project.style, true, (v) => { project.style = v; saveDebounced(); });
+    styleF.style.marginTop = "14px";
     body.appendChild(styleF);
     const pkg = el("div", "pkg");
     project.scenes.forEach((s, i) => {
@@ -1128,7 +1159,7 @@ ${scenes}`;
         if (started && b.dataset.lang !== project.lang &&
             !confirm("언어를 바꾸면 새 프로젝트로 시작합니다. 계속할까요?")) return;
         if (started && b.dataset.lang !== project.lang) { project = newProject(b.dataset.lang); stepIdx = 0; }
-        else { project.lang = b.dataset.lang; if (!project.scenes.length) { project.style = LANG[project.lang].style; project.watermark = LANG[project.lang].watermark; } }
+        else { project.lang = b.dataset.lang; if (!project.scenes.length) { project.style = STYLE_PRESETS[project.lang][0].tail; project.watermark = LANG[project.lang].watermark; } }
         syncLang(); render();
       });
       syncLang();
