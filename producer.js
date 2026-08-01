@@ -126,6 +126,10 @@
     };
   }
 
+  // 로컬 서버(server.ps1)로 열었을 때만 CORS 우회 중계 사용
+  const onLocalServer = () => /^https?:$/.test(location.protocol) && /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+  const apiFetch = (url, opts) => onLocalServer() ? fetch("/__proxy?u=" + encodeURIComponent(url), opts) : fetch(url, opts);
+
   const $ = (s) => document.querySelector(s);
   const el = (tag, cls, html) => {
     const e = document.createElement(tag);
@@ -210,7 +214,7 @@
   async function genImageKIE(prompt) {
     const key = kieKey();
     if (!key) throw new Error("NO_KIE_KEY");
-    const create = await fetch(KIE_CREATE, {
+    const create = await apiFetch(KIE_CREATE, {
       method: "POST",
       headers: { "content-type": "application/json", "authorization": "Bearer " + key },
       body: JSON.stringify({
@@ -227,7 +231,7 @@
     if (!taskId) throw new Error("KIE: taskId 없음 " + JSON.stringify(cj).slice(0, 120));
     for (let n = 0; n < 90; n++) {
       await sleep(2000);
-      const q = await fetch(KIE_RECORD + encodeURIComponent(taskId), { headers: { "authorization": "Bearer " + key } });
+      const q = await apiFetch(KIE_RECORD + encodeURIComponent(taskId), { headers: { "authorization": "Bearer " + key } });
       if (!q.ok) continue;
       const qj = await q.json();
       const st = qj.data?.state;
@@ -236,7 +240,7 @@
         if (typeof rj === "string") { try { rj = JSON.parse(rj); } catch (e) { rj = {}; } }
         const url = rj.resultUrls?.[0] || rj.result_urls?.[0] || (Array.isArray(rj.resultUrls) ? rj.resultUrls[0] : null);
         if (!url) throw new Error("KIE: 결과 URL 없음");
-        try { const r = await fetch(url); return await blobToDataURL(await r.blob()); }
+        try { const r = await apiFetch(url); return await blobToDataURL(await r.blob()); }
         catch (e) { return url; } // CORS로 바이트 못 가져오면 URL 그대로(미리보기는 됨, ZIP 제외)
       }
       if (st === "fail") throw new Error("KIE 실패: " + (qj.data.failMsg || "알 수 없음"));
@@ -311,7 +315,7 @@
     const key = typecastKey();
     if (!key) throw new Error("NO_TYPECAST_KEY");
     if (!typecastVoice()) throw new Error("NO_TYPECAST_VOICE");
-    const res = await fetch(TYPECAST_URL, {
+    const res = await apiFetch(TYPECAST_URL, {
       method: "POST",
       headers: { "content-type": "application/json", "authorization": "Bearer " + key },
       body: JSON.stringify({
@@ -351,7 +355,7 @@
       let data = null;
       for (const url of ["https://api.typecast.ai/v1/voices", "https://api.typecast.ai/v2/voices"]) {
         try {
-          const r = await fetch(url, { headers: { "authorization": "Bearer " + key } });
+          const r = await apiFetch(url, { headers: { "authorization": "Bearer " + key } });
           if (r.ok) { data = await r.json(); break; }
         } catch (e) {}
       }

@@ -69,6 +69,7 @@
     const out = $("#ytChannelResult");
     const input = $("#ytChannel").value.trim();
     if (!input) { toast("채널 @핸들이나 URL을 넣어주세요"); return; }
+    localStorage.setItem("yeti_yt_channel", input);
     if (!ytKey()) { toast("먼저 API 키를 저장하세요"); $("#ytKey").focus(); return; }
     loadingInto(out, "채널을 분석하는 중…");
     try {
@@ -133,6 +134,8 @@
     if (!ytKey()) { toast("먼저 API 키를 저장하세요"); $("#ytKey").focus(); return; }
     const q = $("#ytQuery").value.trim() || "야담 옛날이야기";
     const region = $("#ytRegion").value;
+    localStorage.setItem("yeti_yt_query", q);
+    localStorage.setItem("yeti_yt_region", region);
     const relLang = region === "JP" ? "ja" : region === "US" ? "en" : "ko";
     loadingInto(out, "최근 7일 급상승 영상을 찾는 중…");
     try {
@@ -268,10 +271,26 @@
     }
   }
 
+  let autoRan = false;
+  function autoRun() {
+    if (autoRan || !ytKey()) return;
+    autoRan = true;
+    if (localStorage.getItem("yeti_yt_channel")) analyzeChannel();
+    searchBenchmark();
+  }
+
   function init() {
     if (!$("#panel-youtube")) return;
     $("#ytKey").value = ytKey();
     $("#ytClientId").value = localStorage.getItem(LS_CID) || "";
+    // 저장된 입력 복원 (없으면 기본 검색어)
+    $("#ytChannel").value = localStorage.getItem("yeti_yt_channel") || "";
+    $("#ytQuery").value = localStorage.getItem("yeti_yt_query") || "야담 옛날이야기";
+    const savedRegion = localStorage.getItem("yeti_yt_region"); if (savedRegion) $("#ytRegion").value = savedRegion;
+    // 유튜브 탭 열면 자동 실행(입력 없이)
+    const tabs = document.getElementById("tabs");
+    if (tabs) tabs.addEventListener("click", (e) => { if (e.target.closest('.tab[data-tab="youtube"]')) setTimeout(autoRun, 50); });
+    if (document.querySelector('#panel-youtube.is-active')) setTimeout(autoRun, 100);
     $("#ytLogin").onclick = ytLogin;
     $("#ytLogout").onclick = () => { accessToken = ""; $("#ytLogout").hidden = true; $("#ytMineResult").innerHTML = ""; try { window.google.accounts.oauth2.revoke && 0; } catch (e) {} toast("로그아웃"); };
     $("#ytSaveKey").onclick = () => { localStorage.setItem(LS_KEY, $("#ytKey").value.trim()); toast("YouTube 키를 저장했어요"); };
