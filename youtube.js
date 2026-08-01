@@ -34,7 +34,8 @@
     const m = String(e.message);
     if (m.includes("NO_YT_KEY")) return "먼저 YouTube Data API 키를 저장하세요.";
     if (/Failed to fetch/.test(m)) return "네트워크 오류. 인터넷/키를 확인하세요.";
-    if (/403/.test(m)) return "키 오류 또는 할당량 초과일 수 있어요. " + m;
+    if (/API keys are not supported|401/.test(m)) return "⚠ 넣은 값이 올바른 'API 키'가 아니에요. Google Cloud → 사용자 인증 정보에서 <b>API 키(AIza… 로 시작)</b>를 만들어 넣으세요. (OAuth 클라이언트 ID가 아님!)";
+    if (/403/.test(m)) return "키 오류·할당량 초과·API 미사용설정일 수 있어요. YouTube Data API v3가 켜져 있는지 확인. " + m;
     return m;
   }
   function loadingInto(node, text) {
@@ -128,6 +129,42 @@
     return row;
   }
 
+  // ---- 다른 채널 분석(인기 채널 자동) ----
+  async function searchChannels() {
+    const out = $("#ytChannelResult");
+    if (!ytKey()) { toast("먼저 API 키를 저장하세요"); if ($("#ytKey")) $("#ytKey").focus(); return; }
+    const q = ($("#ytChanQuery").value.trim()) || "야담 옛날이야기";
+    const region = $("#ytChanRegion").value;
+    localStorage.setItem("yeti_yt_chanq", q);
+    localStorage.setItem("yeti_yt_chanregion", region);
+    loadingInto(out, "인기 채널을 찾는 중…");
+    try {
+      const s = await ytGet("search", { part: "snippet", type: "channel", q: q, regionCode: region, maxResults: 12 });
+      const ids = (s.items || []).map((x) => x.snippet.channelId || (x.id && x.id.channelId)).filter(Boolean).join(",");
+      if (!ids) { out.innerHTML = ""; out.appendChild(el("div", "yt-note", "결과가 없어요. 검색어를 바꿔보세요.")); return; }
+      const ch = await ytGet("channels", { part: "snippet,statistics", id: ids });
+      const items = (ch.items || []).sort((a, b) => Number(b.statistics.subscriberCount || 0) - Number(a.statistics.subscriberCount || 0));
+      out.innerHTML = "";
+      out.appendChild(el("div", "yt-note", `"${esc(q)}" 인기 채널 ${items.length}곳 (구독자순)`));
+      const list = el("div", "yt-video-list");
+      items.forEach((c) => list.appendChild(channelRow(c)));
+      out.appendChild(list);
+    } catch (e) { out.innerHTML = ""; out.appendChild(el("div", "prod-err", errMsg(e))); }
+  }
+  function channelRow(c) {
+    const s = c.statistics || {}, sn = c.snippet;
+    const row = el("div", "yt-video");
+    const a = el("a"); a.href = "https://www.youtube.com/channel/" + c.id; a.target = "_blank"; a.rel = "noopener";
+    const th = sn.thumbnails?.default?.url;
+    if (th) { const im = el("img"); im.src = th; im.style.width = "56px"; im.style.height = "56px"; im.style.borderRadius = "50%"; a.appendChild(im); }
+    row.appendChild(a);
+    const info = el("div", "yt-video-info");
+    info.appendChild(el("div", "yt-video-title", esc(sn.title)));
+    info.appendChild(el("div", "yt-video-meta", `구독자 ${s.hiddenSubscriberCount ? "비공개" : nf(s.subscriberCount)} · 총 조회 ${nf(s.viewCount)} · 영상 ${nf(s.videoCount)}`));
+    row.appendChild(info);
+    return row;
+  }
+
   // ---- 벤치마킹 ----
   async function searchBenchmark() {
     const out = $("#ytBenchResult");
@@ -180,8 +217,21 @@
 
   // ---- 내 채널 분석·수익 (OAuth) ----
   const LS_CID = "yeti_yt_client_id";
+  const LS_TOK = "yeti_yt_token";
+  const LS_TOKEXP = "yeti_yt_token_exp";
   let accessToken = "";
   let tokenClient = null;
+
+  function saveToken(tok, expiresIn) {
+    accessToken = tok;
+    localStorage.setItem(LS_TOK, tok);
+    localStorage.setItem(LS_TOKEXP, String(Date.now() + (expiresIn || 3500) * 1000));
+  }
+  function validToken() {
+    const t = localStorage.getItem(LS_TOK);
+    const exp = parseInt(localStorage.getItem(LS_TOKEXP) || "0", 10);
+    return (t && Date.now() < exp - 60000) ? t : "";
+  }
 
   function loadGIS() {
     return new Promise((res, rej) => {
@@ -195,31 +245,30 @@
   }
   function ymd(d) { return d.toISOString().slice(0, 10); }
 
-  async function ytLogin() {
+  async function ytLogin(silent) {
     const out = $("#ytMineResult");
-    const cid = $("#ytClientId").value.trim();
-    if (!cid) { toast("OAuth 클라이언트 ID를 넣어주세요"); return; }
+    const cid = ($("#ytClientId").value || localStorage.getItem(LS_CID) || "").trim();
+    if (!cid) { if (!silent) toast("OAuth 클라이언트 ID를 넣어주세요"); return; }
     localStorage.setItem(LS_CID, cid);
     if (location.protocol === "file:") {
-      out.innerHTML = "";
-      out.appendChild(el("div", "prod-err", "지금 <b>file://</b>로 열려 있어요. 구글 로그인은 http(s) 주소에서만 됩니다. 폴더에서 <code>python -m http.server</code> 실행 후 <b>http://localhost:8000</b> 으로 열고, 그 주소를 클라이언트 ID의 '승인된 자바스크립트 원본'에 추가하세요."));
+      if (!silent) { out.innerHTML = ""; out.appendChild(el("div", "prod-err", "지금 <b>file://</b>로 열려 있어요. 구글 로그인은 <b>수익분석_켜기.bat</b>(localhost)로 열었을 때만 됩니다.")); }
       return;
     }
     try {
-      loadingInto(out, "구글 로그인 중…");
+      if (!silent) loadingInto(out, "구글 로그인 중…");
       await loadGIS();
       tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: cid,
         scope: "https://www.googleapis.com/auth/yt-analytics.readonly https://www.googleapis.com/auth/yt-analytics-monetary.readonly https://www.googleapis.com/auth/youtube.readonly",
         callback: (resp) => {
-          if (resp.error) { out.innerHTML = ""; out.appendChild(el("div", "prod-err", "로그인 실패: " + resp.error)); return; }
-          accessToken = resp.access_token;
+          if (resp.error) { if (!silent) { out.innerHTML = ""; out.appendChild(el("div", "prod-err", "로그인 실패: " + resp.error + " — 다시 '로그인하고 분석 보기'를 눌러주세요.")); } return; }
+          saveToken(resp.access_token, resp.expires_in);
           $("#ytLogout").hidden = false;
           fetchMine();
         }
       });
-      tokenClient.requestAccessToken({ prompt: "consent" });
-    } catch (e) { out.innerHTML = ""; out.appendChild(el("div", "prod-err", errMsg(e))); }
+      tokenClient.requestAccessToken({ prompt: silent ? "" : "consent" });
+    } catch (e) { if (!silent) { out.innerHTML = ""; out.appendChild(el("div", "prod-err", errMsg(e))); } }
   }
 
   async function authGet(url) {
@@ -276,9 +325,11 @@
     if (tab === "benchmark") {
       if (ytKey() && !$("#ytBenchResult").children.length) searchBenchmark();
     } else if (tab === "otherchannel") {
-      if (ytKey() && localStorage.getItem("yeti_yt_channel") && !$("#ytChannelResult").children.length) analyzeChannel();
+      if (ytKey() && !$("#ytChannelResult").children.length) searchChannels();
     } else if (tab === "mychannel") {
-      if (accessToken && !$("#ytMineResult").children.length) fetchMine();
+      if ($("#ytMineResult").children.length) return;
+      if (validToken()) { accessToken = validToken(); $("#ytLogout").hidden = false; fetchMine(); }
+      else if (localStorage.getItem(LS_CID)) ytLogin(true); // 저장된 로그인 조용히 갱신
     }
   }
 
@@ -291,9 +342,13 @@
     if (!$("#panel-benchmark")) return;
     syncKeyInputs();
     $("#ytClientId").value = localStorage.getItem(LS_CID) || "";
-    $("#ytChannel").value = localStorage.getItem("yeti_yt_channel") || "";
     $("#ytQuery").value = localStorage.getItem("yeti_yt_query") || "야담 옛날이야기";
     const savedRegion = localStorage.getItem("yeti_yt_region"); if (savedRegion) $("#ytRegion").value = savedRegion;
+    $("#ytChanQuery").value = localStorage.getItem("yeti_yt_chanq") || "야담 옛날이야기";
+    const chanRegion = localStorage.getItem("yeti_yt_chanregion"); if (chanRegion) $("#ytChanRegion").value = chanRegion;
+
+    // 저장된 로그인 복원
+    if (validToken()) { accessToken = validToken(); $("#ytLogout").hidden = false; }
 
     // 사이드바 메뉴 열면 자동 실행
     const tabs = document.getElementById("tabs");
@@ -303,13 +358,16 @@
       if (d === "mychannel" || d === "otherchannel" || d === "benchmark") setTimeout(() => autoRunFor(d), 60);
     });
 
-    $("#ytLogin").onclick = () => ytLogin();
-    $("#ytLogout").onclick = () => { accessToken = ""; $("#ytLogout").hidden = true; $("#ytMineResult").innerHTML = ""; toast("로그아웃"); };
+    $("#ytLogin").onclick = () => ytLogin(false);
+    $("#ytLogout").onclick = () => {
+      accessToken = ""; localStorage.removeItem(LS_TOK); localStorage.removeItem(LS_TOKEXP);
+      $("#ytLogout").hidden = true; $("#ytMineResult").innerHTML = ""; toast("로그아웃");
+    };
     const saveKey = (inputId) => { localStorage.setItem(LS_KEY, $(inputId).value.trim()); syncKeyInputs(); toast("YouTube 키를 저장했어요"); };
     $("#ytSaveKey").onclick = () => saveKey("#ytKey");
     $("#ytSaveKey2").onclick = () => saveKey("#ytKey2");
-    $("#ytAnalyze").onclick = analyzeChannel;
-    $("#ytChannel").addEventListener("keydown", (e) => { if (e.key === "Enter") analyzeChannel(); });
+    $("#ytChanSearch").onclick = searchChannels;
+    $("#ytChanQuery").addEventListener("keydown", (e) => { if (e.key === "Enter") searchChannels(); });
     $("#ytSearch").onclick = searchBenchmark;
     $("#ytQuery").addEventListener("keydown", (e) => { if (e.key === "Enter") searchBenchmark(); });
   }

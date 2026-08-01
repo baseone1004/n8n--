@@ -353,8 +353,8 @@
       <section class="panel" id="panel-otherchannel">
         <div class="yt">
           <div class="yt-section">
-            <h2 class="prod-h">다른 채널 분석 <span style="font-size:13px;color:var(--ink-soft)">(공개 지표)</span></h2>
-            <p class="prod-sub">채널 <b>@핸들</b>·URL·ID를 넣고 분석하면 구독자·조회수·최근 영상 지표가 나와요. 한 번 넣으면 기억해서 다음엔 자동 실행됩니다.</p>
+            <h2 class="prod-h">다른 채널 분석 <span style="font-size:13px;color:var(--ink-soft)">(인기 채널 자동)</span></h2>
+            <p class="prod-sub">이 메뉴를 열면 <b>자동으로</b> 인기 야담 채널들을 구독자순으로 분석해요. 핸들·URL 입력 필요 없어요. 검색어를 바꾸면 그걸 기억합니다.</p>
             <label class="field">
               <span class="field-label">YouTube Data API 키 <small>(한 번만 저장)</small></span>
               <div class="yt-row" style="margin:0">
@@ -363,8 +363,13 @@
               </div>
             </label>
             <div class="yt-row">
-              <input type="text" id="ytChannel" placeholder="@myhandle 또는 https://youtube.com/@myhandle" />
-              <button class="btn btn-primary" id="ytAnalyze">분석</button>
+              <input type="text" id="ytChanQuery" placeholder="분야 검색어 (예: 야담, 옛날이야기, 괴담)" />
+              <select id="ytChanRegion">
+                <option value="KR">🇰🇷 한국</option>
+                <option value="JP">🇯🇵 일본</option>
+                <option value="US">🇺🇸 미국</option>
+              </select>
+              <button class="btn btn-primary" id="ytChanSearch">채널 찾기</button>
             </div>
             <div id="ytChannelResult"></div>
           </div>
