@@ -617,6 +617,8 @@ textarea {
 .edit-mini { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink-soft); }
 .edit-mini select, .edit-mini input { padding: 6px 8px; font-size: 14px; }
 
+.grok-box { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; padding: 10px; border: 1px dashed var(--line); border-radius: 10px; background: var(--paper-2); }
+
 /* 미리보기 플레이어 */
 .player { position: fixed; inset: 0; z-index: 80; background: #000; display: grid; place-items: center; }
 .player-box { position: relative; width: min(96vw, 1100px); aspect-ratio: 16/9; overflow: hidden; background: #000; border-radius: 8px; }

@@ -24,10 +24,13 @@
     { key: "script", name: "대본·정보" },
     { key: "prompt", name: "이미지 프롬프트" },
     { key: "image", name: "이미지 생성" },
+    { key: "thumb", name: "썸네일" },
     { key: "voice", name: "음성·자막" },
     { key: "edit", name: "편집·미리보기" },
     { key: "export", name: "캡컷 내보내기" }
   ];
+  const stepOf = (k) => STEPS.findIndex((s) => s.key === k);
+  function goStep(k) { stepIdx = stepOf(k); render(); }
 
   // 언어별 설정 (한국 야담 / 일본 괴담·옛이야기)
   const LANG = {
@@ -69,6 +72,19 @@
   };
   const stylePresetsFor = (lang) => STYLE_PRESETS[lang] || STYLE_PRESETS.ko;
 
+  // 대본 규칙(정제본 v11.3) — 제목 패턴 / 인트로 / 고정 멘트
+  const TITLE_PATTERNS =
+    "- 충격 행동 + 반전 궁금증: 장터에서 아기를 100냥에 사온 과부, 그 아이의 정체는?\n" +
+    "- A vs B 대비: 큰 며느리는 땅 갖고 막내 며느리는 시어머니를 가졌다\n" +
+    "- 상황 + 미완성 반응: 세자빈 간택에 거지 차림으로 나온 처자, 모두 비웃었는데..\n" +
+    "- 은혜 행동 + 그날 밤 결과: 흰 뱀을 구한 농부, 그날 밤 문 앞에 나타난 소녀\n" +
+    "- 신분역전 + 운명: 거지 소년을 거둔 과부, 10년 후 벌어진 일";
+  const CTA_KO = "구독과 좋아요는 더 좋은 이야기를 만드는 힘이 됩니다. 그럼 지금부터…";
+  const OUTRO_KO =
+    "다음 영상을 빠르게 만나보시려면 좋아요와 구독을 눌러주세요. " +
+    "지금 화면에 나오는 더 재미있는 영상들도 함께 해주세요. " +
+    "그럼 모두 행복한 하루 보내세요. 감사합니다.";
+
   const CATEGORIES = [
     { key: "권선징악", emoji: "⚖️", desc: "착한 이는 복 받고 악한 이는 벌 받는 통쾌한 이야기" },
     { key: "귀신·괴담", emoji: "👻", desc: "밤에 오싹해지는 처녀귀신·도깨비·저주 이야기" },
@@ -101,7 +117,8 @@
       tags: [],
       style: STYLE_PRESETS[lang][0].tail,
       scenes: [],       // {text, imagePrompt, imageDataUrl, audioDataUrl, durationSec, isIntro, zoom}
-      watermark: LANG[lang].watermark
+      watermark: LANG[lang].watermark,
+      thumb: { copies: [], chosen: -1, imagePrompt: "", imageDataUrl: "" }
     };
   }
 
@@ -380,7 +397,7 @@
     const key = STEPS[stepIdx].key;
     ({
       category: renderCategory, topic: renderTopic, script: renderScript,
-      prompt: renderPrompt, image: renderImage, voice: renderVoice,
+      prompt: renderPrompt, image: renderImage, thumb: renderThumb, voice: renderVoice,
       edit: renderEdit, export: renderExport
     }[key])(body);
   }
@@ -483,15 +500,17 @@
 
 이 카테고리로 ${LANG[project.lang].audience}에서 클릭률·조회수가 높을 만한 이야기 주제 10개를 추천해줘.
 자극적이되 흔한 클리셰의 반복은 피하고, 서로 소재가 겹치지 않게 분산해줘.
+제목은 아래 검증된 패턴 중 하나를 활용해서 궁금증을 남긴다(결말·정체 노출 금지):
+${TITLE_PATTERNS}
 각 주제는 아래 JSON 배열 형식으로만:
 [
-  {"title":"영상 제목 후보(호기심 유발, 25자 내외)","hook":"왜 끌리는지 한 줄 훅","why":"떡상 포인트 한 줄"},
+  {"title":"영상 제목 후보(호기심 유발, 25~35자)","hook":"왜 끌리는지 한 줄 훅","why":"떡상 포인트 한 줄"},
   ... (정확히 10개)
 ]${langDirective()}`;
       const arr = await claudeJSON(sys, usr, 4000);
       project.topics = Array.isArray(arr) ? arr.slice(0, 10) : [];
       project.topicIdx = -1;
-      busy = false; stepIdx = 1; render();
+      busy = false; goStep("topic");
     } catch (e) {
       busy = false; renderCategory(body); showErr(body, keyMissingMsg(e));
     } finally { busy = false; }
@@ -526,25 +545,48 @@
     busy = true; loading(body, "제목·태그·설명·대본을 짓는 중… (조금 걸려요)"); renderNav();
     try {
       const topic = project.topics[project.topicIdx];
-      const sys = `너는 ${LANG[project.lang].audience} 대본 작가다. 몰입되는 옛이야기체로, 장면이 눈에 그려지게 쓴다. 반드시 유효한 JSON만 출력한다.`;
+      const ja = project.lang === "ja";
+      const sys = `너는 ${LANG[project.lang].audience} 대본 작가다. 낭독용 옛이야기체로 장면이 눈에 그려지게 쓴다. 규칙:
+- 결말·정체·반전은 제목과 인트로에서 절대 미리 노출하지 않는다.
+- 나레이션은 '~습니다'와 '~지요'를 섞고, 같은 어미를 3문장 이상 연속하지 않는다.${ja ? " (일본어면 정중한 낭독체 です/ます를 자연스럽게 섞는다.)" : ""}
+- 요약 나레이션보다 인물 대사를 자주 넣는다. 수사 질문('그런데 이게 웬일입니까?')·짧은 전환 문장('그때였습니다')으로 리듬을 만든다.
+- 문장은 15~25자로 짧게. ${ja ? "쉬운 일본어로 쓴다." : "한자 없이 순 한글로 쓴다."} 비하 호칭은 전체 2회 이하.
+- 반드시 유효한 JSON만 출력.`;
       const usr =
 `카테고리: ${project.category}
 선택한 주제: ${topic.title}
 훅: ${topic.hook || ""}
 
 이 주제로 유튜브 영상 한 편 분량의 패키지를 만들어줘.${langDirective()}
+
+[제목] 아래 패턴 중 하나로(결말·정체 노출 금지):
+${TITLE_PATTERNS}
+
+[인트로 = 첫 장면(isIntro:true), 6문장 포맷]
+1) 파격적인 대사 한 줄(큰따옴표, 날것의 감정, 구체적 숫자·물건)
+2~4) 상황을 압축해서. 결과·결말 절대 금지. '지금 이 순간'만
+5) '그런데…'로 시작하는 궁금증(닫힌 질문 금지)
+6) 고정 구독 유도 문구: "${ja ? "→ 위 문장을 자연스러운 일본어로" : CTA_KO}"
+
+[본문 = 7단계 골격으로 장면 전개]
+발단(옛날 옛적 구체적 지역, 주인공의 결핍) → 일상과 갈등의 씨앗 → 사건 발생 → 시련(가장 길게, 장소·상대 다른 에피소드 여럿) → 위기(밑바닥) → 반전·해결(증표로 정체·결백 증명, 악인 몰락, 보상) → 마무리.
+초반에 심은 결핍·물건·증표를 후반에 회수한다.
+
+[마지막 장면 = 마무리]
+이 이야기에만 맞는 주제 한 문장(뻔한 교훈 금지) + 이어서 고정 마무리 멘트: "${ja ? "→ 아래를 자연스러운 일본어로: " + OUTRO_KO : OUTRO_KO}"
+
 JSON만:
 {
-  "title": "최종 영상 제목(호기심 자극, 30자 내외)",
-  "titleTag": "제목 옆에 붙일 태그/키워드 (예: #야담 #실화 형태, 2~4개)",
+  "title": "최종 영상 제목(호기심 자극, 30자 내외, 결말 노출 금지)",
+  "titleTag": "제목 옆 태그/키워드 2~4개 (${ja ? "#日本昔話 등" : "#야담 #실화 등"})",
   "description": "유튜브 설명란 글 (4~6문장, 이야기 소개 + 구독 유도)",
-  "tags": ["설명 아래 넣을 태그", "8~12개", "..."],
+  "tags": ["설명 아래 태그", "8~12개"],
   "scenes": [
-    {"text":"장면1 나레이션(옛이야기체, 2~4문장). 첫 장면은 강렬한 도입=인트로.", "isIntro": true},
+    {"text":"장면1 = 인트로(위 6문장 포맷)", "isIntro": true},
     {"text":"장면2 ...", "isIntro": false}
   ]
 }
-장면(scenes)은 12~18개로 나눠줘. 각 장면은 한 컷의 이미지로 그릴 수 있는 하나의 순간이어야 한다. 전체가 자연스럽게 이어지는 완결된 이야기여야 한다.`;
+장면(scenes)은 14~18개. 각 장면은 한 컷 이미지로 그릴 수 있는 한 순간. 전체가 자연스럽게 이어지는 완결된 이야기.`;
       const pkg = await claudeJSON(sys, usr, 12000);
       project.title = pkg.title || topic.title;
       project.titleTag = pkg.titleTag || "";
@@ -557,7 +599,7 @@ JSON만:
       }));
       if (project.scenes.length && !project.scenes.some((s) => s.isIntro)) project.scenes[0].isIntro = true;
       saveProject();
-      busy = false; stepIdx = 2; render();
+      busy = false; goStep("script");
     } catch (e) {
       busy = false; renderTopic(body); showErr(body, keyMissingMsg(e));
     } finally { busy = false; }
@@ -617,13 +659,20 @@ JSON만:
     const body = $("#prodBody");
     busy = true; loading(body, "각 장면의 이미지 프롬프트를 만드는 중…"); renderNav();
     try {
-      const sys = "너는 대본을 Google 이미지 생성 모델(나노 바나나)용 영어 프롬프트로 바꾸는 전문가다. 시대 배경·복식 고증을 지키고, 각 장면을 한 컷으로 그릴 수 있게 시각적으로 구체화한다. 색상·조명 단어는 최소화하고 인물/구도/행동 중심. 반드시 유효한 JSON만 출력.";
+      const sys = "너는 대본을 나노 바나나(이미지 생성)용 영어 프롬프트로 바꾸는 전문가다. 각 장면을 한 컷으로 그릴 수 있게 시각적으로 구체화한다. 반드시 유효한 JSON 배열만 출력.";
       const scenes = project.scenes.map((s, i) => `${i + 1}${s.isIntro ? "(인트로)" : ""}: ${s.text}`).join("\n");
       const usr =
 `화풍(STYLE_TAIL): ${project.style}
+인물 기본: ${LANG[project.lang].setting}
 
-아래 장면들 각각을 위 화풍으로 그릴 영어 이미지 프롬프트로 만들어줘.
-인물은 ${LANG[project.lang].setting} 를 반드시 명시. 장면 흐름상 같은 인물은 일관되게 묘사.
+아래 장면들을 각각 위 화풍으로 그릴 영어 이미지 프롬프트로 만들어줘. 규칙:
+- 각 프롬프트는 완결된 영어 문장 2~4개. 콤마 키워드 나열 금지.
+- 인물은 ${LANG[project.lang].setting} 를 명시하고, 같은 인물은 장면마다 같은 복식·머리로 일관되게 묘사(외투/상의/하의 분리).
+- 장면마다 샷을 다르게(클로즈업/미디엄/롱/투샷/오버숄더/로우앵글/측면 등 이웃 장면과 다르게).
+- 인물 자세를 장면마다 다르게(걷다 멈춤/뒤돌아봄/손 뻗기/기대기/먼 곳 응시/웅크려 살핌 등). '정면에서 두 손 모은' 반복 금지.
+- 배경은 실제 로케이션(마당/논밭/돌담/숲/관아/초가/기와집 등). 회색 스튜디오 배경 금지.
+- 각 프롬프트 끝에 반드시: "no text, no letters, no words, no modern objects. ${project.style}"
+- 결말·정체를 이미지로 스포일하지 않는다.
 JSON 배열만, 장면 순서대로 정확히 ${project.scenes.length}개:
 ["english image prompt for scene 1", "...", ...]
 
@@ -632,7 +681,7 @@ ${scenes}`;
       const arr = await claudeJSON(sys, usr, 8000);
       (arr || []).forEach((p, i) => { if (project.scenes[i]) project.scenes[i].imagePrompt = String(p); });
       saveProject();
-      busy = false; stepIdx = 3; render();
+      busy = false; goStep("prompt");
     } catch (e) {
       busy = false; render(); showErr($("#prodBody"), keyMissingMsg(e));
     } finally { busy = false; }
@@ -664,7 +713,7 @@ ${scenes}`;
       pkg.appendChild(c);
     });
     body.appendChild(pkg);
-    navBtn("이미지 전부 생성 →", () => { stepIdx = 4; render(); genAllImages(); }, true);
+    navBtn("이미지 전부 생성 →", () => { goStep("image"); genAllImages(); }, true);
   }
 
   // ---- 5. 이미지 생성 ----
@@ -683,7 +732,7 @@ ${scenes}`;
     body.appendChild(pkg);
     navBtn("전체 다시 생성", genAllImages);
     navBtn("이미지 전체 다운로드", downloadImagesZip);
-    navBtn("음성·자막 만들기 →", () => { stepIdx = 5; render(); }, true);
+    navBtn("썸네일 만들기 →", () => { goStep("thumb"); }, true);
   }
 
   function sceneImageCard(s, i) {
@@ -776,6 +825,113 @@ ${scenes}`;
     toast("이미지 생성 완료");
   }
 
+  // ---- 5.5 썸네일 ----
+  function renderThumb(body) {
+    body.appendChild(el("h2", "prod-h", "썸네일"));
+    body.appendChild(el("p", "prod-sub", "클릭을 부르는 <b>썸네일 카피 4종</b>을 만들고, 고른 카피에 맞춰 <b>썸네일 이미지</b>(글자 들어갈 자리 비움)를 생성합니다. 글자는 캡컷/편집기에서 얹으세요."));
+
+    const t = project.thumb || (project.thumb = { copies: [], chosen: -1, imagePrompt: "", imageDataUrl: "" });
+
+    if (!t.copies.length) {
+      const btn = el("button", "btn btn-primary", "✨ 썸네일 카피 만들기");
+      btn.onclick = genThumbCopies;
+      body.appendChild(btn);
+    } else {
+      body.appendChild(el("div", "field-label", "카피 고르기 (클릭)"));
+      const list = el("div", "topic-list");
+      t.copies.forEach((c, i) => {
+        const card = el("div", "topic-card" + (t.chosen === i ? " sel" : ""));
+        card.appendChild(el("div", "topic-rank", c.pos || (i < 2 ? "좌측 4줄" : "하단 2줄")));
+        const lines = el("div", "topic-title");
+        lines.style.whiteSpace = "pre-line"; lines.style.fontSize = "18px";
+        lines.textContent = (c.lines || []).join("\n");
+        card.appendChild(lines);
+        if (c.imageKo) card.appendChild(el("div", "topic-hook", "🖼 " + esc(c.imageKo)));
+        card.onclick = () => { t.chosen = i; saveDebounced(); render(); };
+        list.appendChild(card);
+      });
+      body.appendChild(list);
+
+      if (t.chosen >= 0) {
+        const box = el("div", "scene");
+        box.style.marginTop = "16px";
+        box.appendChild(el("div", "scene-no", "썸네일 이미지"));
+        const imgWrap = el("div", "scene-img"); imgWrap.style.width = "100%"; imgWrap.style.maxWidth = "480px"; imgWrap.id = "thumbImg";
+        if (t.imageDataUrl) { const im = el("img"); im.src = t.imageDataUrl; imgWrap.appendChild(im); }
+        else imgWrap.textContent = "아직 생성 안 됨";
+        box.appendChild(imgWrap);
+        const acts = el("div", "scene-actions");
+        const gen = el("button", "btn sm btn-primary", t.imageDataUrl ? "다시 생성" : "썸네일 이미지 생성");
+        gen.onclick = genThumbImage;
+        acts.appendChild(gen);
+        if (t.imageDataUrl) {
+          const dl = el("button", "btn sm", "이미지 다운로드");
+          dl.onclick = () => { if (/^https?:/.test(t.imageDataUrl)) window.open(t.imageDataUrl); else { const m = t.imageDataUrl.match(/^data:(image\/\w+);base64,(.*)$/); if (m) download(new Blob([base64ToBytes(m[2])], { type: m[1] }), "thumbnail.png"); } };
+          acts.appendChild(dl);
+        }
+        const cp = el("button", "btn sm btn-ghost", "카피 복사");
+        cp.onclick = () => { navigator.clipboard.writeText((t.copies[t.chosen].lines || []).join("\n")); toast("카피를 복사했어요"); };
+        acts.appendChild(cp);
+        box.appendChild(acts);
+        body.appendChild(box);
+      }
+    }
+
+    if (t.copies.length) navBtn("↻ 카피 다시 만들기", genThumbCopies);
+    navBtn("음성·자막 만들기 →", () => goStep("voice"), true);
+  }
+
+  async function genThumbCopies() {
+    const body = $("#prodBody");
+    busy = true; loading(body, "썸네일 카피 4종을 만드는 중…"); renderNav();
+    try {
+      const key = project.scenes.map((s) => s.text).join(" ").slice(0, 1200);
+      const sys = `너는 ${LANG[project.lang].audience} 썸네일 카피 전문가다. 결말·정체는 절대 노출하지 않는다. 반드시 유효한 JSON만 출력.`;
+      const usr =
+`제목: ${project.title}
+줄거리 일부: ${key}
+
+이 영상의 썸네일 카피 4종과 각 이미지 묘사를 만들어줘.${langDirective()}
+규칙:
+- 1,2번은 '좌측 4줄'(한 줄 5~7자, 줄 안에서 의미 완결), 3,4번은 '하단 2줄'(한 줄 12~16자).
+- 결말·정체·범인을 알 수 없게. 단서는 1~2개만. 뻔한 완료형 '~했다' 금지.
+- 4개의 사건 골격이 서로 달라야 함.
+- imageKo: 감정이 터지는 순간 한 컷(설명적 전신 금지, 얼굴/시선/동작 정점). 밤이어도 얼굴 보이게.
+- imageEn: 위 장면의 영어 이미지 프롬프트(완결 문장 2~3개). ${LANG[project.lang].setting}. 카피 자리(좌측4줄→왼쪽, 하단2줄→아래)를 비운다. 얼굴 잘 보이게, 어둠으로 덮지 않기. 글자/자막/말풍선 절대 없음.
+JSON만:
+{"copies":[
+ {"pos":"좌측 4줄","lines":["..","..","..",".."],"imageKo":"..","imageEn":".."},
+ {"pos":"좌측 4줄","lines":["..","..","..",".."],"imageKo":"..","imageEn":".."},
+ {"pos":"하단 2줄","lines":["..",".."],"imageKo":"..","imageEn":".."},
+ {"pos":"하단 2줄","lines":["..",".."],"imageKo":"..","imageEn":".."}
+]}`;
+      const r = await claudeJSON(sys, usr, 4000);
+      project.thumb = { copies: (r.copies || []).slice(0, 4), chosen: -1, imagePrompt: "", imageDataUrl: "" };
+      saveProject();
+      busy = false; render();
+    } catch (e) {
+      busy = false; render(); showErr($("#prodBody"), keyMissingMsg(e));
+    } finally { busy = false; }
+  }
+
+  async function genThumbImage() {
+    const t = project.thumb;
+    if (t.chosen < 0) { toast("카피를 먼저 고르세요"); return; }
+    const box = $("#thumbImg");
+    if (box) { box.innerHTML = ""; box.appendChild(el("div", "spinner")); }
+    try {
+      const c = t.copies[t.chosen];
+      const prompt = (c.imageEn || c.imageKo || project.title) +
+        " . emotional climax moment, face clearly visible, warm readable lighting, leave empty space for title text. no text, no letters, no captions, no speech bubbles. " + project.style;
+      t.imagePrompt = prompt;
+      t.imageDataUrl = await genImage(prompt);
+      saveProject(); render();
+    } catch (e) {
+      if (box) { box.innerHTML = ""; box.textContent = "실패"; }
+      toast("썸네일 실패: " + (/NO_(GEMINI|KIE)_KEY/.test(String(e.message)) ? "이미지 키 필요" : String(e.message).slice(0, 60)));
+    }
+  }
+
   // ---- 6. 음성·자막 ----
   function renderVoice(body) {
     body.appendChild(el("h2", "prod-h", "음성 · 자막"));
@@ -819,7 +975,7 @@ ${scenes}`;
     });
     body.appendChild(pkg);
     navBtn("전체 Gemini 음성 생성", genAllVoices);
-    navBtn("편집·미리보기 →", () => { stepIdx = 6; render(); }, true);
+    navBtn("편집·미리보기 →", () => { goStep("edit"); }, true);
   }
 
   function loadAudioFile(i, fileObj) {
@@ -879,7 +1035,7 @@ ${scenes}`;
     body.appendChild(pkg);
 
     navBtn("▶ 전체 미리보기", () => openPlayer(0, false));
-    navBtn("캡컷 내보내기 →", () => { stepIdx = 7; render(); }, true);
+    navBtn("캡컷 내보내기 →", () => { goStep("export"); }, true);
   }
 
   function sceneEditCard(s, i) {
@@ -924,14 +1080,69 @@ ${scenes}`;
     ctl.appendChild(play);
 
     if (s.isIntro && s.imageDataUrl) {
-      const rec = el("button", "btn sm", "🎬 인트로 영상 저장");
+      const rec = el("button", "btn sm", "🎬 인트로 클립(webm)");
       rec.onclick = () => recordIntroClip(i);
       ctl.appendChild(rec);
     }
+    if (s.isIntro) {
+      const grok = el("button", "btn sm", "🎥 Grok 영상 프롬프트");
+      grok.onclick = () => genGrokIntro(i, grok);
+      ctl.appendChild(grok);
+    }
     right.appendChild(ctl);
+
+    if (s.grokImage || s.grokVideo) {
+      const gb = el("div", "grok-box");
+      gb.appendChild(grokField("Grok 이미지 프롬프트", s.grokImage || ""));
+      gb.appendChild(grokField("Grok 영상 프롬프트", s.grokVideo || ""));
+      right.appendChild(gb);
+    }
+
     row.appendChild(right);
     c.appendChild(row);
     return c;
+  }
+
+  function grokField(label, value) {
+    const f = el("div", "pkg-field");
+    const lab = el("div", "pkg-label");
+    lab.appendChild(el("span", null, label));
+    const copy = el("button", "copy-mini", "복사");
+    copy.onclick = () => { navigator.clipboard.writeText(value); copy.textContent = "복사됨"; setTimeout(() => (copy.textContent = "복사"), 1000); };
+    lab.appendChild(copy);
+    f.appendChild(lab);
+    const ta = el("textarea"); ta.value = value; ta.readOnly = true; ta.style.minHeight = "70px"; ta.style.fontSize = "13px";
+    f.appendChild(ta);
+    return f;
+  }
+
+  async function genGrokIntro(i, btn) {
+    const s = project.scenes[i];
+    if (btn) { btn.disabled = true; btn.textContent = "생성 중…"; }
+    try {
+      const STYLE_LINE = "Drawn illustration in webtoon manhwa comic style with clear bold line art and flat cel-shaded coloring like the attached reference. 16:9 aspect ratio.";
+      const sys = "너는 Grok용 인트로 훅 프롬프트 생성기다. 대본 대사는 한 글자도 수정하지 않는다. 스포일러(정체·반전) 금지. 모든 출력에 텍스트·자막·말풍선 금지. 반드시 유효한 JSON만 출력.";
+      const usr =
+`인트로 장면: ${s.text}
+인물 설정: ${LANG[project.lang].setting}
+
+이 장면으로 Grok용 [이미지 프롬프트]와 [영상 프롬프트]를 영어로 만들어줘.
+- image: 인물 동작·위치·배경·조명을 산문 영어로. 끝에 "no text no letters no words no modern objects." 그리고 스타일 라인 그대로 붙이기: "${STYLE_LINE}"
+- video: 이미지에 이미 있는 외형·세팅·그림체는 반복하지 말고 ACTION / CAMERA / MOOD만. 카메라는 push-in 계열, "Camera moves, the subject does not walk or change position." 포함. 장면 대사(큰따옴표)가 있으면 그 대사 그대로 lip-sync(입만 움직임), 없으면 완전 무음("Completely silent. Mute audio."). 끝에 "CRITICAL: NO text, NO subtitles, NO captions, NO speech bubbles, NO written words."
+JSON만: {"image":"...","video":"..."}`;
+      const r = await claudeJSON(sys, usr, 3000);
+      s.grokImage = r.image || ""; s.grokVideo = r.video || "";
+      saveProject(); render();
+      toast("Grok 인트로 프롬프트 생성 완료");
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.textContent = "🎥 Grok 영상 프롬프트"; }
+      toast("실패: " + keyMissingMsgPlain(e));
+    }
+  }
+  function keyMissingMsgPlain(e) {
+    const m = String(e.message);
+    if (m.includes("NO_CLAUDE_KEY")) return "Anthropic 키 필요";
+    return m.slice(0, 60);
   }
 
   function openPlayer(startIdx, single) {
@@ -1056,6 +1267,14 @@ ${scenes}`;
         }
       }
     });
+    if (project.thumb && project.thumb.imageDataUrl) {
+      const tm = project.thumb.imageDataUrl.match(/^data:(image\/\w+);base64,(.*)$/);
+      if (tm) files.push({ name: `thumbnail.${tm[1].split("/")[1].replace("jpeg", "jpg")}`, bytes: base64ToBytes(tm[2]) });
+    }
+    if (project.thumb && project.thumb.chosen >= 0) {
+      const c = project.thumb.copies[project.thumb.chosen];
+      if (c) files.push({ name: "thumbnail_copy.txt", bytes: strBytes(`[썸네일 카피]\n${(c.lines || []).join("\n")}`) });
+    }
     files.push({ name: "subtitles.srt", bytes: strBytes(buildSRT()) });
     files.push({ name: "script.txt", bytes: strBytes(project.scenes.map((s, i) => `[장면 ${i + 1}${s.isIntro ? " 인트로" : ""} · 줌:${s.zoom || "in"} · ${(s.durationSec || estDur(s.text)).toFixed(1)}초]\n${s.text}`).join("\n\n")) });
     files.push({
