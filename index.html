@@ -101,11 +101,23 @@
               </label>
               <p class="settings-note">⚠ KIE API는 서버용이라 브라우저에서 막힐(CORS) 수 있어요. 안 되면 KIE 웹에서 이미지를 뽑아 <b>이미지 올리기</b>로 넣으세요.</p>
             </div>
+            <div class="key-divider">음성 (선택)</div>
+            <label class="field">
+              <span class="field-label">타입캐스트(Typecast) API 키 <small>(API로 음성 자동 생성)</small></span>
+              <input type="password" id="prodTypecastKey" placeholder="Typecast API Key" autocomplete="off" />
+            </label>
+            <label class="field">
+              <span class="field-label">타입캐스트 voice_id <small>(성우 목소리 ID, 예: tc_xxxxxxxx)</small></span>
+              <input type="text" id="prodTypecastVoice" placeholder="tc_..." autocomplete="off" />
+            </label>
+            <p class="settings-note">⚠ 타입캐스트 API도 서버용이라 브라우저에서 막힐(CORS) 수 있어요. 안 되면 타입캐스트 앱에서 음성을 만들어 <b>음성 올리기</b>로 넣으세요. voice_id는 <a href="https://typecast.ai/docs" target="_blank" rel="noopener">타입캐스트 문서</a>의 목소리 목록에서 확인.</p>
+
+            <div class="key-divider">대본 모델</div>
             <label class="field">
               <span class="field-label">대본 생성 모델</span>
               <input type="text" id="prodModel" list="modelList" placeholder="claude-opus-5" />
             </label>
-            <p class="settings-note">키는 이 브라우저에만 저장됩니다. Anthropic: <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> · Google AI: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> · KIE: <a href="https://kie.ai" target="_blank" rel="noopener">kie.ai</a></p>
+            <p class="settings-note">키는 이 브라우저에만 저장됩니다. Anthropic: <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> · Google AI: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> · KIE: <a href="https://kie.ai" target="_blank" rel="noopener">kie.ai</a> · Typecast: <a href="https://typecast.ai" target="_blank" rel="noopener">typecast.ai</a></p>
             <button class="btn btn-primary sm" id="prodSaveKeys">저장</button>
           </div>
 

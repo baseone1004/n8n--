@@ -15,8 +15,11 @@
     provider: "yeti_img_provider",   // 'gemini' | 'kie'
     kie: "yeti_kie_key",
     kieModel: "yeti_kie_model",
+    typecast: "yeti_typecast_key",
+    typecastVoice: "yeti_typecast_voice",
     projects: "yeti_projects"
   };
+  const TYPECAST_URL = "https://api.typecast.ai/v1/text-to-speech";
 
   const STEPS = [
     { key: "category", name: "주제 고르기" },
@@ -138,6 +141,8 @@
   const imgProvider = () => localStorage.getItem(LS.provider) || "gemini";
   const kieKey = () => localStorage.getItem(LS.kie) || "";
   const kieModel = () => localStorage.getItem(LS.kieModel) || "nano-banana-2";
+  const typecastKey = () => localStorage.getItem(LS.typecast) || "";
+  const typecastVoice = () => localStorage.getItem(LS.typecastVoice) || "";
   const imgKeyOk = () => imgProvider() === "kie" ? !!kieKey() : !!geminiKey();
 
   // ============ 토스트 ============
@@ -289,6 +294,50 @@
     const rate = parseInt((mime.match(/rate=(\d+)/) || [])[1] || "24000", 10);
     const wav = pcm16ToWav(base64ToBytes(part.inlineData.data), rate);
     return { dataUrl: "data:audio/wav;base64," + bytesToBase64(wav), durationSec: (wav.length - 44) / 2 / rate };
+  }
+
+  // ============ 타입캐스트 TTS ============
+  function measureAudio(dataUrl) {
+    return new Promise((res) => {
+      const a = new Audio();
+      a.onloadedmetadata = () => res(isFinite(a.duration) ? a.duration : 0);
+      a.onerror = () => res(0);
+      a.src = dataUrl;
+    });
+  }
+  async function genTypecast(text) {
+    const key = typecastKey();
+    if (!key) throw new Error("NO_TYPECAST_KEY");
+    if (!typecastVoice()) throw new Error("NO_TYPECAST_VOICE");
+    const res = await fetch(TYPECAST_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json", "authorization": "Bearer " + key },
+      body: JSON.stringify({
+        voice_id: typecastVoice(),
+        text: text,
+        model: "ssfm-v30",
+        language: project.lang === "ja" ? "jpn" : "kor",
+        output: { audio_format: "wav" }
+      })
+    });
+    if (!res.ok) {
+      let d = ""; try { d = JSON.stringify(await res.json()); } catch (e) { d = await res.text(); }
+      throw new Error(`Typecast ${res.status}: ${d.slice(0, 120)}`);
+    }
+    const ct = res.headers.get("content-type") || "";
+    let dataUrl;
+    if (ct.includes("application/json")) {
+      const j = await res.json();
+      const b64 = j.audio || j.audio_base64 || j.data;
+      const url = j.audio_url || j.url;
+      if (b64) dataUrl = "data:audio/wav;base64," + b64;
+      else if (url) { const r = await fetch(url); dataUrl = await blobToDataURL(await r.blob()); }
+      else throw new Error("Typecast: 오디오를 찾을 수 없음");
+    } else {
+      dataUrl = await blobToDataURL(await res.blob());
+    }
+    const dur = (await measureAudio(dataUrl)) || estDur(text);
+    return { dataUrl, durationSec: dur };
   }
 
   // ============ 바이트 헬퍼 ============
@@ -935,16 +984,17 @@ JSON만:
   // ---- 6. 음성·자막 ----
   function renderVoice(body) {
     body.appendChild(el("h2", "prod-h", "음성 · 자막"));
-    body.appendChild(el("p", "prod-sub", "타입캐스트에서 만든 <b>음성 파일을 장면마다 업로드</b>하면 그 길이에 맞춰 자막(SRT)을 자동으로 맞춥니다. (내장 Gemini 음성도 사용 가능)"));
+    const hasTC = !!typecastKey() && !!typecastVoice();
+    body.appendChild(el("p", "prod-sub", hasTC
+      ? "<b>타입캐스트 API</b>로 장면별 음성을 자동 생성합니다. (파일 업로드·Gemini 음성도 가능) 음성 길이에 맞춰 자막(SRT)이 자동 싱크됩니다."
+      : "타입캐스트 <b>API 키/voice_id</b>를 ⚙에 넣으면 버튼 한 번으로 자동 생성돼요. 없으면 타입캐스트 앱에서 만든 음성을 <b>올리기</b>로 넣으세요. (Gemini 음성도 가능)"));
 
-    const tip = el("div", "scene");
-    tip.innerHTML =
-      "<div class='scene-no'>타입캐스트(Typecast) 사용법</div>" +
-      "<ol style='margin:8px 0 0;padding-left:20px;line-height:1.9;font-size:14px'>" +
-      "<li>타입캐스트에서 아래 각 장면 대본을 붙여 넣고 원하는 성우로 음성을 만듭니다.</li>" +
-      "<li>만든 음성(mp3/wav)을 다운로드해, 같은 장면의 <b>음성 올리기</b>로 업로드하세요.</li>" +
-      "<li>업로드하면 음성 길이에 맞춰 자막 싱크가 자동으로 맞춰집니다.</li></ol>";
-    body.appendChild(tip);
+    if (!hasTC) {
+      const kb = el("div", "keybar"); kb.style.marginBottom = "16px";
+      kb.innerHTML = "🗣 타입캐스트 API로 자동 생성하려면 키가 필요해요.";
+      const b = el("button", "btn sm btn-primary", "타입캐스트 키 입력"); b.onclick = openKeys;
+      kb.appendChild(b); body.appendChild(kb);
+    }
 
     const pkg = el("div", "pkg");
     project.scenes.forEach((s, i) => {
@@ -956,13 +1006,17 @@ JSON만:
       c.appendChild(el("div", null, esc(s.text)));
       const acts = el("div", "scene-actions");
 
-      const up = el("label", "btn sm", "🎙 타입캐스트 음성 올리기");
+      const tc = el("button", "btn sm btn-primary", "🗣 타입캐스트 음성");
+      tc.onclick = () => genOneTypecast(i, tc);
+      acts.appendChild(tc);
+
+      const up = el("label", "btn sm", "🎙 음성 올리기");
       const file = el("input"); file.type = "file"; file.accept = "audio/*"; file.style.display = "none";
       file.onchange = () => { if (file.files[0]) loadAudioFile(i, file.files[0]); };
       up.appendChild(file);
       acts.appendChild(up);
 
-      const gen = el("button", "btn sm btn-ghost", "또는 Gemini 음성");
+      const gen = el("button", "btn sm btn-ghost", "Gemini 음성");
       gen.onclick = () => genOneVoice(i, gen);
       acts.appendChild(gen);
 
@@ -974,8 +1028,32 @@ JSON만:
       pkg.appendChild(c);
     });
     body.appendChild(pkg);
+    navBtn("전체 타입캐스트 음성 생성", genAllTypecast);
     navBtn("전체 Gemini 음성 생성", genAllVoices);
     navBtn("편집·미리보기 →", () => { goStep("edit"); }, true);
+  }
+
+  async function genOneTypecast(i, btn) {
+    const s = project.scenes[i];
+    if (!typecastKey() || !typecastVoice()) { toast("⚙에 타입캐스트 키/voice_id를 넣어주세요"); openKeys(); return; }
+    if (btn) { btn.disabled = true; btn.textContent = "생성 중…"; }
+    try {
+      const r = await genTypecast(s.text);
+      s.audioDataUrl = r.dataUrl; s.durationSec = r.durationSec;
+      saveProject(); render();
+    } catch (e) {
+      const m = String(e.message);
+      toast("타입캐스트 실패: " + (/NO_TYPECAST_VOICE/.test(m) ? "voice_id 필요" : /NO_TYPECAST_KEY/.test(m) ? "API 키 필요" : /Failed to fetch/.test(m) ? "CORS/네트워크(웹은 막힐 수 있음 → 업로드 사용)" : m.slice(0, 70)));
+      if (btn) { btn.disabled = false; btn.textContent = "🗣 타입캐스트 음성"; }
+    }
+  }
+  async function genAllTypecast() {
+    if (!typecastKey() || !typecastVoice()) { toast("⚙에 타입캐스트 키/voice_id를 넣어주세요"); openKeys(); return; }
+    for (let i = 0; i < project.scenes.length; i++) {
+      try { const r = await genTypecast(project.scenes[i].text); project.scenes[i].audioDataUrl = r.dataUrl; project.scenes[i].durationSec = r.durationSec; }
+      catch (e) { toast("일부 실패: " + String(e.message).slice(0, 50)); break; }
+    }
+    saveProject(); render(); toast("타입캐스트 음성 생성 완료");
   }
 
   function loadAudioFile(i, fileObj) {
@@ -1331,6 +1409,8 @@ JSON만: {"image":"...","video":"..."}`;
       if (provSel) { provSel.value = imgProvider(); provSel.dispatchEvent(new Event("change")); }
       $("#prodKieKey").value = kieKey();
       $("#prodKieModel").value = kieModel();
+      $("#prodTypecastKey").value = typecastKey();
+      $("#prodTypecastVoice").value = typecastVoice();
     }
   }
 
@@ -1362,6 +1442,8 @@ JSON만: {"image":"...","video":"..."}`;
       localStorage.setItem(LS.provider, provSel ? provSel.value : "gemini");
       localStorage.setItem(LS.kie, $("#prodKieKey").value.trim());
       localStorage.setItem(LS.kieModel, $("#prodKieModel").value.trim() || "nano-banana-2");
+      localStorage.setItem(LS.typecast, $("#prodTypecastKey").value.trim());
+      localStorage.setItem(LS.typecastVoice, $("#prodTypecastVoice").value.trim());
       $("#prodKeyPanel").hidden = true;
       render();
       toast("키를 저장했어요");

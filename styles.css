@@ -422,6 +422,7 @@ textarea {
 }
 .settings-panel small { font-weight: 400; color: var(--ink-soft); letter-spacing: 0; }
 .settings-note { margin: 0; font-size: 13px; color: var(--ink-soft); }
+.key-divider { font-size: 12px; letter-spacing: 1px; color: var(--seal-soft); text-transform: uppercase; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 4px; }
 .settings-note a { color: var(--seal); }
 
 .style-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
