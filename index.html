@@ -108,10 +108,17 @@
               <input type="password" id="prodTypecastKey" placeholder="Typecast API Key" autocomplete="off" />
             </label>
             <label class="field">
-              <span class="field-label">타입캐스트 voice_id <small>(성우 목소리 ID, 예: tc_xxxxxxxx)</small></span>
+              <span class="field-label">타입캐스트 목소리 선택</span>
+              <div class="yt-row" style="margin:0">
+                <select id="prodTcVoiceSelect" style="flex:1"><option value="">목록을 불러오세요</option></select>
+                <button type="button" class="btn sm" id="prodTcLoadVoices">목소리 불러오기</button>
+              </div>
+            </label>
+            <label class="field">
+              <span class="field-label">voice_id <small>(선택하면 자동 입력 · 직접 입력도 가능)</small></span>
               <input type="text" id="prodTypecastVoice" placeholder="tc_..." autocomplete="off" />
             </label>
-            <p class="settings-note">⚠ 타입캐스트 API도 서버용이라 브라우저에서 막힐(CORS) 수 있어요. 안 되면 타입캐스트 앱에서 음성을 만들어 <b>음성 올리기</b>로 넣으세요. voice_id는 <a href="https://typecast.ai/docs" target="_blank" rel="noopener">타입캐스트 문서</a>의 목소리 목록에서 확인.</p>
+            <p class="settings-note">⚠ 타입캐스트 API도 서버용이라 브라우저에서 막힐(CORS) 수 있어요. 안 되면 타입캐스트 앱에서 음성을 만들어 <b>음성 올리기</b>로 넣으세요.</p>
 
             <div class="key-divider">대본 모델</div>
             <label class="field">
@@ -312,7 +319,21 @@
           </div>
 
           <div class="yt-section">
-            <h2 class="prod-h">내 채널 분석</h2>
+            <h2 class="prod-h">내 채널 분석 · 수익 <span style="font-size:13px;color:var(--ink-soft)">(구글 로그인)</span></h2>
+            <p class="prod-sub">구글로 로그인하면 <b>최근 28일 조회수·시청시간·구독자 증가·예상 수익</b>을 앱에서 바로 봅니다. (로그인은 <b>localhost 등 http(s) 주소</b>에서 열었을 때만 동작 — file://은 구글이 막아요.)</p>
+            <label class="field">
+              <span class="field-label">OAuth 클라이언트 ID <small>(Google Cloud에서 발급, ...apps.googleusercontent.com)</small></span>
+              <input type="text" id="ytClientId" placeholder="xxxxx.apps.googleusercontent.com" autocomplete="off" />
+            </label>
+            <div class="yt-row">
+              <button class="btn btn-primary" id="ytLogin">🔓 구글로 로그인해서 분석 보기</button>
+              <button class="btn btn-ghost sm" id="ytLogout" hidden>로그아웃</button>
+            </div>
+            <div id="ytMineResult"></div>
+          </div>
+
+          <div class="yt-section">
+            <h2 class="prod-h">다른 채널 분석 <span style="font-size:13px;color:var(--ink-soft)">(공개 지표)</span></h2>
             <p class="prod-sub">채널 <b>@핸들</b>이나 채널 URL·ID를 넣으면 구독자·조회수·최근 영상 지표를 보여줍니다.</p>
             <div class="yt-row">
               <input type="text" id="ytChannel" placeholder="@myhandle 또는 https://youtube.com/@myhandle" />

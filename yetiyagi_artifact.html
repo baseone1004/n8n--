@@ -796,10 +796,17 @@ textarea {
               <input type="password" id="prodTypecastKey" placeholder="Typecast API Key" autocomplete="off" />
             </label>
             <label class="field">
-              <span class="field-label">타입캐스트 voice_id <small>(성우 목소리 ID, 예: tc_xxxxxxxx)</small></span>
+              <span class="field-label">타입캐스트 목소리 선택</span>
+              <div class="yt-row" style="margin:0">
+                <select id="prodTcVoiceSelect" style="flex:1"><option value="">목록을 불러오세요</option></select>
+                <button type="button" class="btn sm" id="prodTcLoadVoices">목소리 불러오기</button>
+              </div>
+            </label>
+            <label class="field">
+              <span class="field-label">voice_id <small>(선택하면 자동 입력 · 직접 입력도 가능)</small></span>
               <input type="text" id="prodTypecastVoice" placeholder="tc_..." autocomplete="off" />
             </label>
-            <p class="settings-note">⚠ 타입캐스트 API도 서버용이라 브라우저에서 막힐(CORS) 수 있어요. 안 되면 타입캐스트 앱에서 음성을 만들어 <b>음성 올리기</b>로 넣으세요. voice_id는 <a href="https://typecast.ai/docs" target="_blank" rel="noopener">타입캐스트 문서</a>의 목소리 목록에서 확인.</p>
+            <p class="settings-note">⚠ 타입캐스트 API도 서버용이라 브라우저에서 막힐(CORS) 수 있어요. 안 되면 타입캐스트 앱에서 음성을 만들어 <b>음성 올리기</b>로 넣으세요.</p>
 
             <div class="key-divider">대본 모델</div>
             <label class="field">
@@ -1000,7 +1007,21 @@ textarea {
           </div>
 
           <div class="yt-section">
-            <h2 class="prod-h">내 채널 분석</h2>
+            <h2 class="prod-h">내 채널 분석 · 수익 <span style="font-size:13px;color:var(--ink-soft)">(구글 로그인)</span></h2>
+            <p class="prod-sub">구글로 로그인하면 <b>최근 28일 조회수·시청시간·구독자 증가·예상 수익</b>을 앱에서 바로 봅니다. (로그인은 <b>localhost 등 http(s) 주소</b>에서 열었을 때만 동작 — file://은 구글이 막아요.)</p>
+            <label class="field">
+              <span class="field-label">OAuth 클라이언트 ID <small>(Google Cloud에서 발급, ...apps.googleusercontent.com)</small></span>
+              <input type="text" id="ytClientId" placeholder="xxxxx.apps.googleusercontent.com" autocomplete="off" />
+            </label>
+            <div class="yt-row">
+              <button class="btn btn-primary" id="ytLogin">🔓 구글로 로그인해서 분석 보기</button>
+              <button class="btn btn-ghost sm" id="ytLogout" hidden>로그아웃</button>
+            </div>
+            <div id="ytMineResult"></div>
+          </div>
+
+          <div class="yt-section">
+            <h2 class="prod-h">다른 채널 분석 <span style="font-size:13px;color:var(--ink-soft)">(공개 지표)</span></h2>
             <p class="prod-sub">채널 <b>@핸들</b>이나 채널 URL·ID를 넣으면 구독자·조회수·최근 영상 지표를 보여줍니다.</p>
             <div class="yt-row">
               <input type="text" id="ytChannel" placeholder="@myhandle 또는 https://youtube.com/@myhandle" />
@@ -2159,6 +2180,42 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
     return { dataUrl, durationSec: dur };
   }
 
+  async function loadTypecastVoices() {
+    const key = ($("#prodTypecastKey").value || typecastKey()).trim();
+    if (!key) { toast("타입캐스트 API 키를 먼저 넣어주세요"); return; }
+    const btn = $("#prodTcLoadVoices"); const sel = $("#prodTcVoiceSelect");
+    if (btn) { btn.disabled = true; btn.textContent = "불러오는 중…"; }
+    try {
+      let data = null;
+      for (const url of ["https://api.typecast.ai/v1/voices", "https://api.typecast.ai/v2/voices"]) {
+        try {
+          const r = await fetch(url, { headers: { "authorization": "Bearer " + key } });
+          if (r.ok) { data = await r.json(); break; }
+        } catch (e) {}
+      }
+      if (!data) throw new Error("목소리 목록을 불러오지 못했어요(CORS/키 확인).");
+      const arr = Array.isArray(data) ? data : (data.voices || data.result || data.data || []);
+      if (!arr.length) throw new Error("목소리가 없습니다.");
+      sel.innerHTML = "";
+      arr.forEach((v) => {
+        const id = v.voice_id || v.id || v.actor_id || v.voiceId;
+        const name = v.name || v.voice_name || v.display_name || v.title || id;
+        const lang = v.language || v.lang || (Array.isArray(v.languages) ? v.languages.join("/") : "");
+        if (!id) return;
+        const o = el("option", null, esc(name) + (lang ? ` (${esc(String(lang))})` : ""));
+        o.value = id; sel.appendChild(o);
+      });
+      const cur = typecastVoice();
+      if (cur) sel.value = cur;
+      if (sel.value) $("#prodTypecastVoice").value = sel.value;
+      toast(arr.length + "개 목소리를 불러왔어요");
+    } catch (e) {
+      toast("실패: " + String(e.message).slice(0, 60));
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = "목소리 불러오기"; }
+    }
+  }
+
   // ============ 바이트 헬퍼 ============
   function base64ToBytes(b64) {
     const bin = atob(b64), a = new Uint8Array(bin.length);
@@ -3268,6 +3325,12 @@ JSON만: {"image":"...","video":"..."}`;
       toast("키를 저장했어요");
     };
 
+    // 타입캐스트 목소리 목록 불러오기 → 선택
+    const tcLoad = $("#prodTcLoadVoices");
+    if (tcLoad) tcLoad.onclick = () => loadTypecastVoices();
+    const tcSel = $("#prodTcVoiceSelect");
+    if (tcSel) tcSel.onchange = () => { if (tcSel.value) $("#prodTypecastVoice").value = tcSel.value; };
+
     // 언어 전환 (한국어 / 日本語)
     const langT = $("#langToggle");
     if (langT) {
@@ -3485,9 +3548,105 @@ JSON만: {"image":"...","video":"..."}`;
     return card;
   }
 
+  // ---- 내 채널 분석·수익 (OAuth) ----
+  const LS_CID = "yeti_yt_client_id";
+  let accessToken = "";
+  let tokenClient = null;
+
+  function loadGIS() {
+    return new Promise((res, rej) => {
+      if (window.google && window.google.accounts && window.google.accounts.oauth2) return res();
+      const s = document.createElement("script");
+      s.src = "https://accounts.google.com/gsi/client";
+      s.onload = () => res();
+      s.onerror = () => rej(new Error("구글 로그인 스크립트를 불러오지 못했어요(인터넷 확인)."));
+      document.head.appendChild(s);
+    });
+  }
+  function ymd(d) { return d.toISOString().slice(0, 10); }
+
+  async function ytLogin() {
+    const out = $("#ytMineResult");
+    const cid = $("#ytClientId").value.trim();
+    if (!cid) { toast("OAuth 클라이언트 ID를 넣어주세요"); return; }
+    localStorage.setItem(LS_CID, cid);
+    if (location.protocol === "file:") {
+      out.innerHTML = "";
+      out.appendChild(el("div", "prod-err", "지금 <b>file://</b>로 열려 있어요. 구글 로그인은 http(s) 주소에서만 됩니다. 폴더에서 <code>python -m http.server</code> 실행 후 <b>http://localhost:8000</b> 으로 열고, 그 주소를 클라이언트 ID의 '승인된 자바스크립트 원본'에 추가하세요."));
+      return;
+    }
+    try {
+      loadingInto(out, "구글 로그인 중…");
+      await loadGIS();
+      tokenClient = window.google.accounts.oauth2.initTokenClient({
+        client_id: cid,
+        scope: "https://www.googleapis.com/auth/yt-analytics.readonly https://www.googleapis.com/auth/yt-analytics-monetary.readonly https://www.googleapis.com/auth/youtube.readonly",
+        callback: (resp) => {
+          if (resp.error) { out.innerHTML = ""; out.appendChild(el("div", "prod-err", "로그인 실패: " + resp.error)); return; }
+          accessToken = resp.access_token;
+          $("#ytLogout").hidden = false;
+          fetchMine();
+        }
+      });
+      tokenClient.requestAccessToken({ prompt: "consent" });
+    } catch (e) { out.innerHTML = ""; out.appendChild(el("div", "prod-err", errMsg(e))); }
+  }
+
+  async function authGet(url) {
+    const res = await fetch(url, { headers: { "Authorization": "Bearer " + accessToken } });
+    if (!res.ok) { let d = ""; try { d = (await res.json()).error?.message; } catch (e) { d = await res.text(); } throw new Error(`${res.status}: ${d}`); }
+    return res.json();
+  }
+
+  async function fetchMine() {
+    const out = $("#ytMineResult");
+    loadingInto(out, "내 채널·수익을 불러오는 중…");
+    try {
+      const ch = await authGet("https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true");
+      const c = ch.items && ch.items[0];
+      const end = new Date(); const start = new Date(Date.now() - 28 * 86400000);
+      const base = "https://youtubeanalytics.googleapis.com/v2/reports?ids=channel==MINE&startDate=" + ymd(start) + "&endDate=" + ymd(end);
+      let rep, hasRevenue = true;
+      try {
+        rep = await authGet(base + "&metrics=views,estimatedMinutesWatched,averageViewDuration,subscribersGained,estimatedRevenue");
+      } catch (e) {
+        hasRevenue = false;
+        rep = await authGet(base + "&metrics=views,estimatedMinutesWatched,averageViewDuration,subscribersGained");
+      }
+      const row = (rep.rows && rep.rows[0]) || [];
+      const cols = (rep.columnHeaders || []).map((h) => h.name);
+      const get = (name) => { const i = cols.indexOf(name); return i >= 0 ? row[i] : 0; };
+
+      out.innerHTML = "";
+      if (c) {
+        const head = el("div", "yt-channel-head");
+        const th = c.snippet.thumbnails?.default?.url; if (th) { const im = el("img", "yt-ch-thumb"); im.src = th; head.appendChild(im); }
+        head.appendChild(el("div", "yt-ch-title", esc(c.snippet.title)));
+        out.appendChild(head);
+      }
+      const stats = el("div", "yt-stats");
+      const stat = (label, val) => { const b = el("div", "yt-stat"); b.appendChild(el("div", "yt-stat-num", val)); b.appendChild(el("div", "yt-stat-label", label)); return b; };
+      const mins = Number(get("estimatedMinutesWatched") || 0);
+      stats.appendChild(stat("28일 조회수", nf(get("views"))));
+      stats.appendChild(stat("28일 시청시간", nf(Math.round(mins / 60)) + "시간"));
+      stats.appendChild(stat("28일 구독 증가", "+" + nf(get("subscribersGained"))));
+      if (hasRevenue) stats.appendChild(stat("28일 예상 수익", "$" + Number(get("estimatedRevenue") || 0).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })));
+      out.appendChild(stats);
+      if (c) out.appendChild(el("div", "yt-note", `전체 구독자 ${nf(c.statistics.subscriberCount)} · 총 조회수 ${nf(c.statistics.viewCount)} · 영상 ${nf(c.statistics.videoCount)}`));
+      if (!hasRevenue) out.appendChild(el("div", "yt-note", "※ 예상 수익은 수익 창출(파트너) 채널 + 권한 승인 시에만 표시됩니다."));
+    } catch (e) {
+      out.innerHTML = "";
+      const m = errMsg(e);
+      out.appendChild(el("div", "prod-err", m + (/403/.test(m) ? " — 클라이언트 ID의 '승인된 원본'에 현재 주소를 넣었는지, YouTube Analytics API를 사용 설정했는지 확인하세요." : "")));
+    }
+  }
+
   function init() {
     if (!$("#panel-youtube")) return;
     $("#ytKey").value = ytKey();
+    $("#ytClientId").value = localStorage.getItem(LS_CID) || "";
+    $("#ytLogin").onclick = ytLogin;
+    $("#ytLogout").onclick = () => { accessToken = ""; $("#ytLogout").hidden = true; $("#ytMineResult").innerHTML = ""; try { window.google.accounts.oauth2.revoke && 0; } catch (e) {} toast("로그아웃"); };
     $("#ytSaveKey").onclick = () => { localStorage.setItem(LS_KEY, $("#ytKey").value.trim()); toast("YouTube 키를 저장했어요"); };
     $("#ytAnalyze").onclick = analyzeChannel;
     $("#ytChannel").addEventListener("keydown", (e) => { if (e.key === "Enter") analyzeChannel(); });

@@ -340,6 +340,42 @@
     return { dataUrl, durationSec: dur };
   }
 
+  async function loadTypecastVoices() {
+    const key = ($("#prodTypecastKey").value || typecastKey()).trim();
+    if (!key) { toast("타입캐스트 API 키를 먼저 넣어주세요"); return; }
+    const btn = $("#prodTcLoadVoices"); const sel = $("#prodTcVoiceSelect");
+    if (btn) { btn.disabled = true; btn.textContent = "불러오는 중…"; }
+    try {
+      let data = null;
+      for (const url of ["https://api.typecast.ai/v1/voices", "https://api.typecast.ai/v2/voices"]) {
+        try {
+          const r = await fetch(url, { headers: { "authorization": "Bearer " + key } });
+          if (r.ok) { data = await r.json(); break; }
+        } catch (e) {}
+      }
+      if (!data) throw new Error("목소리 목록을 불러오지 못했어요(CORS/키 확인).");
+      const arr = Array.isArray(data) ? data : (data.voices || data.result || data.data || []);
+      if (!arr.length) throw new Error("목소리가 없습니다.");
+      sel.innerHTML = "";
+      arr.forEach((v) => {
+        const id = v.voice_id || v.id || v.actor_id || v.voiceId;
+        const name = v.name || v.voice_name || v.display_name || v.title || id;
+        const lang = v.language || v.lang || (Array.isArray(v.languages) ? v.languages.join("/") : "");
+        if (!id) return;
+        const o = el("option", null, esc(name) + (lang ? ` (${esc(String(lang))})` : ""));
+        o.value = id; sel.appendChild(o);
+      });
+      const cur = typecastVoice();
+      if (cur) sel.value = cur;
+      if (sel.value) $("#prodTypecastVoice").value = sel.value;
+      toast(arr.length + "개 목소리를 불러왔어요");
+    } catch (e) {
+      toast("실패: " + String(e.message).slice(0, 60));
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = "목소리 불러오기"; }
+    }
+  }
+
   // ============ 바이트 헬퍼 ============
   function base64ToBytes(b64) {
     const bin = atob(b64), a = new Uint8Array(bin.length);
@@ -1448,6 +1484,12 @@ JSON만: {"image":"...","video":"..."}`;
       render();
       toast("키를 저장했어요");
     };
+
+    // 타입캐스트 목소리 목록 불러오기 → 선택
+    const tcLoad = $("#prodTcLoadVoices");
+    if (tcLoad) tcLoad.onclick = () => loadTypecastVoices();
+    const tcSel = $("#prodTcVoiceSelect");
+    if (tcSel) tcSel.onchange = () => { if (tcSel.value) $("#prodTypecastVoice").value = tcSel.value; };
 
     // 언어 전환 (한국어 / 日本語)
     const langT = $("#langToggle");

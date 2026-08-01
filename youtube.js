@@ -175,9 +175,105 @@
     return card;
   }
 
+  // ---- 내 채널 분석·수익 (OAuth) ----
+  const LS_CID = "yeti_yt_client_id";
+  let accessToken = "";
+  let tokenClient = null;
+
+  function loadGIS() {
+    return new Promise((res, rej) => {
+      if (window.google && window.google.accounts && window.google.accounts.oauth2) return res();
+      const s = document.createElement("script");
+      s.src = "https://accounts.google.com/gsi/client";
+      s.onload = () => res();
+      s.onerror = () => rej(new Error("구글 로그인 스크립트를 불러오지 못했어요(인터넷 확인)."));
+      document.head.appendChild(s);
+    });
+  }
+  function ymd(d) { return d.toISOString().slice(0, 10); }
+
+  async function ytLogin() {
+    const out = $("#ytMineResult");
+    const cid = $("#ytClientId").value.trim();
+    if (!cid) { toast("OAuth 클라이언트 ID를 넣어주세요"); return; }
+    localStorage.setItem(LS_CID, cid);
+    if (location.protocol === "file:") {
+      out.innerHTML = "";
+      out.appendChild(el("div", "prod-err", "지금 <b>file://</b>로 열려 있어요. 구글 로그인은 http(s) 주소에서만 됩니다. 폴더에서 <code>python -m http.server</code> 실행 후 <b>http://localhost:8000</b> 으로 열고, 그 주소를 클라이언트 ID의 '승인된 자바스크립트 원본'에 추가하세요."));
+      return;
+    }
+    try {
+      loadingInto(out, "구글 로그인 중…");
+      await loadGIS();
+      tokenClient = window.google.accounts.oauth2.initTokenClient({
+        client_id: cid,
+        scope: "https://www.googleapis.com/auth/yt-analytics.readonly https://www.googleapis.com/auth/yt-analytics-monetary.readonly https://www.googleapis.com/auth/youtube.readonly",
+        callback: (resp) => {
+          if (resp.error) { out.innerHTML = ""; out.appendChild(el("div", "prod-err", "로그인 실패: " + resp.error)); return; }
+          accessToken = resp.access_token;
+          $("#ytLogout").hidden = false;
+          fetchMine();
+        }
+      });
+      tokenClient.requestAccessToken({ prompt: "consent" });
+    } catch (e) { out.innerHTML = ""; out.appendChild(el("div", "prod-err", errMsg(e))); }
+  }
+
+  async function authGet(url) {
+    const res = await fetch(url, { headers: { "Authorization": "Bearer " + accessToken } });
+    if (!res.ok) { let d = ""; try { d = (await res.json()).error?.message; } catch (e) { d = await res.text(); } throw new Error(`${res.status}: ${d}`); }
+    return res.json();
+  }
+
+  async function fetchMine() {
+    const out = $("#ytMineResult");
+    loadingInto(out, "내 채널·수익을 불러오는 중…");
+    try {
+      const ch = await authGet("https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true");
+      const c = ch.items && ch.items[0];
+      const end = new Date(); const start = new Date(Date.now() - 28 * 86400000);
+      const base = "https://youtubeanalytics.googleapis.com/v2/reports?ids=channel==MINE&startDate=" + ymd(start) + "&endDate=" + ymd(end);
+      let rep, hasRevenue = true;
+      try {
+        rep = await authGet(base + "&metrics=views,estimatedMinutesWatched,averageViewDuration,subscribersGained,estimatedRevenue");
+      } catch (e) {
+        hasRevenue = false;
+        rep = await authGet(base + "&metrics=views,estimatedMinutesWatched,averageViewDuration,subscribersGained");
+      }
+      const row = (rep.rows && rep.rows[0]) || [];
+      const cols = (rep.columnHeaders || []).map((h) => h.name);
+      const get = (name) => { const i = cols.indexOf(name); return i >= 0 ? row[i] : 0; };
+
+      out.innerHTML = "";
+      if (c) {
+        const head = el("div", "yt-channel-head");
+        const th = c.snippet.thumbnails?.default?.url; if (th) { const im = el("img", "yt-ch-thumb"); im.src = th; head.appendChild(im); }
+        head.appendChild(el("div", "yt-ch-title", esc(c.snippet.title)));
+        out.appendChild(head);
+      }
+      const stats = el("div", "yt-stats");
+      const stat = (label, val) => { const b = el("div", "yt-stat"); b.appendChild(el("div", "yt-stat-num", val)); b.appendChild(el("div", "yt-stat-label", label)); return b; };
+      const mins = Number(get("estimatedMinutesWatched") || 0);
+      stats.appendChild(stat("28일 조회수", nf(get("views"))));
+      stats.appendChild(stat("28일 시청시간", nf(Math.round(mins / 60)) + "시간"));
+      stats.appendChild(stat("28일 구독 증가", "+" + nf(get("subscribersGained"))));
+      if (hasRevenue) stats.appendChild(stat("28일 예상 수익", "$" + Number(get("estimatedRevenue") || 0).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })));
+      out.appendChild(stats);
+      if (c) out.appendChild(el("div", "yt-note", `전체 구독자 ${nf(c.statistics.subscriberCount)} · 총 조회수 ${nf(c.statistics.viewCount)} · 영상 ${nf(c.statistics.videoCount)}`));
+      if (!hasRevenue) out.appendChild(el("div", "yt-note", "※ 예상 수익은 수익 창출(파트너) 채널 + 권한 승인 시에만 표시됩니다."));
+    } catch (e) {
+      out.innerHTML = "";
+      const m = errMsg(e);
+      out.appendChild(el("div", "prod-err", m + (/403/.test(m) ? " — 클라이언트 ID의 '승인된 원본'에 현재 주소를 넣었는지, YouTube Analytics API를 사용 설정했는지 확인하세요." : "")));
+    }
+  }
+
   function init() {
     if (!$("#panel-youtube")) return;
     $("#ytKey").value = ytKey();
+    $("#ytClientId").value = localStorage.getItem(LS_CID) || "";
+    $("#ytLogin").onclick = ytLogin;
+    $("#ytLogout").onclick = () => { accessToken = ""; $("#ytLogout").hidden = true; $("#ytMineResult").innerHTML = ""; try { window.google.accounts.oauth2.revoke && 0; } catch (e) {} toast("로그아웃"); };
     $("#ytSaveKey").onclick = () => { localStorage.setItem(LS_KEY, $("#ytKey").value.trim()); toast("YouTube 키를 저장했어요"); };
     $("#ytAnalyze").onclick = analyzeChannel;
     $("#ytChannel").addEventListener("keydown", (e) => { if (e.key === "Enter") analyzeChannel(); });
