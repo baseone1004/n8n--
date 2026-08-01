@@ -17,6 +17,7 @@
     kieModel: "yeti_kie_model",
     typecast: "yeti_typecast_key",
     typecastVoice: "yeti_typecast_voice",
+    geminiVoice: "yeti_gemini_voice",
     projects: "yeti_projects"
   };
   const TYPECAST_URL = "https://api.typecast.ai/v1/text-to-speech";
@@ -143,6 +144,7 @@
   const kieModel = () => localStorage.getItem(LS.kieModel) || "nano-banana-2";
   const typecastKey = () => localStorage.getItem(LS.typecast) || "";
   const typecastVoice = () => localStorage.getItem(LS.typecastVoice) || "";
+  const geminiVoice = () => localStorage.getItem(LS.geminiVoice) || "Kore";
   const imgKeyOk = () => imgProvider() === "kie" ? !!kieKey() : !!geminiKey();
 
   // ============ 토스트 ============
@@ -277,7 +279,7 @@
       contents: [{ parts: [{ text: text }] }],
       generationConfig: {
         responseModalities: ["AUDIO"],
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } }
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: geminiVoice() } } }
       }
     };
     const res = await fetch(GEMINI_BASE + TTS_MODEL + ":generateContent?key=" + encodeURIComponent(key), {
@@ -1447,6 +1449,7 @@ JSON만: {"image":"...","video":"..."}`;
       $("#prodKieModel").value = kieModel();
       $("#prodTypecastKey").value = typecastKey();
       $("#prodTypecastVoice").value = typecastVoice();
+      if ($("#prodGeminiVoice")) $("#prodGeminiVoice").value = geminiVoice();
     }
   }
 
@@ -1480,6 +1483,7 @@ JSON만: {"image":"...","video":"..."}`;
       localStorage.setItem(LS.kieModel, $("#prodKieModel").value.trim() || "nano-banana-2");
       localStorage.setItem(LS.typecast, $("#prodTypecastKey").value.trim());
       localStorage.setItem(LS.typecastVoice, $("#prodTypecastVoice").value.trim());
+      if ($("#prodGeminiVoice")) localStorage.setItem(LS.geminiVoice, $("#prodGeminiVoice").value);
       $("#prodKeyPanel").hidden = true;
       render();
       toast("키를 저장했어요");

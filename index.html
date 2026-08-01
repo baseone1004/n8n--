@@ -104,6 +104,26 @@
             </div>
             <div class="key-divider">음성 (선택)</div>
             <label class="field">
+              <span class="field-label">Gemini 음성 목소리 <small>(브라우저에서 바로 생성 · 이미지용 Google 키 사용 · 추천)</small></span>
+              <select id="prodGeminiVoice">
+                <option value="Kore">Kore — 차분·기본 (여)</option>
+                <option value="Aoede">Aoede — 부드러움 (여)</option>
+                <option value="Leda">Leda — 밝고 또렷 (여)</option>
+                <option value="Callirrhoe">Callirrhoe — 편안함 (여)</option>
+                <option value="Sulafat">Sulafat — 따뜻함 (여)</option>
+                <option value="Charon">Charon — 묵직·낮음 (남)</option>
+                <option value="Puck">Puck — 경쾌 (남)</option>
+                <option value="Fenrir">Fenrir — 강렬 (남)</option>
+                <option value="Orus">Orus — 단단함 (남)</option>
+                <option value="Enceladus">Enceladus — 숨결 섞인 (남)</option>
+                <option value="Iapetus">Iapetus — 담담 (남)</option>
+                <option value="Achernar">Achernar — 또렷 (여)</option>
+              </select>
+            </label>
+            <p class="settings-note">위 목소리로 <b>영상 만들기 → 음성</b> 단계의 'Gemini 음성' 버튼이 생성됩니다. 아래 타입캐스트는 선택 사항이에요.</p>
+
+            <div class="key-divider">타입캐스트 (선택 · 안 되면 업로드 사용)</div>
+            <label class="field">
               <span class="field-label">타입캐스트(Typecast) API 키 <small>(API로 음성 자동 생성)</small></span>
               <input type="password" id="prodTypecastKey" placeholder="Typecast API Key" autocomplete="off" />
             </label>
