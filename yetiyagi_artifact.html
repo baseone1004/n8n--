@@ -2180,21 +2180,33 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
   async function geminiJSON(system, user, maxTokens) {
     const key = geminiKey();
     if (!key) throw new Error("NO_GEMINI_KEY");
-    const res = await fetch(GEMINI_BASE + geminiTextModel() + ":generateContent?key=" + encodeURIComponent(key), {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: system }] },
-        contents: [{ parts: [{ text: user }] }],
-        generationConfig: { temperature: 0.95, maxOutputTokens: Math.min(maxTokens || 8000, 65000), responseMimeType: "application/json" }
-      })
-    });
+    const cap = Math.min(maxTokens || 8000, 65000);
+    const call = (noThink) => {
+      const gen = { temperature: 0.95, maxOutputTokens: cap, responseMimeType: "application/json" };
+      // thinking(생각) 토큰이 출력 한도를 잡아먹어 JSON이 잘리는 것 방지 → 끔
+      if (noThink) gen.thinkingConfig = { thinkingBudget: 0 };
+      return fetch(GEMINI_BASE + geminiTextModel() + ":generateContent?key=" + encodeURIComponent(key), {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ parts: [{ text: user }] }], generationConfig: gen })
+      });
+    };
+    let res = await call(true);
+    if (!res.ok) {
+      let d = ""; try { d = (await res.clone().json()).error?.message || ""; } catch (e) {}
+      // thinkingConfig 미지원 모델이면 그 옵션 없이 재시도
+      if (/thinking|Unknown name|not supported|Invalid|INVALID_ARGUMENT/i.test(d)) res = await call(false);
+    }
     if (!res.ok) {
       let d = ""; try { d = (await res.json()).error?.message; } catch (e) { d = await res.text(); }
       throw new Error(`Gemini(대본) ${res.status}: ${d}`);
     }
     const j = await res.json();
-    const text = (j.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
-    if (!text) throw new Error("Gemini 응답이 비었어요. 다시 시도하세요.");
+    const cand = j.candidates?.[0];
+    const text = (cand?.content?.parts || []).map((p) => p.text || "").join("");
+    if (!text) {
+      if (cand?.finishReason === "MAX_TOKENS") throw new Error("Gemini 응답이 잘렸어요(길이 초과). 모델을 gemini-2.5-flash로 바꾸거나 다시 시도하세요.");
+      throw new Error("Gemini 응답이 비었어요. 다시 시도하세요.");
+    }
     return parseJSON(text);
   }
 
@@ -2825,10 +2837,13 @@ ${langDirective()}
 1시간 30분~2시간짜리 긴 영상의 뼈대를 만들어줘. 7단계 골격(발단→일상·갈등씨앗→사건→시련(가장 길게, 에피소드 여럿)→위기→반전·해결→마무리)을 ${SCENE_COUNT}개 장면으로 촘촘히 나눠라.
 제목은 아래 패턴 중 하나(결말 노출 금지): ${TITLE_PATTERNS}
 ★ 제목은 <b>썸네일 2줄에 다 들어가게</b> 짧고 강하게: 공백 포함 16~24자(최대 26자). 후킹·떡상 지향, 결말 노출 금지.
+★ A/B 테스트용: 서로 <b>각도가 다른</b> 후킹 제목 2개(A/B)와 태그 2개(A/B)를 만들어라. B는 A와 다른 감정버튼·다른 표현으로.
 JSON만:
 {
- "title":"짧고 강한 영상 제목(16~24자, 썸네일 2줄에 들어감, 결말 노출 금지)",
- "titleTag":"제목 옆 태그 2~4개 (${ja ? "#日本昔話 등" : "#야담 #실화 등"})",
+ "title":"제목 A (16~24자, 썸네일 2줄, 결말 노출 금지)",
+ "titleB":"제목 B (A와 다른 각도의 후킹, 16~24자)",
+ "titleTag":"제목 옆 태그 A (2~4개, ${ja ? "#日本昔話 등" : "#야담 #실화 등"})",
+ "titleTagB":"제목 옆 태그 B (A와 다른 조합)",
  "description":"유튜브 설명란 (4~6문장 + '${channelName()}' 채널 구독 유도)",
  "tags":["태그","8~12개"],
  "scenes":[ {"beat":"장면1 한 줄 요약(=인트로 도입)","isIntro":true}, {"beat":"장면2 한 줄 요약","isIntro":false} ]
@@ -2836,7 +2851,9 @@ JSON만:
 scenes는 정확히 ${SCENE_COUNT}개. 각 beat는 한 컷 이미지로 그릴 수 있는 한 장면. 전체가 이어지는 완결된 이야기.`;
       const pkg = await claudeJSON(sysO, usrO, 6000);
       project.title = pkg.title || topic.title;
+      project.titleB = pkg.titleB || "";
       project.titleTag = pkg.titleTag || "";
+      project.titleTagB = pkg.titleTagB || "";
       project.description = pkg.description || "";
       project.tags = Array.isArray(pkg.tags) ? pkg.tags : [];
       let beats = (pkg.scenes || []).map((s) => ({ beat: s.beat || "", isIntro: !!s.isIntro }));
@@ -2912,8 +2929,14 @@ JSON 배열만, 정확히 ${end - b}개: ["장면 대본", ...]`;
     body.appendChild(el("h2", "prod-h", "대본과 유튜브 정보"));
     body.appendChild(el("p", "prod-sub", "자유롭게 <b>고쳐 쓸 수</b> 있어요. 다 됐으면 다음 단계로 넘어가세요."));
     const pkg = el("div", "pkg");
-    pkg.appendChild(field("제목", () => project.title, false, (v) => { project.title = v; saveDebounced(); }));
-    pkg.appendChild(field("제목 옆 태그", () => project.titleTag, false, (v) => { project.titleTag = v; saveDebounced(); }));
+    const abNote = el("p", "prod-sub");
+    abNote.style.margin = "0 0 6px";
+    abNote.innerHTML = "🅰️🅱️ 제목·태그를 <b>A/B 두 개</b>로 준비했어요. 유튜브 <b>제목 실험(A/B 테스트)</b>에 A와 B를 각각 넣어 어느 쪽이 더 터지는지 비교하세요.";
+    pkg.appendChild(abNote);
+    pkg.appendChild(field("제목 A", () => project.title, false, (v) => { project.title = v; saveDebounced(); }));
+    pkg.appendChild(field("제목 B", () => project.titleB || "", false, (v) => { project.titleB = v; saveDebounced(); }));
+    pkg.appendChild(field("제목 옆 태그 A", () => project.titleTag, false, (v) => { project.titleTag = v; saveDebounced(); }));
+    pkg.appendChild(field("제목 옆 태그 B", () => project.titleTagB || "", false, (v) => { project.titleTagB = v; saveDebounced(); }));
     pkg.appendChild(field("설명", () => project.description, true, (v) => { project.description = v; saveDebounced(); }));
     pkg.appendChild(field("설명 아래 태그 (쉼표로 구분)", () => project.tags.join(", "), true, (v) => { project.tags = v.split(",").map((x) => x.trim()).filter(Boolean); saveDebounced(); }));
 
@@ -3812,8 +3835,10 @@ JSON만: {"video":"..."}`;
     // 유튜브 업로드 정보 (복사용)
     const yt = el("div", "scene");
     yt.appendChild(el("div", "scene-no", "유튜브 업로드 정보 (복사해서 붙여넣기)"));
-    yt.appendChild(copyRow("제목", project.title || ""));
-    yt.appendChild(copyRow("제목 옆 태그", project.titleTag || ""));
+    yt.appendChild(copyRow("제목 A", project.title || ""));
+    if (project.titleB) yt.appendChild(copyRow("제목 B (A/B 테스트용)", project.titleB));
+    yt.appendChild(copyRow("제목 옆 태그 A", project.titleTag || ""));
+    if (project.titleTagB) yt.appendChild(copyRow("제목 옆 태그 B", project.titleTagB));
     yt.appendChild(copyRow("설명", project.description || "", true));
     yt.appendChild(copyRow("설명 아래 태그", (project.tags || []).join(", "), true));
     body.appendChild(yt);
@@ -3881,7 +3906,7 @@ JSON만: {"video":"..."}`;
     files.push({ name: "script.txt", bytes: strBytes(project.scenes.map((s, i) => `[장면 ${i + 1}${s.isIntro ? " 인트로" : ""} · 줌:${s.zoom || "in"} · ${(s.durationSec || estDur(s.text)).toFixed(1)}초]\n${s.text}`).join("\n\n")) });
     files.push({
       name: "youtube_info.txt",
-      bytes: strBytes(`■ 제목\n${project.title}\n\n■ 제목 옆 태그\n${project.titleTag}\n\n■ 설명\n${project.description}\n\n■ 태그\n${project.tags.join(", ")}\n\n■ 워터마크(왼쪽 위 문구)\n${project.watermark}`)
+      bytes: strBytes(`■ 제목 A\n${project.title}\n\n■ 제목 B (A/B 테스트용)\n${project.titleB || "-"}\n\n■ 제목 옆 태그 A\n${project.titleTag}\n\n■ 제목 옆 태그 B\n${project.titleTagB || "-"}\n\n■ 설명\n${project.description}\n\n■ 태그\n${project.tags.join(", ")}\n\n■ 워터마크(왼쪽 위 문구)\n${project.watermark}`)
     });
     const introVid = project.scenes.find((s) => s.isIntro && s.videoUrl);
     const introLine = introVid ? `\n\n■ 인트로 영상(KIE 생성): 아래 링크에서 받아 맨 앞에 배치하세요.\n${introVid.videoUrl}` : "";
