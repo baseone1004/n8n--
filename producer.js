@@ -25,6 +25,7 @@
     kieModel: "yeti_kie_model",
     kieVideoModel: "yeti_kie_video_model",
     kieRes: "yeti_kie_res",
+    channelName: "yeti_channel_name",
     typecast: "yeti_typecast_key",
     typecastVoice: "yeti_typecast_voice",      // 구버전(마이그레이션용)
     typecastVoiceKo: "yeti_typecast_voice_ko",
@@ -177,6 +178,7 @@
   const imgKeyOk = () => !!kieKey();
   const imgCostWon = () => IMG_COST[kieModel()] || 30;
   const imgCostText = () => `약 <b>${imgCostWon()}원/장</b> (KIE.ai 크레딧 기준 추정)`;
+  const channelName = () => localStorage.getItem(LS.channelName) || "설루온";
   const typecastKey = () => localStorage.getItem(LS.typecast) || "";
   const typecastVoice = () => (project.lang === "ja"
     ? (localStorage.getItem(LS.typecastVoiceJa) || localStorage.getItem(LS.typecastVoice))
@@ -247,7 +249,8 @@
   }
 
   function parseJSON(text) {
-    let t = text.trim();
+    let t = (text || "").trim();
+    if (!t) throw new Error("AI 응답이 비었어요. 다시 시도하세요.");
     const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (fence) t = fence[1].trim();
     const s = t.indexOf("{"), e = t.lastIndexOf("}");
@@ -255,7 +258,30 @@
     let cut = t;
     if (a >= 0 && (a < s || s < 0)) cut = t.slice(a, b + 1);
     else if (s >= 0) cut = t.slice(s, e + 1);
-    return JSON.parse(cut);
+    try { return JSON.parse(cut); }
+    catch (err) {
+      // 잘린 JSON 배열 복구 시도: 마지막 완성된 항목까지만 취함
+      const salv = salvageArray(cut);
+      if (salv) return salv;
+      throw new Error("AI 응답이 잘렸어요(길이 초과). 다시 시도하면 대개 해결돼요.");
+    }
+  }
+  // 잘린 문자열 배열 ["...","..."(잘림) 을 마지막 완성 항목까지 복구
+  function salvageArray(cut) {
+    if (cut[0] !== "[") return null;
+    const items = []; let i = 1, inStr = false, esc = false, cur = "";
+    for (; i < cut.length; i++) {
+      const ch = cut[i];
+      if (inStr) {
+        if (esc) { cur += ch; esc = false; }
+        else if (ch === "\\") { cur += ch; esc = true; }
+        else if (ch === '"') { inStr = false; items.push(cur); cur = ""; }
+        else cur += ch;
+      } else if (ch === '"') { inStr = true; }
+    }
+    if (!items.length) return null;
+    try { return JSON.parse("[" + items.map((x) => JSON.stringify(x)).join(",") + "]"); }
+    catch (e) { return null; }
   }
 
   // ============ 이미지 헬퍼 ============
@@ -762,9 +788,11 @@
 - 흔한 클리셰 반복 금지, 10개 소재를 서로 다르게 분산.
 아래 검증된 제목 패턴 골격을 활용(결말·정체 노출 금지):
 ${TITLE_PATTERNS}
+★ 제목 길이 제한(매우 중요): 제목은 <b>썸네일 2줄에 다 들어가야</b> 한다. 짧고 강하게 — 공백 포함 <b>16~24자</b>, 절대 26자 넘기지 말 것. 두 덩어리로 끊어 읽히게(예: "죽은 며느리가 / 10년 만에 돌아왔다"). 길게 늘어지는 제목 금지.
+- thumb: 위 제목을 썸네일용 <b>2줄</b>로 나눈 배열. 각 줄 6~12자, 큰 글씨로 시원하게 읽히게.
 각 주제는 아래 JSON 배열 형식으로만:
 [
-  {"title":"영상 제목 후보(호기심 유발, 25~35자)","hook":"왜 끌리는지 한 줄 훅","why":"떡상 포인트 한 줄","score":85},
+  {"title":"짧고 강한 제목(16~24자, 썸네일 2줄에 들어감)","thumb":["썸네일 1줄","썸네일 2줄"],"hook":"왜 끌리는지 한 줄 훅","why":"떡상 포인트 한 줄","score":85},
   ... (정확히 10개)
 ]
 ${trend && trend.length ? "★ 최근 30일 실제로 조회수가 높았던 영상들(근거로 삼아라):\n" + trend.map((t) => `- ${t.title} (조회 ${t.views.toLocaleString()})`).join("\n") + "\n위 실제 사례와 소재·후킹이 얼마나 닮았는지를 근거로 score를 매겨라. 실제 대박 영상과 매우 유사하면 높게, 동떨어지면 낮게.\n" : ""}score는 '떡상(대박) 확률' 추정 정수(%)다. 40~95 사이에서 현실적으로 분산(전부 90+ 금지). 클릭률·소재 신선함·감정 강도·위 실제 데이터와의 유사도를 종합.${langDirective()}`;
@@ -793,6 +821,11 @@ ${trend && trend.length ? "★ 최근 30일 실제로 조회수가 높았던 영
       }
       c.appendChild(el("div", "topic-rank", `${i + 1}위`));
       c.appendChild(el("div", "topic-title", esc(t.title || "")));
+      if (Array.isArray(t.thumb) && t.thumb.length) {
+        const th = el("div", "topic-thumb2");
+        th.innerHTML = "🖼 썸네일 2줄: " + t.thumb.slice(0, 2).map((x) => `<b>${esc(x)}</b>`).join(" · ");
+        c.appendChild(th);
+      }
       if (t.hook) c.appendChild(el("div", "topic-hook", esc(t.hook)));
       if (t.why) c.appendChild(el("div", "topic-why", "📈 " + esc(t.why)));
       c.onclick = () => {
@@ -827,11 +860,12 @@ ${trend && trend.length ? "★ 최근 30일 실제로 조회수가 높았던 영
 ${langDirective()}
 1시간 30분~2시간짜리 긴 영상의 뼈대를 만들어줘. 7단계 골격(발단→일상·갈등씨앗→사건→시련(가장 길게, 에피소드 여럿)→위기→반전·해결→마무리)을 ${SCENE_COUNT}개 장면으로 촘촘히 나눠라.
 제목은 아래 패턴 중 하나(결말 노출 금지): ${TITLE_PATTERNS}
+★ 제목은 <b>썸네일 2줄에 다 들어가게</b> 짧고 강하게: 공백 포함 16~24자(최대 26자). 후킹·떡상 지향, 결말 노출 금지.
 JSON만:
 {
- "title":"영상 제목(호기심, 결말 노출 금지)",
+ "title":"짧고 강한 영상 제목(16~24자, 썸네일 2줄에 들어감, 결말 노출 금지)",
  "titleTag":"제목 옆 태그 2~4개 (${ja ? "#日本昔話 등" : "#야담 #실화 등"})",
- "description":"유튜브 설명란 (4~6문장 + 구독 유도)",
+ "description":"유튜브 설명란 (4~6문장 + '${channelName()}' 채널 구독 유도)",
  "tags":["태그","8~12개"],
  "scenes":[ {"beat":"장면1 한 줄 요약(=인트로 도입)","isIntro":true}, {"beat":"장면2 한 줄 요약","isIntro":false} ]
 }
@@ -944,36 +978,43 @@ JSON 배열만, 정확히 ${end - b}개: ["장면 대본", ...]`;
     return c;
   }
 
-  // ---- 4. 이미지 프롬프트 ----
+  // ---- 4. 이미지 프롬프트 (배치로 나눠서 — 응답 잘림 방지) ----
   async function loadPrompts() {
     const body = $("#prodBody");
     busy = true; loading(body, "각 장면의 이미지 프롬프트를 만드는 중…"); renderNav();
     try {
-      const sys = "너는 대본을 나노 바나나(이미지 생성)용 영어 프롬프트로 바꾸는 전문가다. 각 장면을 한 컷으로 그릴 수 있게 시각적으로 구체화한다. 반드시 유효한 JSON 배열만 출력.";
-      const scenes = project.scenes.map((s, i) => `${i + 1}${s.isIntro ? "(인트로)" : ""}: ${s.text}`).join("\n");
+      const n = project.scenes.length;
+      const PB = 8; // 한 번에 8장면씩 (40장면이면 5번) → JSON 잘림 방지
       const charBlock = (project.characters || []).filter((c) => c.look).length
         ? "\n고정 주인공(등장할 때 항상 이 외형 그대로 묘사):\n" + project.characters.filter((c) => c.look).map((c) => `- ${c.name}: ${c.look}`).join("\n") + "\n"
         : "";
-      const usr =
+      const sys = "너는 대본을 나노 바나나(이미지 생성)용 영어 프롬프트로 바꾸는 전문가다. 각 장면을 한 컷으로 그릴 수 있게 시각적으로 구체화한다. 반드시 유효한 JSON 배열만 출력.";
+      for (let b = 0; b < n; b += PB) {
+        const end = Math.min(b + PB, n);
+        loading(body, `이미지 프롬프트 만드는 중… (${b + 1}~${end} / ${n})`);
+        const scenes = [];
+        for (let i = b; i < end; i++) scenes.push(`${i + 1}${project.scenes[i].isIntro ? "(인트로)" : ""}: ${project.scenes[i].text}`);
+        const usr =
 `화풍(STYLE_TAIL): ${project.style}
 인물 기본: ${LANG[project.lang].setting}${charBlock}
 
-아래 장면들을 각각 위 화풍으로 그릴 영어 이미지 프롬프트로 만들어줘. 규칙:
+아래 ${scenes.length}개 장면을 각각 위 화풍으로 그릴 영어 이미지 프롬프트로 만들어줘. 규칙:
 - 각 프롬프트는 완결된 영어 문장 2~4개. 콤마 키워드 나열 금지.
 - 인물은 ${LANG[project.lang].setting} 를 명시하고, 같은 인물은 장면마다 같은 복식·머리로 일관되게 묘사(외투/상의/하의 분리).
 - 장면마다 샷을 다르게(클로즈업/미디엄/롱/투샷/오버숄더/로우앵글/측면 등 이웃 장면과 다르게).
-- 인물 자세를 장면마다 다르게(걷다 멈춤/뒤돌아봄/손 뻗기/기대기/먼 곳 응시/웅크려 살핌 등). '정면에서 두 손 모은' 반복 금지.
+- 인물 자세를 장면마다 다르게. '정면에서 두 손 모은' 반복 금지.
 - 배경은 실제 로케이션(마당/논밭/돌담/숲/관아/초가/기와집 등). 회색 스튜디오 배경 금지.
 - 각 프롬프트 끝에 반드시: "no text, no letters, no words, no modern objects. ${project.style}"
 - 결말·정체를 이미지로 스포일하지 않는다.
-JSON 배열만, 장면 순서대로 정확히 ${project.scenes.length}개:
-["english image prompt for scene 1", "...", ...]
+JSON 배열만, 장면 순서대로 정확히 ${scenes.length}개:
+["english image prompt", "...", ...]
 
 장면들:
-${scenes}`;
-      const arr = await claudeJSON(sys, usr, 8000);
-      (arr || []).forEach((p, i) => { if (project.scenes[i]) project.scenes[i].imagePrompt = String(p); });
-      saveProject();
+${scenes.join("\n")}`;
+        const arr = await claudeJSON(sys, usr, 4000);
+        (Array.isArray(arr) ? arr : []).forEach((p, k) => { if (project.scenes[b + k]) project.scenes[b + k].imagePrompt = String(p); });
+        saveProject();
+      }
       busy = false; goStep("prompt");
     } catch (e) {
       busy = false; render(); showErr($("#prodBody"), keyMissingMsg(e));
@@ -1847,31 +1888,79 @@ JSON만: {"video":"..."}`;
     toast("ZIP을 내려받았어요");
   }
 
-  // ============ 프로젝트 저장 ============
-  let saveT;
-  function saveDebounced() { clearTimeout(saveT); saveT = setTimeout(saveProject, 500); }
-  function loadProjects() { try { return JSON.parse(localStorage.getItem(LS.projects)) || []; } catch (e) { return []; } }
+  // ============ 프로젝트 저장 (IndexedDB — 이미지 많아도 용량 걱정 없음) ============
+  function idbOpen() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open("yeti_db", 1);
+      r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains("kv")) r.result.createObjectStore("kv"); };
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+  }
+  function idbGet(key) {
+    return idbOpen().then((db) => new Promise((res, rej) => {
+      const t = db.transaction("kv", "readonly").objectStore("kv").get(key);
+      t.onsuccess = () => res(t.result); t.onerror = () => rej(t.error);
+    }));
+  }
+  function idbSet(key, val) {
+    return idbOpen().then((db) => new Promise((res, rej) => {
+      const t = db.transaction("kv", "readwrite").objectStore("kv").put(val, key);
+      t.onsuccess = () => res(); t.onerror = () => rej(t.error);
+    }));
+  }
+
+  let _projCache = null;   // 메모리 캐시 (IDB에서 로드)
+  let _projLoaded = false; // IDB 최초 로드 완료 여부
+
+  function loadProjects() {
+    if (_projCache === null) { try { _projCache = JSON.parse(localStorage.getItem(LS.projects)) || []; } catch (e) { _projCache = []; } }
+    return _projCache;
+  }
+  function persistProjects() {
+    idbSet("projects", _projCache).catch(() => {});
+    // 가벼운 백업(이미지 제외)도 localStorage에 — IDB 못 쓰는 환경 대비
+    try {
+      const light = _projCache.map((p) => ({ ...p, scenes: (p.scenes || []).map((s) => ({ ...s, imageDataUrl: "", audioDataUrl: "" })), characters: (p.characters || []).map((c) => ({ ...c, imageDataUrl: "" })), thumb: p.thumb ? { ...p.thumb, imageDataUrl: "" } : p.thumb }));
+      localStorage.setItem(LS.projects, JSON.stringify(light));
+    } catch (e) {}
+  }
   function saveProject() {
     const all = loadProjects();
     const idx = all.findIndex((p) => p.id === project.id);
     const meta = { ...project };
     if (idx >= 0) all[idx] = meta; else all.unshift(meta);
-    try { localStorage.setItem(LS.projects, JSON.stringify(all)); }
-    catch (e) { toast("저장 공간이 부족해요(이미지가 많으면 용량 초과). 캡컷으로 내보낸 뒤 새로 시작하세요."); }
+    persistProjects();
+  }
+  // 최초 IDB 로드 — 이미지 포함 전체 프로젝트 복원
+  function initProjectStore() {
+    idbGet("projects").then(async (list) => {
+      if (list === undefined) {
+        // 최초 실행: 기존 localStorage 데이터를 IDB로 이관
+        const ls = loadProjects();
+        if (ls.length) { _projCache = ls; await idbSet("projects", ls).catch(() => {}); }
+        else _projCache = [];
+      } else {
+        _projCache = Array.isArray(list) ? list : [];
+      }
+      _projLoaded = true;
+      if ($("#prodProjPanel") && !$("#prodProjPanel").hidden) renderProjList();
+    }).catch(() => { _projLoaded = true; loadProjects(); });
   }
 
   function renderProjList() {
     const w = $("#prodProjList"); w.innerHTML = "";
+    if (!_projLoaded) { w.appendChild(el("div", "prod-sub", "불러오는 중…")); }
     const all = loadProjects();
-    if (!all.length) { w.appendChild(el("div", "prod-sub", "저장된 프로젝트가 없어요.")); return; }
+    if (!all.length) { if (_projLoaded) w.appendChild(el("div", "prod-sub", "저장된 프로젝트가 없어요.")); return; }
     all.forEach((p) => {
       const it = el("div", "proj-item");
       const t = el("div", "pi-title", esc(p.title || p.topics?.[p.topicIdx]?.title || p.category || "제목 미정"));
-      t.onclick = () => { project = p; stepIdx = p.scenes?.length ? 2 : 1; $("#prodProjPanel").hidden = true; render(); };
+      t.onclick = () => { project = p; if (!project.characters) project.characters = []; stepIdx = p.scenes?.length ? 2 : 1; $("#prodProjPanel").hidden = true; render(); };
       it.appendChild(t);
       it.appendChild(el("div", "pi-meta", new Date(p.createdAt).toLocaleDateString("ko")));
       const del = el("button", null, "삭제");
-      del.onclick = () => { localStorage.setItem(LS.projects, JSON.stringify(loadProjects().filter((x) => x.id !== p.id))); renderProjList(); };
+      del.onclick = () => { _projCache = loadProjects().filter((x) => x.id !== p.id); persistProjects(); renderProjList(); };
       it.appendChild(del);
       w.appendChild(it);
     });
@@ -1881,6 +1970,7 @@ JSON만: {"video":"..."}`;
     $("#prodProjPanel").hidden = true;
     const p = $("#prodKeyPanel"); p.hidden = !p.hidden;
     if (!p.hidden) {
+      if ($("#prodChannelName")) $("#prodChannelName").value = channelName();
       const tp = $("#prodTextProvider");
       if (tp) { tp.value = textProvider(); tp.dispatchEvent(new Event("change")); }
       $("#prodClaudeKey").value = claudeKey();
@@ -1901,6 +1991,8 @@ JSON만: {"video":"..."}`;
 
   // ============ 초기화 ============
   function init() {
+    initProjectStore(); // IndexedDB에서 저장된 프로젝트 복원
+
     // 상단 제목을 활성 탭에 맞춰 갱신
     const tabsEl = document.getElementById("tabs");
     const topTitle = document.getElementById("topTitle");
@@ -1922,6 +2014,7 @@ JSON만: {"video":"..."}`;
     if ($("#prodLoadGeminiModels")) $("#prodLoadGeminiModels").onclick = loadGeminiModels;
 
     $("#prodSaveKeys").onclick = () => {
+      if ($("#prodChannelName")) localStorage.setItem(LS.channelName, $("#prodChannelName").value.trim() || "설루온");
       if (textSel) localStorage.setItem(LS.textProvider, textSel.value);
       localStorage.setItem(LS.claude, $("#prodClaudeKey").value.trim());
       if ($("#prodGeminiKey")) localStorage.setItem(LS.gemini, $("#prodGeminiKey").value.trim());
