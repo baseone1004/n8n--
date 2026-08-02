@@ -12,6 +12,8 @@
     gemini: "yeti_gemini_key",
     model: "yeti_model_daebon",      // 대본 공방과 공유
     imgModel: "yeti_img_model",
+    textProvider: "yeti_text_provider", // 'claude' | 'gemini'
+    geminiTextModel: "yeti_gemini_text_model",
     provider: "yeti_img_provider",   // 'gemini' | 'kie'
     kie: "yeti_kie_key",
     kieModel: "yeti_kie_model",
@@ -153,6 +155,8 @@
   const geminiKey = () => localStorage.getItem(LS.gemini) || "";
   const claudeModel = () => localStorage.getItem(LS.model) || "claude-opus-5";
   const imgModel = () => localStorage.getItem(LS.imgModel) || "gemini-2.5-flash-image";
+  const textProvider = () => localStorage.getItem(LS.textProvider) || "claude";
+  const geminiTextModel = () => localStorage.getItem(LS.geminiTextModel) || "gemini-2.5-flash";
   const imgProvider = () => localStorage.getItem(LS.provider) || "gemini";
   const kieKey = () => localStorage.getItem(LS.kie) || "";
   const kieModel = () => localStorage.getItem(LS.kieModel) || "nano-banana-2";
@@ -178,6 +182,7 @@
 
   // ============ Claude JSON 호출 ============
   async function claudeJSON(system, user, maxTokens) {
+    if (textProvider() === "gemini") return geminiJSON(system, user, maxTokens);
     const key = claudeKey();
     if (!key) throw new Error("NO_CLAUDE_KEY");
     const res = await fetch(CLAUDE_URL, {
@@ -203,6 +208,28 @@
     const text = (j.content || []).map((c) => c.text || "").join("");
     return parseJSON(text);
   }
+  // Gemini 무료 텍스트 생성 (Google AI Studio 키의 무료 사용량 사용)
+  async function geminiJSON(system, user, maxTokens) {
+    const key = geminiKey();
+    if (!key) throw new Error("NO_GEMINI_KEY");
+    const res = await fetch(GEMINI_BASE + geminiTextModel() + ":generateContent?key=" + encodeURIComponent(key), {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ parts: [{ text: user }] }],
+        generationConfig: { temperature: 0.95, maxOutputTokens: Math.min(maxTokens || 8000, 65000), responseMimeType: "application/json" }
+      })
+    });
+    if (!res.ok) {
+      let d = ""; try { d = (await res.json()).error?.message; } catch (e) { d = await res.text(); }
+      throw new Error(`Gemini(대본) ${res.status}: ${d}`);
+    }
+    const j = await res.json();
+    const text = (j.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
+    if (!text) throw new Error("Gemini 응답이 비었어요. 다시 시도하세요.");
+    return parseJSON(text);
+  }
+
   function parseJSON(text) {
     let t = text.trim();
     const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -507,13 +534,16 @@
   }
 
   function keyBar(body) {
-    const needC = !claudeKey(), needI = !imgKeyOk();
-    if (!needC && !needI) return;
+    const gemText = textProvider() === "gemini";
+    const needT = gemText ? !geminiKey() : !claudeKey();
+    const needI = !imgKeyOk();
+    if (!needT && !needI) return;
+    const textLabel = gemText ? "Google AI 키(대본 무료)" : "Anthropic 키";
     const imgLabel = imgProvider() === "kie" ? "KIE.ai 키" : "Google AI 키";
     const bar = el("div", "keybar");
     const txt = el("div", null,
       "🔑 시작하려면 API 키가 필요해요 — " +
-      (needC ? "<b>Anthropic 키</b>" : "") + (needC && needI ? " · " : "") +
+      (needT ? `<b>${textLabel}</b>` : "") + (needT && needI ? " · " : "") +
       (needI ? `<b>${imgLabel}</b>` : ""));
     bar.appendChild(txt);
     const b = el("button", "btn sm btn-primary", "여기에 API 키 입력하기");
@@ -619,13 +649,18 @@
     busy = true; loading(body, "실제 인기 영상을 참고해 주제 10개를 뽑는 중…"); renderNav();
     try {
       const trend = await fetchTrendingSample(project.lang);
-      const sys = `너는 ${LANG[project.lang].audience} 채널 기획 전문가다. 조회수가 잘 나오는(떡상하는) 주제를 잘 안다. 반드시 유효한 JSON만 출력한다. 설명·군더더기 금지.`;
+      const sys = `너는 ${LANG[project.lang].audience} 채널의 '클릭률 극대화' 제목 카피라이터다. 시청자가 스크롤하다 멈추고 저절로 누르게 만드는 후킹 제목을 잘 뽑는다. 반드시 유효한 JSON만 출력한다.`;
       const usr =
 `카테고리: "${project.category}"
 
-이 카테고리로 ${LANG[project.lang].audience}에서 클릭률·조회수가 높을 만한 이야기 주제 10개를 추천해줘.
-자극적이되 흔한 클리셰의 반복은 피하고, 서로 소재가 겹치지 않게 분산해줘.
-제목은 아래 검증된 패턴 중 하나를 활용해서 궁금증을 남긴다(결말·정체 노출 금지):
+이 카테고리로, 시니어 시청자가 <b>도저히 안 누르고 못 배기는</b> 초강력 후킹 제목 10개를 뽑아줘.
+후킹 원칙(반드시 반영):
+- 첫머리에 충격·반전·금기의 냄새를 풍긴다(예: 팔려간, 버려진, 소름, 죽은 줄 알았던, 감히).
+- 구체적 숫자·금액·관계 대비를 넣는다(100냥, 10년 후, 셋째 며느리 vs 맏며느리).
+- 결말·정체는 절대 노출하지 말고, "그 아이의 정체는?", "그날 밤 벌어진 일" 처럼 궁금증에서 끊는다.
+- 감정 버튼(억울함·통쾌함·오싹함·애틋함)을 하나 확실히 누른다.
+- 흔한 클리셰 반복 금지, 10개 소재를 서로 다르게 분산.
+아래 검증된 제목 패턴 골격을 활용(결말·정체 노출 금지):
 ${TITLE_PATTERNS}
 각 주제는 아래 JSON 배열 형식으로만:
 [
@@ -1529,6 +1564,8 @@ JSON만: {"image":"...","video":"..."}`;
     $("#prodProjPanel").hidden = true;
     const p = $("#prodKeyPanel"); p.hidden = !p.hidden;
     if (!p.hidden) {
+      const tp = $("#prodTextProvider");
+      if (tp) { tp.value = textProvider(); tp.dispatchEvent(new Event("change")); }
       $("#prodClaudeKey").value = claudeKey();
       $("#prodGeminiKey").value = geminiKey();
       $("#prodModel").value = claudeModel();
@@ -1565,7 +1602,11 @@ JSON만: {"image":"...","video":"..."}`;
     };
     if (provSel) provSel.onchange = syncProvFields;
 
+    const textSel = $("#prodTextProvider");
+    if (textSel) textSel.onchange = () => { $("#claudeTextField").hidden = textSel.value !== "claude"; };
+
     $("#prodSaveKeys").onclick = () => {
+      if (textSel) localStorage.setItem(LS.textProvider, textSel.value);
       localStorage.setItem(LS.claude, $("#prodClaudeKey").value.trim());
       localStorage.setItem(LS.gemini, $("#prodGeminiKey").value.trim());
       localStorage.setItem(LS.model, $("#prodModel").value.trim() || "claude-opus-5");

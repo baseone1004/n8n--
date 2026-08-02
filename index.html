@@ -63,9 +63,19 @@
           <!-- 키 설정 패널 -->
           <div class="settings-panel" id="prodKeyPanel" hidden>
             <label class="field">
-              <span class="field-label">Anthropic API 키 <small>(대본·주제·프롬프트 생성)</small></span>
-              <input type="password" id="prodClaudeKey" placeholder="sk-ant-..." autocomplete="off" />
+              <span class="field-label">대본 생성 엔진</span>
+              <select id="prodTextProvider">
+                <option value="gemini">Gemini (무료 · Google 키 사용) 💸무료</option>
+                <option value="claude">Claude (유료 · 고품질)</option>
+              </select>
             </label>
+            <div id="claudeTextField" hidden>
+              <label class="field">
+                <span class="field-label">Anthropic API 키 <small>(Claude 선택 시 필요)</small></span>
+                <input type="password" id="prodClaudeKey" placeholder="sk-ant-..." autocomplete="off" />
+              </label>
+            </div>
+            <p class="settings-note" id="textEngineNote">💸 <b>Gemini(무료)</b>는 Google AI 키의 무료 사용량으로 대본을 만들어요(아래 Google 키 사용). 품질을 최대로 원하면 Claude(유료)를 고르세요.</p>
             <label class="field">
               <span class="field-label">이미지 생성 방식</span>
               <select id="prodProvider">
