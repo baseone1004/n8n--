@@ -82,7 +82,11 @@
               <span class="field-label">Google AI(Gemini) API 키 <small>(대본 무료 + Gemini 음성)</small></span>
               <input type="password" id="prodGeminiKey" placeholder="AIza..." autocomplete="off" />
             </label>
-            <p class="settings-note">🆓 이 키로 <b>대본 생성(무료)</b>과 <b>Gemini 음성</b>을 씁니다. 발급: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> (무료).</p>
+            <div class="yt-row" style="margin:0 0 6px">
+              <button type="button" class="btn sm" id="prodTestGemini">🔍 이 키 테스트</button>
+              <span id="prodTestGeminiResult" class="settings-note" style="margin:0"></span>
+            </div>
+            <p class="settings-note">🆓 이 키로 <b>대본 생성(무료)</b>과 <b>Gemini 음성</b>을 씁니다. 발급: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> (무료). <br>키는 반드시 <b>AIza…</b>로 시작해요. <b>OAuth 클라이언트 ID</b>(…apps.googleusercontent.com)나 로그인용 ID는 안 됩니다.</p>
 
             <div class="key-divider">🖼️ 이미지·영상 생성 API — KIE.ai (유료·선택)</div>
             <p class="settings-note" style="margin-bottom:8px">글작성 키와 <b>따로</b> 넣습니다. <b>이미지 생성</b>과 <b>인트로 영상 변환</b>을 모두 KIE.ai로 합니다(크레딧 필요). 안 넣어도 무료 사이트에서 만들어 <b>이미지 올리기</b>로 진행할 수 있어요.</p>

@@ -601,6 +601,31 @@
   }
   function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
 
+  // 글작성 Google AI 키가 진짜 되는지 즉석 확인
+  async function testGeminiKey() {
+    const out = $("#prodTestGeminiResult");
+    const key = ($("#prodGeminiKey").value || "").trim();
+    const set = (msg, ok) => { if (out) { out.innerHTML = msg; out.style.color = ok ? "var(--good)" : "var(--danger)"; } };
+    if (!key) { set("❌ 키가 비었어요. AIza…로 시작하는 키를 넣으세요.", false); return; }
+    if (/apps\.googleusercontent\.com/.test(key) || key.includes(".apps.")) {
+      set("❌ 이건 <b>OAuth 클라이언트 ID</b>예요. 대본용은 <b>AIza…</b> API 키가 필요합니다.", false); return;
+    }
+    if (!/^AIza/.test(key)) { set("⚠ 보통 <b>AIza</b>로 시작해요. 그래도 테스트해볼게요…", false); }
+    else set("⏳ 테스트 중…", true);
+    try {
+      const res = await fetch(GEMINI_BASE + geminiTextModel() + ":generateContent?key=" + encodeURIComponent(key), {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }], generationConfig: { maxOutputTokens: 5 } })
+      });
+      if (res.ok) { set("✅ 키 정상! <b>저장</b>을 누른 뒤 대본을 만들 수 있어요.", true); return; }
+      let d = ""; try { d = (await res.json()).error?.message || ""; } catch (e) { d = await res.text(); }
+      if (res.status === 400 && /API key not valid|API_KEY_INVALID/.test(d)) set("❌ 잘못된 키예요. <a href='https://aistudio.google.com/apikey' target='_blank' rel='noopener'>aistudio.google.com/apikey</a>에서 새로 발급하세요.", false);
+      else if (/SERVICE_DISABLED|has not been used|is disabled/.test(d)) set("❌ 이 키 프로젝트에서 <b>Generative Language API</b>가 꺼져 있어요. 콘솔에서 사용 설정 후 다시 시도.", false);
+      else if (res.status === 401 || /OAuth|invalid authentication/.test(d)) set("❌ 키가 인식되지 않아요(OAuth 오류). <b>AIza…</b> API 키가 맞는지 확인하세요(로그인 ID 아님).", false);
+      else set("❌ 오류 " + res.status + ": " + esc(d.slice(0, 90)), false);
+    } catch (e) { set("❌ 네트워크 오류: " + esc(String(e.message).slice(0, 60)), false); }
+  }
+
   // ---- 1. 카테고리 ----
   function renderCategory(body) {
     body.appendChild(el("h2", "prod-h", "어떤 이야기를 만들까요?"));
@@ -1678,6 +1703,8 @@ JSON만: {"video":"..."}`;
     $("#prodProjects").onclick = () => { $("#prodKeyPanel").hidden = true; const p = $("#prodProjPanel"); p.hidden = !p.hidden; if (!p.hidden) renderProjList(); };
     const textSel = $("#prodTextProvider");
     if (textSel) textSel.onchange = () => { $("#claudeTextField").hidden = textSel.value !== "claude"; };
+
+    if ($("#prodTestGemini")) $("#prodTestGemini").onclick = testGeminiKey;
 
     $("#prodSaveKeys").onclick = () => {
       if (textSel) localStorage.setItem(LS.textProvider, textSel.value);
