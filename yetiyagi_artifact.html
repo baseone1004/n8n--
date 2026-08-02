@@ -803,42 +803,46 @@ textarea {
               <p class="settings-note">⚠ KIE API는 서버용이라 브라우저에서 막힐(CORS) 수 있어요. 안 되면 KIE 웹에서 이미지를 뽑아 <b>이미지 올리기</b>로 넣으세요.</p>
             </div>
             <div class="key-divider">음성 (선택)</div>
-            <label class="field">
-              <span class="field-label">Gemini 음성 목소리 <small>(브라우저에서 바로 생성 · 이미지용 Google 키 사용 · 추천)</small></span>
-              <select id="prodGeminiVoice">
-                <option value="Kore">Kore — 차분·기본 (여)</option>
-                <option value="Aoede">Aoede — 부드러움 (여)</option>
-                <option value="Leda">Leda — 밝고 또렷 (여)</option>
-                <option value="Callirrhoe">Callirrhoe — 편안함 (여)</option>
-                <option value="Sulafat">Sulafat — 따뜻함 (여)</option>
-                <option value="Charon">Charon — 묵직·낮음 (남)</option>
-                <option value="Puck">Puck — 경쾌 (남)</option>
-                <option value="Fenrir">Fenrir — 강렬 (남)</option>
-                <option value="Orus">Orus — 단단함 (남)</option>
-                <option value="Enceladus">Enceladus — 숨결 섞인 (남)</option>
-                <option value="Iapetus">Iapetus — 담담 (남)</option>
-                <option value="Achernar">Achernar — 또렷 (여)</option>
-              </select>
-            </label>
-            <p class="settings-note">위 목소리로 <b>영상 만들기 → 음성</b> 단계의 'Gemini 음성' 버튼이 생성됩니다. 아래 타입캐스트는 선택 사항이에요.</p>
+            <p class="settings-note" style="margin-bottom:8px">🇰🇷 한국어 / 🇯🇵 일본어 목소리를 각각 저장해두면, 언어를 바꿀 때 <b>자동으로 해당 언어 목소리</b>로 생성됩니다.</p>
+            <div class="editor-row">
+              <label class="field" style="flex:1">
+                <span class="field-label">🇰🇷 Gemini 한국어 목소리</span>
+                <select id="prodGeminiVoiceKo"></select>
+              </label>
+              <label class="field" style="flex:1">
+                <span class="field-label">🇯🇵 Gemini 일본어 목소리</span>
+                <select id="prodGeminiVoiceJa"></select>
+              </label>
+            </div>
+            <p class="settings-note">위 목소리로 음성 단계의 'Gemini 음성' 버튼이 생성됩니다. 아래 타입캐스트는 선택 사항이에요.</p>
 
             <div class="key-divider">타입캐스트 (선택 · 안 되면 업로드 사용)</div>
             <label class="field">
-              <span class="field-label">타입캐스트(Typecast) API 키 <small>(API로 음성 자동 생성)</small></span>
+              <span class="field-label">타입캐스트(Typecast) API 키</span>
               <input type="password" id="prodTypecastKey" placeholder="Typecast API Key" autocomplete="off" />
             </label>
             <label class="field">
-              <span class="field-label">타입캐스트 목소리 선택</span>
+              <span class="field-label">목소리 목록에서 골라 언어별로 넣기</span>
               <div class="yt-row" style="margin:0">
                 <select id="prodTcVoiceSelect" style="flex:1"><option value="">목록을 불러오세요</option></select>
                 <button type="button" class="btn sm" id="prodTcLoadVoices">목소리 불러오기</button>
               </div>
+              <div class="yt-row" style="margin-top:6px">
+                <button type="button" class="btn sm" id="prodTcToKo">▲ 한국어에 넣기</button>
+                <button type="button" class="btn sm" id="prodTcToJa">▲ 일본어에 넣기</button>
+              </div>
             </label>
-            <label class="field">
-              <span class="field-label">voice_id <small>(선택하면 자동 입력 · 직접 입력도 가능)</small></span>
-              <input type="text" id="prodTypecastVoice" placeholder="tc_..." autocomplete="off" />
-            </label>
-            <p class="settings-note">⭐ 타입캐스트 API를 앱에서 쓰려면 <b>수익분석_켜기.bat</b>(로컬 서버)로 열어야 해요 — 서버가 CORS를 우회(중계)합니다. 그렇게 열면 위 <b>목소리 불러오기</b>와 음성 단계의 <b>타입캐스트 음성</b> 버튼이 작동합니다. (그래도 안 되면 타입캐스트 앱에서 만들어 <b>음성 올리기</b>) </p>
+            <div class="editor-row">
+              <label class="field" style="flex:1">
+                <span class="field-label">🇰🇷 한국어 voice_id</span>
+                <input type="text" id="prodTypecastVoiceKo" placeholder="tc_..." autocomplete="off" />
+              </label>
+              <label class="field" style="flex:1">
+                <span class="field-label">🇯🇵 일본어 voice_id</span>
+                <input type="text" id="prodTypecastVoiceJa" placeholder="tc_..." autocomplete="off" />
+              </label>
+            </div>
+            <p class="settings-note">⭐ 타입캐스트 API는 <b>수익분석_켜기.bat</b>(로컬 서버)로 열 때만 작동해요(CORS 우회). 웹주소에선 <b>음성 올리기</b>를 쓰세요.</p>
 
             <div class="key-divider">대본 모델</div>
             <label class="field">
@@ -1910,11 +1914,21 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
     kie: "yeti_kie_key",
     kieModel: "yeti_kie_model",
     typecast: "yeti_typecast_key",
-    typecastVoice: "yeti_typecast_voice",
-    geminiVoice: "yeti_gemini_voice",
+    typecastVoice: "yeti_typecast_voice",      // 구버전(마이그레이션용)
+    typecastVoiceKo: "yeti_typecast_voice_ko",
+    typecastVoiceJa: "yeti_typecast_voice_ja",
+    geminiVoice: "yeti_gemini_voice",          // 구버전
+    geminiVoiceKo: "yeti_gemini_voice_ko",
+    geminiVoiceJa: "yeti_gemini_voice_ja",
     projects: "yeti_projects"
   };
   const TYPECAST_URL = "https://api.typecast.ai/v1/text-to-speech";
+  const GEMINI_VOICES = [
+    ["Kore", "Kore — 차분·기본 (여)"], ["Aoede", "Aoede — 부드러움 (여)"], ["Leda", "Leda — 밝고 또렷 (여)"],
+    ["Callirrhoe", "Callirrhoe — 편안함 (여)"], ["Sulafat", "Sulafat — 따뜻함 (여)"], ["Achernar", "Achernar — 또렷 (여)"],
+    ["Charon", "Charon — 묵직·낮음 (남)"], ["Puck", "Puck — 경쾌 (남)"], ["Fenrir", "Fenrir — 강렬 (남)"],
+    ["Orus", "Orus — 단단함 (남)"], ["Enceladus", "Enceladus — 숨결 섞인 (남)"], ["Iapetus", "Iapetus — 담담 (남)"]
+  ];
 
   const STEPS = [
     { key: "category", name: "주제 고르기" },
@@ -2041,8 +2055,12 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
   const kieKey = () => localStorage.getItem(LS.kie) || "";
   const kieModel = () => localStorage.getItem(LS.kieModel) || "nano-banana-2";
   const typecastKey = () => localStorage.getItem(LS.typecast) || "";
-  const typecastVoice = () => localStorage.getItem(LS.typecastVoice) || "";
-  const geminiVoice = () => localStorage.getItem(LS.geminiVoice) || "Kore";
+  const typecastVoice = () => (project.lang === "ja"
+    ? (localStorage.getItem(LS.typecastVoiceJa) || localStorage.getItem(LS.typecastVoice))
+    : (localStorage.getItem(LS.typecastVoiceKo) || localStorage.getItem(LS.typecastVoice))) || "";
+  const geminiVoice = () => (project.lang === "ja"
+    ? (localStorage.getItem(LS.geminiVoiceJa) || localStorage.getItem(LS.geminiVoice))
+    : (localStorage.getItem(LS.geminiVoiceKo) || localStorage.getItem(LS.geminiVoice))) || "Kore";
   const imgKeyOk = () => imgProvider() === "kie" ? !!kieKey() : !!geminiKey();
 
   // ============ 토스트 ============
@@ -2267,8 +2285,7 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
       });
       const cur = typecastVoice();
       if (cur) sel.value = cur;
-      if (sel.value) $("#prodTypecastVoice").value = sel.value;
-      toast(arr.length + "개 목소리를 불러왔어요");
+      toast(arr.length + "개 불러옴 · 아래 '한국어에 넣기/일본어에 넣기'로 지정하세요");
     } catch (e) {
       toast("실패: " + String(e.message).slice(0, 60));
     } finally {
@@ -3419,8 +3436,10 @@ JSON만: {"image":"...","video":"..."}`;
       $("#prodKieKey").value = kieKey();
       $("#prodKieModel").value = kieModel();
       $("#prodTypecastKey").value = typecastKey();
-      $("#prodTypecastVoice").value = typecastVoice();
-      if ($("#prodGeminiVoice")) $("#prodGeminiVoice").value = geminiVoice();
+      $("#prodTypecastVoiceKo").value = localStorage.getItem(LS.typecastVoiceKo) || localStorage.getItem(LS.typecastVoice) || "";
+      $("#prodTypecastVoiceJa").value = localStorage.getItem(LS.typecastVoiceJa) || "";
+      $("#prodGeminiVoiceKo").value = localStorage.getItem(LS.geminiVoiceKo) || localStorage.getItem(LS.geminiVoice) || "Kore";
+      $("#prodGeminiVoiceJa").value = localStorage.getItem(LS.geminiVoiceJa) || localStorage.getItem(LS.geminiVoice) || "Kore";
     }
   }
 
@@ -3453,18 +3472,28 @@ JSON만: {"image":"...","video":"..."}`;
       localStorage.setItem(LS.kie, $("#prodKieKey").value.trim());
       localStorage.setItem(LS.kieModel, $("#prodKieModel").value.trim() || "nano-banana-2");
       localStorage.setItem(LS.typecast, $("#prodTypecastKey").value.trim());
-      localStorage.setItem(LS.typecastVoice, $("#prodTypecastVoice").value.trim());
-      if ($("#prodGeminiVoice")) localStorage.setItem(LS.geminiVoice, $("#prodGeminiVoice").value);
+      localStorage.setItem(LS.typecastVoiceKo, $("#prodTypecastVoiceKo").value.trim());
+      localStorage.setItem(LS.typecastVoiceJa, $("#prodTypecastVoiceJa").value.trim());
+      localStorage.setItem(LS.geminiVoiceKo, $("#prodGeminiVoiceKo").value);
+      localStorage.setItem(LS.geminiVoiceJa, $("#prodGeminiVoiceJa").value);
       $("#prodKeyPanel").hidden = true;
       render();
       toast("키를 저장했어요");
     };
 
-    // 타입캐스트 목소리 목록 불러오기 → 선택
+    // Gemini 목소리 드롭다운(한/일) 채우기
+    ["#prodGeminiVoiceKo", "#prodGeminiVoiceJa"].forEach((sid) => {
+      const sel = $(sid); if (!sel || sel.options.length) return;
+      GEMINI_VOICES.forEach(([v, label]) => { const o = el("option", null, label); o.value = v; sel.appendChild(o); });
+    });
+    $("#prodGeminiVoiceKo").value = localStorage.getItem(LS.geminiVoiceKo) || localStorage.getItem(LS.geminiVoice) || "Kore";
+    $("#prodGeminiVoiceJa").value = localStorage.getItem(LS.geminiVoiceJa) || localStorage.getItem(LS.geminiVoice) || "Kore";
+
+    // 타입캐스트 목소리 목록 불러오기 + 언어별 지정
     const tcLoad = $("#prodTcLoadVoices");
     if (tcLoad) tcLoad.onclick = () => loadTypecastVoices();
-    const tcSel = $("#prodTcVoiceSelect");
-    if (tcSel) tcSel.onchange = () => { if (tcSel.value) $("#prodTypecastVoice").value = tcSel.value; };
+    if ($("#prodTcToKo")) $("#prodTcToKo").onclick = () => { const v = $("#prodTcVoiceSelect").value; if (v) { $("#prodTypecastVoiceKo").value = v; toast("한국어 목소리로 지정"); } };
+    if ($("#prodTcToJa")) $("#prodTcToJa").onclick = () => { const v = $("#prodTcVoiceSelect").value; if (v) { $("#prodTypecastVoiceJa").value = v; toast("일본어 목소리로 지정"); } };
 
     // 언어 전환 (한국어 / 日本語)
     const langT = $("#langToggle");

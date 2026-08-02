@@ -16,11 +16,21 @@
     kie: "yeti_kie_key",
     kieModel: "yeti_kie_model",
     typecast: "yeti_typecast_key",
-    typecastVoice: "yeti_typecast_voice",
-    geminiVoice: "yeti_gemini_voice",
+    typecastVoice: "yeti_typecast_voice",      // 구버전(마이그레이션용)
+    typecastVoiceKo: "yeti_typecast_voice_ko",
+    typecastVoiceJa: "yeti_typecast_voice_ja",
+    geminiVoice: "yeti_gemini_voice",          // 구버전
+    geminiVoiceKo: "yeti_gemini_voice_ko",
+    geminiVoiceJa: "yeti_gemini_voice_ja",
     projects: "yeti_projects"
   };
   const TYPECAST_URL = "https://api.typecast.ai/v1/text-to-speech";
+  const GEMINI_VOICES = [
+    ["Kore", "Kore — 차분·기본 (여)"], ["Aoede", "Aoede — 부드러움 (여)"], ["Leda", "Leda — 밝고 또렷 (여)"],
+    ["Callirrhoe", "Callirrhoe — 편안함 (여)"], ["Sulafat", "Sulafat — 따뜻함 (여)"], ["Achernar", "Achernar — 또렷 (여)"],
+    ["Charon", "Charon — 묵직·낮음 (남)"], ["Puck", "Puck — 경쾌 (남)"], ["Fenrir", "Fenrir — 강렬 (남)"],
+    ["Orus", "Orus — 단단함 (남)"], ["Enceladus", "Enceladus — 숨결 섞인 (남)"], ["Iapetus", "Iapetus — 담담 (남)"]
+  ];
 
   const STEPS = [
     { key: "category", name: "주제 고르기" },
@@ -147,8 +157,12 @@
   const kieKey = () => localStorage.getItem(LS.kie) || "";
   const kieModel = () => localStorage.getItem(LS.kieModel) || "nano-banana-2";
   const typecastKey = () => localStorage.getItem(LS.typecast) || "";
-  const typecastVoice = () => localStorage.getItem(LS.typecastVoice) || "";
-  const geminiVoice = () => localStorage.getItem(LS.geminiVoice) || "Kore";
+  const typecastVoice = () => (project.lang === "ja"
+    ? (localStorage.getItem(LS.typecastVoiceJa) || localStorage.getItem(LS.typecastVoice))
+    : (localStorage.getItem(LS.typecastVoiceKo) || localStorage.getItem(LS.typecastVoice))) || "";
+  const geminiVoice = () => (project.lang === "ja"
+    ? (localStorage.getItem(LS.geminiVoiceJa) || localStorage.getItem(LS.geminiVoice))
+    : (localStorage.getItem(LS.geminiVoiceKo) || localStorage.getItem(LS.geminiVoice))) || "Kore";
   const imgKeyOk = () => imgProvider() === "kie" ? !!kieKey() : !!geminiKey();
 
   // ============ 토스트 ============
@@ -373,8 +387,7 @@
       });
       const cur = typecastVoice();
       if (cur) sel.value = cur;
-      if (sel.value) $("#prodTypecastVoice").value = sel.value;
-      toast(arr.length + "개 목소리를 불러왔어요");
+      toast(arr.length + "개 불러옴 · 아래 '한국어에 넣기/일본어에 넣기'로 지정하세요");
     } catch (e) {
       toast("실패: " + String(e.message).slice(0, 60));
     } finally {
@@ -1525,8 +1538,10 @@ JSON만: {"image":"...","video":"..."}`;
       $("#prodKieKey").value = kieKey();
       $("#prodKieModel").value = kieModel();
       $("#prodTypecastKey").value = typecastKey();
-      $("#prodTypecastVoice").value = typecastVoice();
-      if ($("#prodGeminiVoice")) $("#prodGeminiVoice").value = geminiVoice();
+      $("#prodTypecastVoiceKo").value = localStorage.getItem(LS.typecastVoiceKo) || localStorage.getItem(LS.typecastVoice) || "";
+      $("#prodTypecastVoiceJa").value = localStorage.getItem(LS.typecastVoiceJa) || "";
+      $("#prodGeminiVoiceKo").value = localStorage.getItem(LS.geminiVoiceKo) || localStorage.getItem(LS.geminiVoice) || "Kore";
+      $("#prodGeminiVoiceJa").value = localStorage.getItem(LS.geminiVoiceJa) || localStorage.getItem(LS.geminiVoice) || "Kore";
     }
   }
 
@@ -1559,18 +1574,28 @@ JSON만: {"image":"...","video":"..."}`;
       localStorage.setItem(LS.kie, $("#prodKieKey").value.trim());
       localStorage.setItem(LS.kieModel, $("#prodKieModel").value.trim() || "nano-banana-2");
       localStorage.setItem(LS.typecast, $("#prodTypecastKey").value.trim());
-      localStorage.setItem(LS.typecastVoice, $("#prodTypecastVoice").value.trim());
-      if ($("#prodGeminiVoice")) localStorage.setItem(LS.geminiVoice, $("#prodGeminiVoice").value);
+      localStorage.setItem(LS.typecastVoiceKo, $("#prodTypecastVoiceKo").value.trim());
+      localStorage.setItem(LS.typecastVoiceJa, $("#prodTypecastVoiceJa").value.trim());
+      localStorage.setItem(LS.geminiVoiceKo, $("#prodGeminiVoiceKo").value);
+      localStorage.setItem(LS.geminiVoiceJa, $("#prodGeminiVoiceJa").value);
       $("#prodKeyPanel").hidden = true;
       render();
       toast("키를 저장했어요");
     };
 
-    // 타입캐스트 목소리 목록 불러오기 → 선택
+    // Gemini 목소리 드롭다운(한/일) 채우기
+    ["#prodGeminiVoiceKo", "#prodGeminiVoiceJa"].forEach((sid) => {
+      const sel = $(sid); if (!sel || sel.options.length) return;
+      GEMINI_VOICES.forEach(([v, label]) => { const o = el("option", null, label); o.value = v; sel.appendChild(o); });
+    });
+    $("#prodGeminiVoiceKo").value = localStorage.getItem(LS.geminiVoiceKo) || localStorage.getItem(LS.geminiVoice) || "Kore";
+    $("#prodGeminiVoiceJa").value = localStorage.getItem(LS.geminiVoiceJa) || localStorage.getItem(LS.geminiVoice) || "Kore";
+
+    // 타입캐스트 목소리 목록 불러오기 + 언어별 지정
     const tcLoad = $("#prodTcLoadVoices");
     if (tcLoad) tcLoad.onclick = () => loadTypecastVoices();
-    const tcSel = $("#prodTcVoiceSelect");
-    if (tcSel) tcSel.onchange = () => { if (tcSel.value) $("#prodTypecastVoice").value = tcSel.value; };
+    if ($("#prodTcToKo")) $("#prodTcToKo").onclick = () => { const v = $("#prodTcVoiceSelect").value; if (v) { $("#prodTypecastVoiceKo").value = v; toast("한국어 목소리로 지정"); } };
+    if ($("#prodTcToJa")) $("#prodTcToJa").onclick = () => { const v = $("#prodTcVoiceSelect").value; if (v) { $("#prodTypecastVoiceJa").value = v; toast("일본어 목소리로 지정"); } };
 
     // 언어 전환 (한국어 / 日本語)
     const langT = $("#langToggle");

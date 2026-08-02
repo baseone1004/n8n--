@@ -105,42 +105,46 @@
               <p class="settings-note">⚠ KIE API는 서버용이라 브라우저에서 막힐(CORS) 수 있어요. 안 되면 KIE 웹에서 이미지를 뽑아 <b>이미지 올리기</b>로 넣으세요.</p>
             </div>
             <div class="key-divider">음성 (선택)</div>
-            <label class="field">
-              <span class="field-label">Gemini 음성 목소리 <small>(브라우저에서 바로 생성 · 이미지용 Google 키 사용 · 추천)</small></span>
-              <select id="prodGeminiVoice">
-                <option value="Kore">Kore — 차분·기본 (여)</option>
-                <option value="Aoede">Aoede — 부드러움 (여)</option>
-                <option value="Leda">Leda — 밝고 또렷 (여)</option>
-                <option value="Callirrhoe">Callirrhoe — 편안함 (여)</option>
-                <option value="Sulafat">Sulafat — 따뜻함 (여)</option>
-                <option value="Charon">Charon — 묵직·낮음 (남)</option>
-                <option value="Puck">Puck — 경쾌 (남)</option>
-                <option value="Fenrir">Fenrir — 강렬 (남)</option>
-                <option value="Orus">Orus — 단단함 (남)</option>
-                <option value="Enceladus">Enceladus — 숨결 섞인 (남)</option>
-                <option value="Iapetus">Iapetus — 담담 (남)</option>
-                <option value="Achernar">Achernar — 또렷 (여)</option>
-              </select>
-            </label>
-            <p class="settings-note">위 목소리로 <b>영상 만들기 → 음성</b> 단계의 'Gemini 음성' 버튼이 생성됩니다. 아래 타입캐스트는 선택 사항이에요.</p>
+            <p class="settings-note" style="margin-bottom:8px">🇰🇷 한국어 / 🇯🇵 일본어 목소리를 각각 저장해두면, 언어를 바꿀 때 <b>자동으로 해당 언어 목소리</b>로 생성됩니다.</p>
+            <div class="editor-row">
+              <label class="field" style="flex:1">
+                <span class="field-label">🇰🇷 Gemini 한국어 목소리</span>
+                <select id="prodGeminiVoiceKo"></select>
+              </label>
+              <label class="field" style="flex:1">
+                <span class="field-label">🇯🇵 Gemini 일본어 목소리</span>
+                <select id="prodGeminiVoiceJa"></select>
+              </label>
+            </div>
+            <p class="settings-note">위 목소리로 음성 단계의 'Gemini 음성' 버튼이 생성됩니다. 아래 타입캐스트는 선택 사항이에요.</p>
 
             <div class="key-divider">타입캐스트 (선택 · 안 되면 업로드 사용)</div>
             <label class="field">
-              <span class="field-label">타입캐스트(Typecast) API 키 <small>(API로 음성 자동 생성)</small></span>
+              <span class="field-label">타입캐스트(Typecast) API 키</span>
               <input type="password" id="prodTypecastKey" placeholder="Typecast API Key" autocomplete="off" />
             </label>
             <label class="field">
-              <span class="field-label">타입캐스트 목소리 선택</span>
+              <span class="field-label">목소리 목록에서 골라 언어별로 넣기</span>
               <div class="yt-row" style="margin:0">
                 <select id="prodTcVoiceSelect" style="flex:1"><option value="">목록을 불러오세요</option></select>
                 <button type="button" class="btn sm" id="prodTcLoadVoices">목소리 불러오기</button>
               </div>
+              <div class="yt-row" style="margin-top:6px">
+                <button type="button" class="btn sm" id="prodTcToKo">▲ 한국어에 넣기</button>
+                <button type="button" class="btn sm" id="prodTcToJa">▲ 일본어에 넣기</button>
+              </div>
             </label>
-            <label class="field">
-              <span class="field-label">voice_id <small>(선택하면 자동 입력 · 직접 입력도 가능)</small></span>
-              <input type="text" id="prodTypecastVoice" placeholder="tc_..." autocomplete="off" />
-            </label>
-            <p class="settings-note">⭐ 타입캐스트 API를 앱에서 쓰려면 <b>수익분석_켜기.bat</b>(로컬 서버)로 열어야 해요 — 서버가 CORS를 우회(중계)합니다. 그렇게 열면 위 <b>목소리 불러오기</b>와 음성 단계의 <b>타입캐스트 음성</b> 버튼이 작동합니다. (그래도 안 되면 타입캐스트 앱에서 만들어 <b>음성 올리기</b>) </p>
+            <div class="editor-row">
+              <label class="field" style="flex:1">
+                <span class="field-label">🇰🇷 한국어 voice_id</span>
+                <input type="text" id="prodTypecastVoiceKo" placeholder="tc_..." autocomplete="off" />
+              </label>
+              <label class="field" style="flex:1">
+                <span class="field-label">🇯🇵 일본어 voice_id</span>
+                <input type="text" id="prodTypecastVoiceJa" placeholder="tc_..." autocomplete="off" />
+              </label>
+            </div>
+            <p class="settings-note">⭐ 타입캐스트 API는 <b>수익분석_켜기.bat</b>(로컬 서버)로 열 때만 작동해요(CORS 우회). 웹주소에선 <b>음성 올리기</b>를 쓰세요.</p>
 
             <div class="key-divider">대본 모델</div>
             <label class="field">
