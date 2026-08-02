@@ -760,12 +760,32 @@ textarea {
 
           <!-- 키 설정 패널 -->
           <div class="settings-panel" id="prodKeyPanel" hidden>
-            <div class="key-divider">✍️ 글작성(대본) — Claude</div>
+            <div class="key-divider">✍️ 글작성(대본) API</div>
             <label class="field">
-              <span class="field-label">Anthropic(Claude) API 키 <small>(대본 작성에 사용)</small></span>
-              <input type="password" id="prodClaudeKey" placeholder="sk-ant-..." autocomplete="off" />
+              <span class="field-label">대본 생성 엔진</span>
+              <select id="prodTextProvider">
+                <option value="gemini">Gemini (무료 · Google 키 사용) 💸무료</option>
+                <option value="claude">Claude (유료 · 고품질)</option>
+              </select>
             </label>
-            <p class="settings-note">✍️ 대본은 <b>Claude</b>로 만듭니다. 발급: <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com/settings/keys</a>. 사용 모델은 아래 <b>대본 모델</b>에서 바꿀 수 있어요.</p>
+            <div id="geminiTextField">
+              <label class="field">
+                <span class="field-label">Google AI(Gemini) API 키 <small>(대본 무료 + Gemini 음성)</small></span>
+                <input type="password" id="prodGeminiKey" placeholder="AIza..." autocomplete="off" />
+              </label>
+              <div class="yt-row" style="margin:0 0 6px">
+                <button type="button" class="btn sm" id="prodTestGemini">🔍 이 키 테스트</button>
+                <span id="prodTestGeminiResult" class="settings-note" style="margin:0"></span>
+              </div>
+              <p class="settings-note">🆓 <b>Gemini(무료)</b>로 대본을 만듭니다. 발급: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> (무료). 키는 반드시 <b>AIza…</b>로 시작(OAuth 클라이언트 ID 아님).</p>
+            </div>
+            <div id="claudeTextField" hidden>
+              <label class="field">
+                <span class="field-label">Anthropic(Claude) API 키 <small>(유료 · 고품질)</small></span>
+                <input type="password" id="prodClaudeKey" placeholder="sk-ant-..." autocomplete="off" />
+              </label>
+              <p class="settings-note">✍️ <b>Claude(유료)</b>로 고품질 대본. 발급: <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com/settings/keys</a>. 모델은 아래 <b>대본 모델</b>에서 변경.</p>
+            </div>
 
             <div class="key-divider">🖼️ 이미지·영상 생성 API — KIE.ai (유료·선택)</div>
             <p class="settings-note" style="margin-bottom:8px">글작성 키와 <b>따로</b> 넣습니다. <b>이미지 생성</b>과 <b>인트로 영상 변환</b>을 모두 KIE.ai로 합니다(크레딧 필요). 안 넣어도 무료 사이트에서 만들어 <b>이미지 올리기</b>로 진행할 수 있어요.</p>
@@ -796,11 +816,7 @@ textarea {
             <p class="settings-note">💰 이미지 약 15~60원/장 · 영상은 모델별로 수백~수천원/편. <br>⚠ KIE API는 서버용이라 <b>웹주소에선 막힐(CORS)</b> 수 있어요. 그럴 땐 <b>수익분석_켜기.bat</b>(로컬 서버)로 열거나, KIE 웹에서 뽑아 <b>올리기</b>로 넣으세요. 영상 모델 이름은 본인 KIE 계정에서 쓰는 이름으로 넣으세요.</p>
 
             <div class="key-divider">음성 (선택)</div>
-            <p class="settings-note" style="margin-bottom:8px">🇰🇷 한국어 / 🇯🇵 일본어 목소리를 각각 저장해두면, 언어를 바꿀 때 <b>자동으로 해당 언어 목소리</b>로 생성됩니다. 타입캐스트만 쓰면 아래 Gemini 항목은 비워도 돼요.</p>
-            <label class="field">
-              <span class="field-label">Gemini 음성용 Google AI 키 <small>(Gemini 음성 쓸 때만 · 선택)</small></span>
-              <input type="password" id="prodGeminiKey" placeholder="AIza... (Gemini 음성 안 쓰면 비워두기)" autocomplete="off" />
-            </label>
+            <p class="settings-note" style="margin-bottom:8px">🇰🇷 한국어 / 🇯🇵 일본어 목소리를 각각 저장해두면, 언어를 바꿀 때 <b>자동으로 해당 언어 목소리</b>로 생성됩니다. Gemini 음성은 위 <b>글작성 Google AI 키</b>를 함께 씁니다.</p>
             <div class="editor-row">
               <label class="field" style="flex:1">
                 <span class="field-label">🇰🇷 Gemini 한국어 목소리</span>
@@ -2084,8 +2100,9 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
     tT = setTimeout(() => { t.classList.remove("show"); setTimeout(() => (t.hidden = true), 260); }, 2100);
   }
 
-  // ============ Claude JSON 호출 (대본은 Claude 전용) ============
+  // ============ 대본 JSON 호출 (엔진: Gemini 무료 / Claude) ============
   async function claudeJSON(system, user, maxTokens) {
+    if (textProvider() === "gemini") return geminiJSON(system, user, maxTokens);
     const key = claudeKey();
     if (!key) throw new Error("NO_CLAUDE_KEY");
     const res = await fetch(CLAUDE_URL, {
@@ -2423,9 +2440,11 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
   }
 
   function keyBar(body) {
-    if (claudeKey()) return;
+    const gemText = textProvider() === "gemini";
+    if (gemText ? geminiKey() : claudeKey()) return;
+    const textLabel = gemText ? "Google AI 키(대본 무료)" : "Anthropic(Claude) 키";
     const bar = el("div", "keybar");
-    const txt = el("div", null, "🔑 시작하려면 API 키가 필요해요 — <b>Anthropic(Claude) 키</b>");
+    const txt = el("div", null, "🔑 시작하려면 API 키가 필요해요 — " + `<b>${textLabel}</b>`);
     bar.appendChild(txt);
     const b = el("button", "btn sm btn-primary", "여기에 API 키 입력하기");
     b.onclick = openKeys;
@@ -3563,6 +3582,8 @@ JSON만: {"video":"..."}`;
     $("#prodProjPanel").hidden = true;
     const p = $("#prodKeyPanel"); p.hidden = !p.hidden;
     if (!p.hidden) {
+      const tp = $("#prodTextProvider");
+      if (tp) { tp.value = textProvider(); tp.dispatchEvent(new Event("change")); }
       $("#prodClaudeKey").value = claudeKey();
       if ($("#prodGeminiKey")) $("#prodGeminiKey").value = geminiKey();
       $("#prodModel").value = claudeModel();
@@ -3589,10 +3610,17 @@ JSON만: {"video":"..."}`;
 
     $("#prodSettings").onclick = openKeys;
     $("#prodProjects").onclick = () => { $("#prodKeyPanel").hidden = true; const p = $("#prodProjPanel"); p.hidden = !p.hidden; if (!p.hidden) renderProjList(); };
+    const textSel = $("#prodTextProvider");
+    if (textSel) textSel.onchange = () => {
+      const gem = textSel.value === "gemini";
+      if ($("#geminiTextField")) $("#geminiTextField").hidden = !gem;
+      if ($("#claudeTextField")) $("#claudeTextField").hidden = gem;
+    };
+
     if ($("#prodTestGemini")) $("#prodTestGemini").onclick = testGeminiKey;
 
     $("#prodSaveKeys").onclick = () => {
-      localStorage.setItem(LS.textProvider, "claude");
+      if (textSel) localStorage.setItem(LS.textProvider, textSel.value);
       localStorage.setItem(LS.claude, $("#prodClaudeKey").value.trim());
       if ($("#prodGeminiKey")) localStorage.setItem(LS.gemini, $("#prodGeminiKey").value.trim());
       localStorage.setItem(LS.model, $("#prodModel").value.trim() || "claude-opus-5");
