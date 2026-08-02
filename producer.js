@@ -1361,7 +1361,7 @@ JSON 배열만: [{"name":"..","look":".."}]`;
   // KIE/이미지 오류를 사람이 읽기 쉬운 한국어로
   function kieErrMsg(e) {
     const m = String(e.message);
-    if (m.includes("KIE_NO_CREDIT")) return "KIE가 '포인트 부족(433)' 응답 — 크레딧이 남아있다면 이미지 모델명(nano-banana-2 등)이 맞는지 확인하세요";
+    if (m.includes("KIE_NO_CREDIT")) return "KIE 433: 이 API 키로 '포인트 부족' 응답. 크레딧이 있어도 뜨면 → ① kie.ai/logs 에서 실제 사유 확인 ② API 키에 사용한도 걸렸는지 확인 ③ 해상도 1K로 낮춰보기";
     if (/NO_(GEMINI|KIE)_KEY/.test(m)) return "이미지 API 키 필요";
     if (/Failed to fetch/.test(m)) return "CORS/네트워크 — 웹주소에선 KIE가 막힐 수 있어요(로컬 .bat 실행)";
     return m.slice(0, 70);
