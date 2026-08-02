@@ -768,7 +768,7 @@ ${trend && trend.length ? "★ 최근 30일 실제로 조회수가 높았던 영
   }
 
   // 대본: 1시간 30분~2시간(약 35,000~40,000자). 뼈대 → 장면별 긴 나레이션 배치 생성.
-  const SCENE_COUNT = 32;   // 장면 수 (이미지 컷 수)
+  const SCENE_COUNT = 40;   // 장면 수 (이미지 컷 수) — 40컷 고정
   const BATCH = 4;          // 배치당 장면 수
 
   async function loadScript() {
@@ -830,7 +830,7 @@ scenes는 정확히 ${SCENE_COUNT}개. 각 beat는 한 컷 이미지로 그릴 �
 전체 장면 개요:
 ${outline}
 
-${prev ? "직전 장면 마지막 부분(자연스럽게 이어서):\n" + prev + "\n\n" : ""}지금은 아래 장면들의 '완성된 낭독 대본'만 순서대로 써라. 각 장면은 넉넉히 길게(각 900~1400자), 대사와 묘사를 풍부하게.
+${prev ? "직전 장면 마지막 부분(자연스럽게 이어서):\n" + prev + "\n\n" : ""}지금은 아래 장면들의 '완성된 낭독 대본'만 순서대로 써라. 각 장면은 넉넉히 길게(각 850~1150자), 대사와 묘사를 풍부하게. (40장면 합계로 1시간 30분~2시간 분량이 되도록)
 ${targets.map((t) => "- " + t).join("\n")}
 ${b === 0 ? `\n첫 장면(인트로)은 6문장 포맷: 파격 대사→압축 상황(결말 금지)→'그런데…' 궁금증→마지막에 "${ja ? "구독 유도 문구를 일본어로" : CTA_KO}". (인트로만 250자 내외로 짧게)` : ""}
 ${end === n ? `\n마지막 장면은 이 이야기에 맞는 주제 한 문장 + 고정 마무리 멘트: "${ja ? OUTRO_KO + " (일본어로)" : OUTRO_KO}"` : ""}
@@ -879,7 +879,10 @@ JSON 배열만, 정확히 ${end - b}개: ["장면 대본", ...]`;
     pkg.appendChild(field("설명 아래 태그 (쉼표로 구분)", () => project.tags.join(", "), true, (v) => { project.tags = v.split(",").map((x) => x.trim()).filter(Boolean); saveDebounced(); }));
 
     const sceneHead = el("div", "pkg-field");
-    sceneHead.appendChild(el("div", "pkg-label", `<span>장면 대본 (${project.scenes.length}개)</span>`));
+    const totalSec = project.scenes.reduce((a, s) => a + (s.durationSec || estDur(s.text)), 0);
+    const mm = Math.round(totalSec / 60);
+    const totalChars = project.scenes.reduce((a, s) => a + (s.text || "").replace(/\s/g, "").length, 0);
+    sceneHead.appendChild(el("div", "pkg-label", `<span>장면 대본 (${project.scenes.length}개) · 예상 <b>약 ${mm}분</b> (${totalChars.toLocaleString("ko")}자)</span>`));
     pkg.appendChild(sceneHead);
     project.scenes.forEach((s, i) => pkg.appendChild(sceneTextCard(s, i)));
     body.appendChild(pkg);
