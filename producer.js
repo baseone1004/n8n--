@@ -266,22 +266,28 @@
       throw new Error("AI 응답이 잘렸어요(길이 초과). 다시 시도하면 대개 해결돼요.");
     }
   }
-  // 잘린 문자열 배열 ["...","..."(잘림) 을 마지막 완성 항목까지 복구
+  // 잘린 JSON 배열에서 '완성된 최상위 항목'(객체 또는 문자열)만 골라 복구
   function salvageArray(cut) {
     if (cut[0] !== "[") return null;
-    const items = []; let i = 1, inStr = false, esc = false, cur = "";
-    for (; i < cut.length; i++) {
+    const items = []; let depth = 0, inStr = false, esc = false, start = -1;
+    for (let i = 1; i < cut.length; i++) {
       const ch = cut[i];
       if (inStr) {
-        if (esc) { cur += ch; esc = false; }
-        else if (ch === "\\") { cur += ch; esc = true; }
-        else if (ch === '"') { inStr = false; items.push(cur); cur = ""; }
-        else cur += ch;
-      } else if (ch === '"') { inStr = true; }
+        if (esc) esc = false;
+        else if (ch === "\\") esc = true;
+        else if (ch === '"') { inStr = false; if (depth === 0 && start >= 0) { items.push(cut.slice(start, i + 1)); start = -1; } }
+        continue;
+      }
+      if (ch === '"') { if (depth === 0 && start < 0) start = i; inStr = true; continue; }
+      if (ch === "{" || ch === "[") { if (depth === 0 && start < 0) start = i; depth++; continue; }
+      if (ch === "}" || ch === "]") { if (depth > 0) { depth--; if (depth === 0 && start >= 0) { items.push(cut.slice(start, i + 1)); start = -1; } } else break; continue; }
     }
     if (!items.length) return null;
-    try { return JSON.parse("[" + items.map((x) => JSON.stringify(x)).join(",") + "]"); }
-    catch (e) { return null; }
+    // 뒤에서부터 완성된 만큼만 파싱 (마지막 잘린 항목 버림)
+    for (let k = items.length; k > 0; k--) {
+      try { return JSON.parse("[" + items.slice(0, k).join(",") + "]"); } catch (e) {}
+    }
+    return null;
   }
 
   // ============ 이미지 헬퍼 ============
@@ -796,10 +802,13 @@ ${TITLE_PATTERNS}
   ... (정확히 10개)
 ]
 ${trend && trend.length ? "★ 최근 30일 실제로 조회수가 높았던 영상들(근거로 삼아라):\n" + trend.map((t) => `- ${t.title} (조회 ${t.views.toLocaleString()})`).join("\n") + "\n위 실제 사례와 소재·후킹이 얼마나 닮았는지를 근거로 score를 매겨라. 실제 대박 영상과 매우 유사하면 높게, 동떨어지면 낮게.\n" : ""}score는 '떡상(대박) 확률' 추정 정수(%)다. 40~95 사이에서 현실적으로 분산(전부 90+ 금지). 클릭률·소재 신선함·감정 강도·위 실제 데이터와의 유사도를 종합.${langDirective()}`;
-      const arr = await claudeJSON(sys, usr, 4000);
-      project.topics = (Array.isArray(arr) ? arr : []).slice(0, 10)
+      const arr = await claudeJSON(sys, usr, 8000);
+      project.topics = (Array.isArray(arr) ? arr : [])
+        .filter((t) => t && typeof t === "object" && (t.title || "").trim())
+        .slice(0, 10)
         .map((t) => ({ ...t, score: Math.max(0, Math.min(100, parseInt(t.score, 10) || 70)) }))
         .sort((a, b) => b.score - a.score);
+      if (!project.topics.length) throw new Error("주제를 만들지 못했어요. 다시 시도해 주세요.");
       project.topicIdx = -1;
       busy = false; goStep("topic");
     } catch (e) {
