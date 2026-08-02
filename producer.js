@@ -162,7 +162,12 @@
   const geminiKey = () => localStorage.getItem(LS.gemini) || "";
   const claudeModel = () => localStorage.getItem(LS.model) || "claude-opus-5";
   const textProvider = () => localStorage.getItem(LS.textProvider) || "claude";
-  const geminiTextModel = () => localStorage.getItem(LS.geminiTextModel) || "gemini-2.5-flash";
+  const geminiTextModel = () => {
+    const m = localStorage.getItem(LS.geminiTextModel);
+    // 신규 사용자에게 막힌 옛 모델명은 최신으로 자동 교정
+    if (!m || m === "gemini-2.5-flash" || m === "gemini-1.5-flash") return "gemini-2.0-flash";
+    return m;
+  };
   // 이미지·영상 생성 API — KIE.ai 전용 (글작성 키와 분리)
   const kieKey = () => localStorage.getItem(LS.kie) || "";
   const kieModel = () => localStorage.getItem(LS.kieModel) || "nano-banana-2";
@@ -587,6 +592,10 @@
     if (m.includes("NO_CLAUDE_KEY")) return "⚙ 키 설정에서 <b>Anthropic API 키</b>를 먼저 넣어주세요.";
     if (m.includes("NO_GEMINI_KEY")) return "⚙ 키 설정에서 <b>✍️ 글작성(대본) API</b> 칸에 <b>Google AI 키(AIza…)</b>를 먼저 넣어주세요.";
     if (m.includes("NO_KIE_KEY")) return "⚙ 키 설정에서 <b>KIE.ai 키</b>를 먼저 넣어주세요.";
+    // Gemini 모델 사용 불가(404/deprecated)
+    if (/Gemini\(대본\)\s*404/.test(m) || /no longer available|is not found|not supported|update your code to use a newer model/.test(m)) {
+      return "⚙ <b>Gemini 대본 모델</b>이 지금 계정에서 안 돼요.<br>🔑 API 키 → <b>Gemini 대본 모델</b> 칸에서 <b>gemini-2.0-flash</b>(또는 gemini-flash-latest)로 바꾸고 저장 후 다시 시도하세요. <small>(원본: " + esc(m) + ")</small>";
+    }
     // Gemini 인증 오류(잘못된 키/빈 키/키 위치 혼동)
     if (/Gemini\(대본\)\s*(400|401|403)/.test(m) || /invalid authentication|API key not valid|API_KEY_INVALID|Expected OAuth/.test(m)) {
       return "🔑 <b>글작성(대본) Google AI 키가 올바르지 않아요.</b><br>" +
@@ -1675,6 +1684,7 @@ JSON만: {"video":"..."}`;
       if (tp) { tp.value = textProvider(); tp.dispatchEvent(new Event("change")); }
       $("#prodClaudeKey").value = claudeKey();
       if ($("#prodGeminiKey")) $("#prodGeminiKey").value = geminiKey();
+      if ($("#prodGeminiTextModel")) $("#prodGeminiTextModel").value = geminiTextModel();
       $("#prodModel").value = claudeModel();
       if ($("#prodKieKey")) $("#prodKieKey").value = kieKey();
       if ($("#prodKieModel")) $("#prodKieModel").value = kieModel();
@@ -1712,6 +1722,7 @@ JSON만: {"video":"..."}`;
       if (textSel) localStorage.setItem(LS.textProvider, textSel.value);
       localStorage.setItem(LS.claude, $("#prodClaudeKey").value.trim());
       if ($("#prodGeminiKey")) localStorage.setItem(LS.gemini, $("#prodGeminiKey").value.trim());
+      if ($("#prodGeminiTextModel")) localStorage.setItem(LS.geminiTextModel, $("#prodGeminiTextModel").value.trim() || "gemini-2.0-flash");
       localStorage.setItem(LS.model, $("#prodModel").value.trim() || "claude-opus-5");
       localStorage.setItem(LS.provider, "kie");
       if ($("#prodKieKey")) localStorage.setItem(LS.kie, $("#prodKieKey").value.trim());
