@@ -588,7 +588,7 @@
     });
     return out;
   }
-  function estDur(text) { return Math.max(2, Math.round((text || "").replace(/\s/g, "").length / 5.5)); }
+  function estDur(text) { return Math.max(2, Math.round((text || "").replace(/\s/g, "").length / (SCRIPT_CPM / 60))); }
 
   // ============ 렌더 ============
   function render() {
@@ -625,6 +625,10 @@
       const st = el("div", "pstep" + (i === stepIdx ? " active" : i < stepIdx ? " done" : ""));
       st.appendChild(el("div", "pstep-dot", i < stepIdx ? "✓" : String(i + 1)));
       st.appendChild(el("div", "pstep-name", s.name));
+      // 단계 번호를 눌러서 바로 이동
+      st.title = "이 단계로 이동";
+      st.style.cursor = busy ? "default" : "pointer";
+      if (!busy) st.onclick = () => { if (i !== stepIdx) { stepIdx = i; render(); } };
       w.appendChild(st);
     });
   }
@@ -852,6 +856,7 @@ ${trend && trend.length ? "★ 최근 30일 실제로 조회수가 높았던 영
   // 대본: 1시간 30분~2시간(약 35,000~40,000자). 뼈대 → 장면별 긴 나레이션 배치 생성.
   const SCENE_COUNT = 40;   // 장면 수 (이미지 컷 수) — 40컷 고정
   const BATCH = 4;          // 배치당 장면 수
+  const SCRIPT_CPM = 300;   // 낭독 분당 글자수(추정) — 30,000자 ≈ 100분
 
   async function loadScript() {
     if (project.topicIdx < 0) { toast("주제를 하나 고르세요"); return; }
@@ -913,7 +918,8 @@ scenes는 정확히 ${SCENE_COUNT}개. 각 beat는 한 컷 이미지로 그릴 �
 전체 장면 개요:
 ${outline}
 
-${prev ? "직전 장면 마지막 부분(자연스럽게 이어서):\n" + prev + "\n\n" : ""}지금은 아래 장면들의 '완성된 낭독 대본'만 순서대로 써라. 각 장면은 넉넉히 길게(각 850~1150자), 대사와 묘사를 풍부하게. (40장면 합계로 1시간 30분~2시간 분량이 되도록)
+${prev ? "직전 장면 마지막 부분(자연스럽게 이어서):\n" + prev + "\n\n" : ""}지금은 아래 장면들의 '완성된 낭독 대본'만 순서대로 써라.
+★ 길이 필수(매우 중요): 인트로 외 각 장면은 <b>최소 1000자, 목표 1200~1500자</b>. 짧으면 안 된다. 대사·심리묘사·상황묘사·회상을 충분히 넣어 분량을 채워라(40장면 합계 30,000~40,000자 = 1시간 30분~2시간).
 ${targets.map((t) => "- " + t).join("\n")}
 ${b === 0 ? `\n첫 장면(인트로)은 6문장 포맷: 파격 대사→압축 상황(결말 금지)→'그런데…' 궁금증→마지막에 "${ja ? "구독 유도 문구를 일본어로" : CTA_KO}". (인트로만 250자 내외로 짧게)` : ""}
 ${end === n ? `\n마지막 장면은 이 이야기에 맞는 주제 한 문장 + 고정 마무리 멘트: "${ja ? OUTRO_KO + " (일본어로)" : OUTRO_KO}"` : ""}
@@ -929,7 +935,7 @@ JSON 배열만, 정확히 ${end - b}개: ["장면 대본", ...]`;
       }
       const total = project.scenes.reduce((a, s) => a + (s.text || "").replace(/\s/g, "").length, 0);
       busy = false; goStep("script");
-      toast(`대본 완성 · 약 ${total.toLocaleString()}자 (~${Math.round(total / 270)}분)`);
+      toast(`대본 완성 · 약 ${total.toLocaleString()}자 (~${Math.round(total / SCRIPT_CPM)}분)`);
     } catch (e) {
       busy = false; renderTopic(body); showErr(body, keyMissingMsg(e));
     } finally { busy = false; }
@@ -961,30 +967,70 @@ JSON 배열만, 정확히 ${end - b}개: ["장면 대본", ...]`;
     pkg.appendChild(field("설명", () => project.description, true, (v) => { project.description = v; saveDebounced(); }));
     pkg.appendChild(field("설명 아래 태그 (쉼표로 구분)", () => project.tags.join(", "), true, (v) => { project.tags = v.split(",").map((x) => x.trim()).filter(Boolean); saveDebounced(); }));
 
-    const sceneHead = el("div", "pkg-field");
-    const totalSec = project.scenes.reduce((a, s) => a + (s.durationSec || estDur(s.text)), 0);
-    const mm = Math.round(totalSec / 60);
     const totalChars = project.scenes.reduce((a, s) => a + (s.text || "").replace(/\s/g, "").length, 0);
-    sceneHead.appendChild(el("div", "pkg-label", `<span>장면 대본 (${project.scenes.length}개) · 예상 <b>약 ${mm}분</b> (${totalChars.toLocaleString("ko")}자)</span>`));
-    pkg.appendChild(sceneHead);
-    project.scenes.forEach((s, i) => pkg.appendChild(sceneTextCard(s, i)));
+    const mm = Math.round(totalChars / SCRIPT_CPM); // 낭독 분당 글자수 기준
+    const lenTier = totalChars >= 30000 ? "good" : totalChars >= 24000 ? "mid" : "low";
+    const lenNote = el("div", "pkg-label");
+    lenNote.innerHTML = `<span>전체 대본 · <b class="len-${lenTier}">약 ${mm}분</b> (${totalChars.toLocaleString("ko")}자) — ${totalChars >= 27000 ? "1시간 30분↑ 목표 도달" : "1시간 30분엔 30,000자↑ 필요 (아래 '더 길게'로 늘리세요)"}</span>`;
+    pkg.appendChild(lenNote);
+
+    // 칸 나누지 않고 하나의 대본으로 표시 (장면은 빈 줄로 구분되어 내부 관리)
+    const ta = el("textarea", "script-all");
+    ta.value = project.scenes.map((s) => s.text).join("\n\n");
+    ta.style.minHeight = "420px"; ta.style.lineHeight = "1.7";
+    ta.oninput = () => { syncScriptText(ta.value); saveDebounced(); };
+    pkg.appendChild(ta);
     body.appendChild(pkg);
 
+    navBtn("📋 전체 대본 복사", () => { navigator.clipboard.writeText(project.scenes.map((s) => s.text).join("\n\n")); toast("전체 대본을 복사했어요"); });
+    navBtn("⬆ 더 길게 늘리기", expandScript);
     navBtn("이미지 프롬프트 만들기 →", loadPrompts, true);
   }
 
-  function sceneTextCard(s, i) {
-    const c = el("div", "scene");
-    const head = el("div", "scene-head");
-    head.appendChild(el("div", "scene-no", `장면 ${i + 1}`));
-    const badge = el("span", "scene-badge", s.isIntro ? "인트로" : "일반");
-    badge.style.cursor = "pointer"; badge.title = "인트로 여부 전환";
-    badge.onclick = () => { s.isIntro = !s.isIntro; badge.textContent = s.isIntro ? "인트로" : "일반"; saveDebounced(); };
-    head.appendChild(badge);
-    c.appendChild(head);
-    const ta = el("textarea"); ta.value = s.text; ta.oninput = () => { s.text = ta.value; saveDebounced(); };
-    c.appendChild(ta);
-    return c;
+  // 하나의 텍스트를 빈 줄 기준으로 나눠 40개 장면에 다시 배분(장면 수는 유지)
+  function syncScriptText(full) {
+    const blocks = String(full).split(/\n{2,}/).map((x) => x.trim());
+    const n = project.scenes.length;
+    if (blocks.length === n) { project.scenes.forEach((s, i) => (s.text = blocks[i])); return; }
+    for (let i = 0; i < n; i++) {
+      if (i < n - 1) project.scenes[i].text = blocks[i] || "";
+      else project.scenes[i].text = blocks.slice(i).join("\n\n"); // 마지막 장면에 나머지 전부
+    }
+  }
+
+  // 기존 대본을 새 이야기 없이 더 길게(풍부하게) 늘리기
+  async function expandScript() {
+    if (!project.scenes.length) { toast("먼저 대본을 만들어주세요"); return; }
+    const body = $("#prodBody");
+    busy = true; loading(body, "대본을 더 길게 늘리는 중…"); renderNav();
+    try {
+      const n = project.scenes.length;
+      const sysE = `너는 ${LANG[project.lang].audience} 낭독 대본을 '더 길고 풍부하게' 늘리는 작가다. 원래 내용·순서·결말은 그대로 두고, 대사·심리묘사·상황묘사·회상을 더해 각 장면을 1.5~2배로 늘린다. 반드시 JSON 배열(문자열)만, 요청 개수와 정확히 일치.`;
+      for (let b = 0; b < n; b += BATCH) {
+        const end = Math.min(b + BATCH, n);
+        loading(body, `대본 늘리는 중… (${end}/${n})`);
+        const items = [];
+        for (let i = b; i < end; i++) items.push(`[장면 ${i + 1}${project.scenes[i].isIntro ? " · 인트로: 짧게 유지" : ""}]\n${project.scenes[i].text}`);
+        const usrE =
+`아래 장면 대본들을 각각 더 길게 늘려줘. 규칙:
+- 새로운 사건·인물 추가 금지. 기존 내용을 대사·심리·상황 묘사로 풍부하게만.
+- 인트로 외 각 장면 목표 1200~1500자.  인트로는 지금 길이 유지.
+- 어미 반복 금지, 자연스러운 낭독체.${langDirective()}
+JSON 배열만, 정확히 ${end - b}개: ["늘린 장면 대본", ...]
+
+${items.join("\n\n")}`;
+        try {
+          const arr = await claudeJSON(sysE, usrE, 12000);
+          (Array.isArray(arr) ? arr : []).forEach((t, k) => { if (project.scenes[b + k] && String(t).trim()) project.scenes[b + k].text = String(t); });
+        } catch (e) {}
+        saveProject();
+      }
+      busy = false; render();
+      const total = project.scenes.reduce((a, s) => a + (s.text || "").replace(/\s/g, "").length, 0);
+      toast(`대본 늘리기 완료 · 약 ${total.toLocaleString()}자 (~${Math.round(total / SCRIPT_CPM)}분)`);
+    } catch (e) {
+      busy = false; render(); showErr($("#prodBody"), keyMissingMsg(e));
+    } finally { busy = false; }
   }
 
   // ---- 4. 이미지 프롬프트 (배치로 나눠서 — 응답 잘림 방지) ----
