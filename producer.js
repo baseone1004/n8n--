@@ -1024,7 +1024,7 @@ ${scenes}`;
     const pkg = el("div", "pkg");
     project.scenes.forEach((s, i) => pkg.appendChild(sceneImageCard(s, i)));
     body.appendChild(pkg);
-    navBtn("전체 생성 (유료)", genAllImages);
+    navBtn("전체 생성 (없는 것만 · 유료)", genAllImages);
     navBtn("프롬프트 전체 복사", copyAllImagePrompts);
     navBtn("이미지 전체 다운로드", downloadImagesZip);
     navBtn("썸네일 만들기 →", () => { goStep("thumb"); }, true);
@@ -1240,13 +1240,19 @@ JSON 배열만: [{"name":"..","look":".."}]`;
   }
   async function genAllImages() {
     if (!imgKeyOk()) { toast("⚙ 이미지 생성 API 키를 먼저 넣어주세요"); openKeys(); return; }
-    const n = project.scenes.length;
-    if (!confirm(`장면 ${n}개를 전부 생성하면 약 ${(imgCostWon() * n).toLocaleString("ko")}원이 들 수 있어요. 진행할까요?`)) return;
-    for (let i = 0; i < n; i++) {
+    // 이미 이미지가 있는 장면은 건너뜀 → 오류로 멈춰도 처음부터 다시 안 함(크레딧 절약)
+    const todo = [];
+    project.scenes.forEach((s, i) => { if (!s.imageDataUrl) todo.push(i); });
+    const done = project.scenes.length - todo.length;
+    if (!todo.length) { toast("모든 장면에 이미 이미지가 있어요. 특정 장면만 바꾸려면 그 장면의 '다시 생성'을 쓰세요."); return; }
+    if (!confirm(`${done ? `이미 만든 ${done}개는 건너뛰고, ` : ""}남은 ${todo.length}개 장면만 생성해요. 약 ${(imgCostWon() * todo.length).toLocaleString("ko")}원. 진행할까요?`)) return;
+    let ok = 0;
+    for (const i of todo) {
       const r = await genOneImage(i);
-      if (r && r.credit) { toast("⛔ KIE 포인트 부족으로 중단했어요. kie.ai에서 충전 후 다시 시도하세요."); return; }
+      if (r && r.ok) ok++;
+      if (r && r.credit) { toast(`⛔ ${ok}개 만들고 중단(KIE 오류). 이미 만든 건 그대로 있어요 — 고친 뒤 '전체 생성'을 다시 누르면 남은 것만 이어서 만듭니다.`); return; }
     }
-    toast("이미지 생성 완료");
+    toast(`이미지 생성 완료 (${ok}개 추가)`);
   }
 
   // ---- 5.5 썸네일 ----
