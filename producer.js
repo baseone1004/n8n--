@@ -580,11 +580,32 @@
     navBtn("주제 10개 추천 받기 →", loadTopics, true);
   }
 
+  // 최근 30일 실제 인기 영상 표본 (YouTube 키 있을 때) — 확률 추정 근거
+  async function fetchTrendingSample(lang) {
+    const key = localStorage.getItem("yeti_yt_key");
+    if (!key) return null;
+    const region = lang === "ja" ? "JP" : "KR";
+    const q = lang === "ja" ? "怪談 昔話" : "야담 옛날이야기 사연";
+    const after = new Date(Date.now() - 30 * 86400000).toISOString();
+    try {
+      const s = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&order=viewCount&publishedAfter=${after}&q=${encodeURIComponent(q)}&regionCode=${region}&maxResults=12&key=${key}`);
+      if (!s.ok) return null;
+      const ids = ((await s.json()).items || []).map((x) => x.id.videoId).filter(Boolean).join(",");
+      if (!ids) return null;
+      const v = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${ids}&key=${key}`);
+      if (!v.ok) return null;
+      return ((await v.json()).items || [])
+        .map((it) => ({ title: it.snippet.title, views: Number(it.statistics.viewCount || 0) }))
+        .sort((a, b) => b.views - a.views).slice(0, 10);
+    } catch (e) { return null; }
+  }
+
   async function loadTopics() {
     if (!project.category) { toast("카테고리를 먼저 고르세요"); return; }
     const body = $("#prodBody");
-    busy = true; loading(body, "떡상할 만한 주제 10개를 뽑는 중…"); renderNav();
+    busy = true; loading(body, "실제 인기 영상을 참고해 주제 10개를 뽑는 중…"); renderNav();
     try {
+      const trend = await fetchTrendingSample(project.lang);
       const sys = `너는 ${LANG[project.lang].audience} 채널 기획 전문가다. 조회수가 잘 나오는(떡상하는) 주제를 잘 안다. 반드시 유효한 JSON만 출력한다. 설명·군더더기 금지.`;
       const usr =
 `카테고리: "${project.category}"
@@ -595,11 +616,14 @@
 ${TITLE_PATTERNS}
 각 주제는 아래 JSON 배열 형식으로만:
 [
-  {"title":"영상 제목 후보(호기심 유발, 25~35자)","hook":"왜 끌리는지 한 줄 훅","why":"떡상 포인트 한 줄"},
+  {"title":"영상 제목 후보(호기심 유발, 25~35자)","hook":"왜 끌리는지 한 줄 훅","why":"떡상 포인트 한 줄","score":85},
   ... (정확히 10개)
-]${langDirective()}`;
+]
+${trend && trend.length ? "★ 최근 30일 실제로 조회수가 높았던 영상들(근거로 삼아라):\n" + trend.map((t) => `- ${t.title} (조회 ${t.views.toLocaleString()})`).join("\n") + "\n위 실제 사례와 소재·후킹이 얼마나 닮았는지를 근거로 score를 매겨라. 실제 대박 영상과 매우 유사하면 높게, 동떨어지면 낮게.\n" : ""}score는 '떡상(대박) 확률' 추정 정수(%)다. 40~95 사이에서 현실적으로 분산(전부 90+ 금지). 클릭률·소재 신선함·감정 강도·위 실제 데이터와의 유사도를 종합.${langDirective()}`;
       const arr = await claudeJSON(sys, usr, 4000);
-      project.topics = Array.isArray(arr) ? arr.slice(0, 10) : [];
+      project.topics = (Array.isArray(arr) ? arr : []).slice(0, 10)
+        .map((t) => ({ ...t, score: Math.max(0, Math.min(100, parseInt(t.score, 10) || 70)) }))
+        .sort((a, b) => b.score - a.score);
       project.topicIdx = -1;
       busy = false; goStep("topic");
     } catch (e) {
@@ -610,10 +634,15 @@ ${TITLE_PATTERNS}
   // ---- 2. 주제 선택 ----
   function renderTopic(body) {
     body.appendChild(el("h2", "prod-h", "마음에 드는 주제를 고르세요"));
-    body.appendChild(el("p", "prod-sub", `카테고리: <b>${esc(project.category)}</b> · 하나를 선택하면 제목·태그·설명·대본을 만들어 드려요.`));
+    const grounded = !!localStorage.getItem("yeti_yt_key");
+    body.appendChild(el("p", "prod-sub", `카테고리: <b>${esc(project.category)}</b> · 확률순 정렬. 🔥 <b>떡상 확률</b>은 ${grounded ? "최근 30일 <b>실제 인기 영상 데이터</b>를 반영한" : "AI"} 추정치예요${grounded ? "" : " (유튜브 키를 넣으면 실제 데이터 반영)"}.`));
     const list = el("div", "topic-list");
     project.topics.forEach((t, i) => {
       const c = el("div", "topic-card" + (project.topicIdx === i ? " sel" : ""));
+      if (typeof t.score === "number") {
+        const tier = t.score >= 85 ? "hot" : t.score >= 70 ? "mid" : "low";
+        c.appendChild(el("div", "topic-score " + tier, `🔥 떡상 ${t.score}%`));
+      }
       c.appendChild(el("div", "topic-rank", `${i + 1}위`));
       c.appendChild(el("div", "topic-title", esc(t.title || "")));
       if (t.hook) c.appendChild(el("div", "topic-hook", esc(t.hook)));
