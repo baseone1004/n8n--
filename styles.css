@@ -522,6 +522,9 @@ textarea {
 }
 .prod-sub { color: var(--ink-soft); font-size: 14px; margin: 0 0 20px; }
 .prod-sub b { color: var(--accent); }
+.char-box { border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 0 0 20px; background: var(--paper-2); }
+.char-box .prod-h2 { font-size: 18px; font-weight: 800; margin: 0 0 6px; color: var(--ink); }
+.char-box .pkg { margin-bottom: 10px; }
 
 /* 카테고리 그리드 */
 .cat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }

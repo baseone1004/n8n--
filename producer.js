@@ -140,6 +140,7 @@
       tags: [],
       style: STYLE_PRESETS[lang][0].tail,
       scenes: [],       // {text, imagePrompt, imageDataUrl, audioDataUrl, durationSec, isIntro, zoom}
+      characters: [],   // {name, look, imageDataUrl, imageUrl} — 모든 장면에 고정되는 주인공
       watermark: LANG[lang].watermark,
       thumb: { copies: [], chosen: -1, imagePrompt: "", imageDataUrl: "" }
     };
@@ -302,14 +303,45 @@
     throw new Error("KIE 시간 초과. 나중에 다시 시도하세요.");
   }
 
-  // ---- KIE 이미지 생성 ----
+  // ---- 일관성(캐릭터·화풍) 고정 ----
+  // 모든 장면에 같은 주인공 외형을 강제
+  function charLockText() {
+    const cs = (project.characters || []).filter((c) => c.look);
+    if (!cs.length) return "";
+    return "Keep these recurring characters IDENTICAL in every image — same face, hairstyle, age and clothing every time: " +
+      cs.map((c) => `[${c.name}] ${c.look}`).join("; ") + ". ";
+  }
+  // 화풍 고정 + 실사화 방지 (nano-banana가 실사로 튀는 것 차단)
+  function styleLockText() {
+    return " . Art style (keep EXACTLY the same across all images): " + (project.style || "flat 2D Korean webtoon manhwa illustration") +
+      ". Flat 2D drawn cel-shaded webtoon/manhwa illustration. CRITICAL: NOT photorealistic, NOT a real photograph, NOT 3D render, NOT realistic skin/lighting — it must look hand-drawn like the reference style. no text, no letters, no watermark.";
+  }
+  // 캐릭터 참조 이미지(공개 URL만) — nano-banana 이미지 조건부 생성용
+  function charRefUrls() {
+    return (project.characters || []).map((c) => c.imageUrl).filter((u) => u && /^https?:\/\//.test(u));
+  }
+
+  // ---- KIE 이미지 생성 (주인공·화풍 고정 포함) ----
   async function genImage(prompt) {
-    const url = await kieTask(kieModel(), {
-      prompt: prompt + " . 16:9 widescreen cinematic composition, no text, no watermark, no letters.",
-      aspect_ratio: "16:9", output_format: "png"
-    }, 90);
+    const full = charLockText() + prompt + styleLockText() + " 16:9 widescreen cinematic composition.";
+    const input = { prompt: full, aspect_ratio: "16:9", output_format: "png" };
+    const refs = charRefUrls();
+    if (refs.length) input.image_urls = refs.slice(0, 3); // 주인공 참조로 일관성 강화
+    const url = await kieTask(kieModel(), input, 90);
     try { const r = await apiFetch(url); return await blobToDataURL(await r.blob()); }
     catch (e) { return url; } // CORS로 바이트 못 가져오면 URL 그대로(미리보기는 됨, ZIP 제외)
+  }
+
+  // ---- 주인공 캐릭터 레퍼런스 이미지 생성 ----
+  async function genCharImage(idx) {
+    const c = project.characters[idx];
+    const prompt = "Character reference sheet, single full-body character, front view, neutral standing pose, clear visible face, plain light background. " +
+      c.look + styleLockText();
+    const url = await kieTask(kieModel(), { prompt, aspect_ratio: "3:4", output_format: "png" }, 90);
+    c.imageUrl = url; // 조건부 생성용 원본 URL 보관
+    try { const r = await apiFetch(url); c.imageDataUrl = await blobToDataURL(await r.blob()); }
+    catch (e) { c.imageDataUrl = url; }
+    return c.imageDataUrl;
   }
 
   // ---- KIE 인트로 영상 생성 (이미지→영상 또는 텍스트→영상) ----
@@ -916,9 +948,12 @@ JSON 배열만, 정확히 ${end - b}개: ["장면 대본", ...]`;
     try {
       const sys = "너는 대본을 나노 바나나(이미지 생성)용 영어 프롬프트로 바꾸는 전문가다. 각 장면을 한 컷으로 그릴 수 있게 시각적으로 구체화한다. 반드시 유효한 JSON 배열만 출력.";
       const scenes = project.scenes.map((s, i) => `${i + 1}${s.isIntro ? "(인트로)" : ""}: ${s.text}`).join("\n");
+      const charBlock = (project.characters || []).filter((c) => c.look).length
+        ? "\n고정 주인공(등장할 때 항상 이 외형 그대로 묘사):\n" + project.characters.filter((c) => c.look).map((c) => `- ${c.name}: ${c.look}`).join("\n") + "\n"
+        : "";
       const usr =
 `화풍(STYLE_TAIL): ${project.style}
-인물 기본: ${LANG[project.lang].setting}
+인물 기본: ${LANG[project.lang].setting}${charBlock}
 
 아래 장면들을 각각 위 화풍으로 그릴 영어 이미지 프롬프트로 만들어줘. 규칙:
 - 각 프롬프트는 완결된 영어 문장 2~4개. 콤마 키워드 나열 금지.
@@ -983,6 +1018,9 @@ ${scenes}`;
     cost.innerHTML = `💰 예상 비용 — 이미지 1장 ${imgCostText()}. 이 영상은 장면 <b>${n}개</b> → 전부 생성 시 <b>약 ${total.toLocaleString("ko")}원</b>. <br>🆓 아끼려면: <b>드롭샷</b>·<b>Bing 이미지 크리에이터</b>·<b>구글 Gemini(무료 사용량)</b> 등에서 만들어 <b>이미지 올리기</b>로 넣으세요.`;
     body.appendChild(cost);
 
+    // 주인공 고정 섹션 (장면 생성 전에 먼저)
+    body.appendChild(characterSection());
+
     const pkg = el("div", "pkg");
     project.scenes.forEach((s, i) => pkg.appendChild(sceneImageCard(s, i)));
     body.appendChild(pkg);
@@ -996,6 +1034,110 @@ ${scenes}`;
     const txt = project.scenes.map((s, i) => `[장면 ${i + 1}${s.isIntro ? " · 인트로" : ""}]\n${s.imagePrompt || s.text}`).join("\n\n");
     navigator.clipboard.writeText(txt);
     toast("이미지 프롬프트 전체를 복사했어요");
+  }
+
+  // ---- 주인공 캐릭터(고정) 섹션 ----
+  function characterSection() {
+    const wrap = el("div", "char-box");
+    wrap.appendChild(el("div", "prod-h2", "🧍 주인공 캐릭터 (고정)"));
+    wrap.appendChild(el("p", "prod-sub", "먼저 <b>주인공</b>을 정해두면, 아래 장면 이미지를 만들 때 <b>같은 얼굴·복장</b>으로 고정돼요. 그림체도 자동으로 고정(실사화 방지)됩니다."));
+
+    const chars = project.characters || [];
+    if (!chars.length) {
+      const b = el("button", "btn btn-primary sm", "✨ 대본에서 주인공 뽑기");
+      b.onclick = loadCharacters;
+      wrap.appendChild(b);
+      return wrap;
+    }
+    const grid = el("div", "pkg");
+    chars.forEach((c, i) => grid.appendChild(charCard(c, i)));
+    wrap.appendChild(grid);
+    const re = el("button", "btn sm", "↻ 주인공 다시 뽑기");
+    re.onclick = loadCharacters;
+    wrap.appendChild(re);
+    const note = el("p", "prod-sub");
+    note.style.marginTop = "8px";
+    note.innerHTML = charRefUrls().length
+      ? "✅ 주인공 참조 이미지가 있어서 장면마다 <b>더 강하게 고정</b>됩니다."
+      : "💡 주인공 이미지를 <b>생성</b>해 두면(또는 올리면) 장면 일관성이 더 좋아져요. (없어도 외형 설명으로 고정됩니다)";
+    wrap.appendChild(note);
+    return wrap;
+  }
+
+  function charCard(c, i) {
+    const card = el("div", "scene");
+    card.appendChild(el("div", "scene-no", `주인공 ${i + 1}`));
+    const row = el("div", "scene-img-row");
+    const box = el("div", "scene-img"); box.id = "char-" + i;
+    if (c.imageDataUrl) { const im = el("img"); im.src = c.imageDataUrl; box.appendChild(im); }
+    else box.textContent = "이미지 없음";
+    row.appendChild(box);
+    const right = el("div", "scene-prompt");
+    const nameIn = el("input"); nameIn.type = "text"; nameIn.value = c.name || ""; nameIn.placeholder = "이름/호칭";
+    nameIn.style.marginBottom = "6px";
+    nameIn.oninput = () => { c.name = nameIn.value; saveDebounced(); };
+    right.appendChild(nameIn);
+    const ta = el("textarea"); ta.value = c.look || ""; ta.style.minHeight = "60px"; ta.placeholder = "고정 외형(영어)";
+    ta.oninput = () => { c.look = ta.value; saveDebounced(); };
+    right.appendChild(ta);
+    const acts = el("div", "scene-actions");
+    const gen = el("button", "btn sm btn-primary", c.imageDataUrl ? "다시 생성" : `✨ 생성 (약 ${imgCostWon()}원)`);
+    gen.onclick = () => genOneChar(i);
+    acts.appendChild(gen);
+    const up = el("label", "btn sm btn-ghost", "🖼 올리기");
+    const file = el("input"); file.type = "file"; file.accept = "image/*"; file.style.display = "none";
+    file.onchange = () => {
+      if (!file.files[0]) return;
+      const reader = new FileReader();
+      reader.onload = () => { c.imageDataUrl = reader.result; c.imageUrl = ""; saveProject(); render(); toast("주인공 이미지 업로드"); };
+      reader.readAsDataURL(file.files[0]);
+    };
+    up.appendChild(file);
+    acts.appendChild(up);
+    right.appendChild(acts);
+    row.appendChild(right);
+    card.appendChild(row);
+    return card;
+  }
+
+  async function loadCharacters() {
+    const body = $("#prodBody");
+    busy = true; loading(body, "대본에서 주인공을 뽑는 중…"); renderNav();
+    try {
+      const key = project.scenes.map((s) => s.text).join(" ").slice(0, 3000);
+      const sys = "너는 대본에서 반복 등장하는 핵심 인물을 뽑아 '이미지 생성용 고정 외형'을 만드는 전문가다. 반드시 유효한 JSON 배열만 출력.";
+      const usr =
+`제목: ${project.title}
+줄거리(일부): ${key}
+인물 기본 설정: ${LANG[project.lang].setting}
+화풍: ${project.style}
+
+이 이야기에 반복 등장하는 핵심 주인공 1~4명을 뽑아줘.
+- name: 한국어 이름/호칭(예: 젊은 선비, 주모, 최 대감)
+- look: 장면마다 똑같이 유지할 고정 외형을 '영어'로 자세히 — 성별, 나이대, 얼굴 특징, 머리 모양/색, 상의·하의·외투와 색, 소품. ${LANG[project.lang].setting} 반영. 완결 영어 문장 1~2개.
+JSON 배열만: [{"name":"..","look":".."}]`;
+      const arr = await claudeJSON(sys, usr, 2000);
+      project.characters = (Array.isArray(arr) ? arr : []).slice(0, 4)
+        .map((c) => ({ name: c.name || "", look: c.look || "", imageDataUrl: "", imageUrl: "" }));
+      saveProject();
+      busy = false; render();
+    } catch (e) {
+      busy = false; render(); showErr($("#prodBody"), keyMissingMsg(e));
+    } finally { busy = false; }
+  }
+
+  async function genOneChar(i) {
+    if (!imgKeyOk()) { toast("⚙ 이미지 생성 API 키를 먼저 넣어주세요"); openKeys(); return; }
+    const box = $("#char-" + i);
+    if (box) { box.innerHTML = ""; box.appendChild(el("div", "spinner")); }
+    try {
+      await genCharImage(i);
+      saveProject(); render();
+      toast(`주인공 ${i + 1} 이미지 생성 완료`);
+    } catch (e) {
+      if (box) { box.innerHTML = ""; box.textContent = "실패"; }
+      toast("주인공 생성 실패: " + kieErrMsg(e));
+    }
   }
 
   function sceneImageCard(s, i) {
@@ -1091,7 +1233,7 @@ ${scenes}`;
   // KIE/이미지 오류를 사람이 읽기 쉬운 한국어로
   function kieErrMsg(e) {
     const m = String(e.message);
-    if (m.includes("KIE_NO_CREDIT")) return "KIE 포인트(크레딧) 부족 — kie.ai에서 충전 후 다시 시도하세요";
+    if (m.includes("KIE_NO_CREDIT")) return "KIE가 '포인트 부족(433)' 응답 — 크레딧이 남아있다면 이미지 모델명(nano-banana-2 등)이 맞는지 확인하세요";
     if (/NO_(GEMINI|KIE)_KEY/.test(m)) return "이미지 API 키 필요";
     if (/Failed to fetch/.test(m)) return "CORS/네트워크 — 웹주소에선 KIE가 막힐 수 있어요(로컬 .bat 실행)";
     return m.slice(0, 70);
