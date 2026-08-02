@@ -778,17 +778,20 @@ textarea {
                 <span id="prodTestGeminiResult" class="settings-note" style="margin:0"></span>
               </div>
               <label class="field">
-                <span class="field-label">Gemini 대본 모델 <small>(막히면 다른 걸로 바꾸세요)</small></span>
-                <input type="text" id="prodGeminiTextModel" list="geminiTextModelList" placeholder="gemini-2.0-flash" />
+                <span class="field-label">Gemini 대본 모델 <small>(막히면 '모델 불러오기'로 되는 걸 고르세요)</small></span>
+                <input type="text" id="prodGeminiTextModel" list="geminiTextModelList" placeholder="gemini-flash-latest" />
                 <datalist id="geminiTextModelList">
-                  <option value="gemini-2.0-flash"></option>
                   <option value="gemini-flash-latest"></option>
                   <option value="gemini-2.5-flash"></option>
                   <option value="gemini-2.5-pro"></option>
-                  <option value="gemini-2.0-flash-lite"></option>
+                  <option value="gemini-2.0-flash"></option>
                 </datalist>
               </label>
-              <p class="settings-note">🆓 <b>Gemini(무료)</b>로 대본을 만듭니다. 발급: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> (무료). 키는 반드시 <b>AIza…</b>로 시작(OAuth 클라이언트 ID 아님). <br>모델은 <b>gemini-2.0-flash</b> 추천. "이 모델 사용 불가" 오류가 나면 위에서 다른 모델을 골라보세요.</p>
+              <div class="yt-row" style="margin:0 0 6px">
+                <button type="button" class="btn sm" id="prodLoadGeminiModels">📋 내 키로 되는 모델 불러오기</button>
+                <span id="prodGeminiModelsResult" class="settings-note" style="margin:0"></span>
+              </div>
+              <p class="settings-note">🆓 <b>Gemini(무료)</b>로 대본을 만듭니다. 발급: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> (무료). 키는 반드시 <b>AIza…</b>로 시작(OAuth 클라이언트 ID 아님). <br>"모델 사용 불가" 오류가 나면 <b>📋 내 키로 되는 모델 불러오기</b>를 눌러 목록에서 고르세요.</p>
             </div>
             <div id="claudeTextField" hidden>
               <label class="field">
@@ -2086,8 +2089,8 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
   const textProvider = () => localStorage.getItem(LS.textProvider) || "claude";
   const geminiTextModel = () => {
     const m = localStorage.getItem(LS.geminiTextModel);
-    // 신규 사용자에게 막힌 옛 모델명은 최신으로 자동 교정
-    if (!m || m === "gemini-2.5-flash" || m === "gemini-1.5-flash") return "gemini-2.0-flash";
+    // 신규 사용자에게 막힌 옛 모델명은 최신 별칭으로 자동 교정
+    if (!m || /^gemini-2\.5-flash$|^gemini-1\.5-flash$|^gemini-2\.0-flash$/.test(m)) return "gemini-flash-latest";
     return m;
   };
   // 이미지·영상 생성 API — KIE.ai 전용 (글작성 키와 분리)
@@ -2552,6 +2555,35 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
       else if (/SERVICE_DISABLED|has not been used|is disabled/.test(d)) set("❌ 이 키 프로젝트에서 <b>Generative Language API</b>가 꺼져 있어요. 콘솔에서 사용 설정 후 다시 시도.", false);
       else if (res.status === 401 || /OAuth|invalid authentication/.test(d)) set("❌ 키가 인식되지 않아요(OAuth 오류). <b>AIza…</b> API 키가 맞는지 확인하세요(로그인 ID 아님).", false);
       else set("❌ 오류 " + res.status + ": " + esc(d.slice(0, 90)), false);
+    } catch (e) { set("❌ 네트워크 오류: " + esc(String(e.message).slice(0, 60)), false); }
+  }
+
+  // 이 키에서 실제로 대본 생성(generateContent) 가능한 모델 목록 불러오기
+  async function loadGeminiModels() {
+    const out = $("#prodGeminiModelsResult");
+    const key = ($("#prodGeminiKey").value || "").trim();
+    const set = (msg, ok) => { if (out) { out.innerHTML = msg; out.style.color = ok ? "var(--good)" : "var(--danger)"; } };
+    if (!key) { set("❌ 먼저 Google AI 키를 넣으세요.", false); return; }
+    set("⏳ 불러오는 중…", true);
+    try {
+      const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=" + encodeURIComponent(key));
+      if (!res.ok) {
+        let d = ""; try { d = (await res.json()).error?.message || ""; } catch (e) { d = await res.text(); }
+        set("❌ 목록 실패: " + esc(d.slice(0, 90)), false); return;
+      }
+      const j = await res.json();
+      const models = (j.models || [])
+        .filter((m) => (m.supportedGenerationMethods || []).includes("generateContent"))
+        .map((m) => (m.name || "").replace(/^models\//, ""))
+        .filter((n) => /gemini/.test(n) && !/embedding|aqa|imagen|tts|image|vision-latest/.test(n));
+      if (!models.length) { set("❌ 사용 가능한 대본 모델이 없어요. 키/프로젝트를 확인하세요.", false); return; }
+      // 데이터리스트 갱신
+      const dl = $("#geminiTextModelList");
+      if (dl) { dl.innerHTML = ""; models.forEach((n) => { const o = el("option"); o.value = n; dl.appendChild(o); }); }
+      // 좋은 기본값 자동 선택: flash-latest > 아무 flash > 첫 번째
+      const pick = models.find((n) => /flash-latest/.test(n)) || models.find((n) => /flash/.test(n) && !/lite/.test(n)) || models.find((n) => /flash/.test(n)) || models[0];
+      $("#prodGeminiTextModel").value = pick;
+      set(`✅ ${models.length}개 발견! <b>${esc(pick)}</b> 선택됨. <b>저장</b> 누르세요.`, true);
     } catch (e) { set("❌ 네트워크 오류: " + esc(String(e.message).slice(0, 60)), false); }
   }
 
@@ -3639,6 +3671,7 @@ JSON만: {"video":"..."}`;
     };
 
     if ($("#prodTestGemini")) $("#prodTestGemini").onclick = testGeminiKey;
+    if ($("#prodLoadGeminiModels")) $("#prodLoadGeminiModels").onclick = loadGeminiModels;
 
     $("#prodSaveKeys").onclick = () => {
       if (textSel) localStorage.setItem(LS.textProvider, textSel.value);

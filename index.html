@@ -80,17 +80,20 @@
                 <span id="prodTestGeminiResult" class="settings-note" style="margin:0"></span>
               </div>
               <label class="field">
-                <span class="field-label">Gemini 대본 모델 <small>(막히면 다른 걸로 바꾸세요)</small></span>
-                <input type="text" id="prodGeminiTextModel" list="geminiTextModelList" placeholder="gemini-2.0-flash" />
+                <span class="field-label">Gemini 대본 모델 <small>(막히면 '모델 불러오기'로 되는 걸 고르세요)</small></span>
+                <input type="text" id="prodGeminiTextModel" list="geminiTextModelList" placeholder="gemini-flash-latest" />
                 <datalist id="geminiTextModelList">
-                  <option value="gemini-2.0-flash"></option>
                   <option value="gemini-flash-latest"></option>
                   <option value="gemini-2.5-flash"></option>
                   <option value="gemini-2.5-pro"></option>
-                  <option value="gemini-2.0-flash-lite"></option>
+                  <option value="gemini-2.0-flash"></option>
                 </datalist>
               </label>
-              <p class="settings-note">🆓 <b>Gemini(무료)</b>로 대본을 만듭니다. 발급: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> (무료). 키는 반드시 <b>AIza…</b>로 시작(OAuth 클라이언트 ID 아님). <br>모델은 <b>gemini-2.0-flash</b> 추천. "이 모델 사용 불가" 오류가 나면 위에서 다른 모델을 골라보세요.</p>
+              <div class="yt-row" style="margin:0 0 6px">
+                <button type="button" class="btn sm" id="prodLoadGeminiModels">📋 내 키로 되는 모델 불러오기</button>
+                <span id="prodGeminiModelsResult" class="settings-note" style="margin:0"></span>
+              </div>
+              <p class="settings-note">🆓 <b>Gemini(무료)</b>로 대본을 만듭니다. 발급: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> (무료). 키는 반드시 <b>AIza…</b>로 시작(OAuth 클라이언트 ID 아님). <br>"모델 사용 불가" 오류가 나면 <b>📋 내 키로 되는 모델 불러오기</b>를 눌러 목록에서 고르세요.</p>
             </div>
             <div id="claudeTextField" hidden>
               <label class="field">
