@@ -24,6 +24,7 @@
     kie: "yeti_kie_key",
     kieModel: "yeti_kie_model",
     kieVideoModel: "yeti_kie_video_model",
+    kieRes: "yeti_kie_res",
     typecast: "yeti_typecast_key",
     typecastVoice: "yeti_typecast_voice",      // 구버전(마이그레이션용)
     typecastVoiceKo: "yeti_typecast_voice_ko",
@@ -321,12 +322,14 @@
     return (project.characters || []).map((c) => c.imageUrl).filter((u) => u && /^https?:\/\//.test(u));
   }
 
+  const kieRes = () => localStorage.getItem(LS.kieRes) || "2K"; // 해상도(1K/2K/4K) — 기본 2K로 비용 절약(4K 기본은 비쌈)
+
   // ---- KIE 이미지 생성 (주인공·화풍 고정 포함) ----
   async function genImage(prompt) {
     const full = charLockText() + prompt + styleLockText() + " 16:9 widescreen cinematic composition.";
-    const input = { prompt: full, aspect_ratio: "16:9", output_format: "png" };
+    const input = { prompt: full, aspect_ratio: "16:9", resolution: kieRes(), output_format: "png" };
     const refs = charRefUrls();
-    if (refs.length) input.image_urls = refs.slice(0, 3); // 주인공 참조로 일관성 강화
+    if (refs.length) input.image_input = refs.slice(0, 3); // 주인공 참조로 일관성 강화(nano-banana-2 필드: image_input)
     const url = await kieTask(kieModel(), input, 90);
     try { const r = await apiFetch(url); return await blobToDataURL(await r.blob()); }
     catch (e) { return url; } // CORS로 바이트 못 가져오면 URL 그대로(미리보기는 됨, ZIP 제외)
@@ -337,7 +340,7 @@
     const c = project.characters[idx];
     const prompt = "Character reference sheet, single full-body character, front view, neutral standing pose, clear visible face, plain light background. " +
       c.look + styleLockText();
-    const url = await kieTask(kieModel(), { prompt, aspect_ratio: "3:4", output_format: "png" }, 90);
+    const url = await kieTask(kieModel(), { prompt, aspect_ratio: "3:4", resolution: kieRes(), output_format: "png" }, 90);
     c.imageUrl = url; // 조건부 생성용 원본 URL 보관
     try { const r = await apiFetch(url); c.imageDataUrl = await blobToDataURL(await r.blob()); }
     catch (e) { c.imageDataUrl = url; }
@@ -1886,6 +1889,7 @@ JSON만: {"video":"..."}`;
       $("#prodModel").value = claudeModel();
       if ($("#prodKieKey")) $("#prodKieKey").value = kieKey();
       if ($("#prodKieModel")) $("#prodKieModel").value = kieModel();
+      if ($("#prodKieRes")) $("#prodKieRes").value = kieRes();
       if ($("#prodKieVideoModel")) $("#prodKieVideoModel").value = kieVideoModel();
       $("#prodTypecastKey").value = typecastKey();
       $("#prodTypecastVoiceKo").value = localStorage.getItem(LS.typecastVoiceKo) || localStorage.getItem(LS.typecastVoice) || "";
@@ -1926,6 +1930,7 @@ JSON만: {"video":"..."}`;
       localStorage.setItem(LS.provider, "kie");
       if ($("#prodKieKey")) localStorage.setItem(LS.kie, $("#prodKieKey").value.trim());
       if ($("#prodKieModel")) localStorage.setItem(LS.kieModel, $("#prodKieModel").value.trim() || "nano-banana-2");
+      if ($("#prodKieRes")) localStorage.setItem(LS.kieRes, $("#prodKieRes").value);
       if ($("#prodKieVideoModel")) localStorage.setItem(LS.kieVideoModel, $("#prodKieVideoModel").value.trim() || "veo3-fast");
       localStorage.setItem(LS.typecast, $("#prodTypecastKey").value.trim());
       localStorage.setItem(LS.typecastVoiceKo, $("#prodTypecastVoiceKo").value.trim());

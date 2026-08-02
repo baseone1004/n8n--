@@ -113,10 +113,18 @@
               <span class="field-label">KIE 이미지 모델</span>
               <input type="text" id="prodKieModel" list="kieModelList" placeholder="nano-banana-2" />
               <datalist id="kieModelList">
-                <option value="nano-banana-2">nano-banana-2 (약 30원/장)</option>
-                <option value="nano-banana-pro">nano-banana-pro (약 60원/장)</option>
-                <option value="nano-banana-2-lite">nano-banana-2-lite (약 15원/장)</option>
+                <option value="nano-banana-2">nano-banana-2</option>
+                <option value="nano-banana-pro">nano-banana-pro</option>
+                <option value="nano-banana-2-lite">nano-banana-2-lite</option>
               </datalist>
+            </label>
+            <label class="field">
+              <span class="field-label">KIE 이미지 해상도 <small>(4K는 비쌈 · 크레딧 절약하려면 1K~2K)</small></span>
+              <select id="prodKieRes">
+                <option value="1K">1K (가장 저렴)</option>
+                <option value="2K" selected>2K (권장 · 1080p에 충분)</option>
+                <option value="4K">4K (고화질 · 비쌈)</option>
+              </select>
             </label>
             <label class="field">
               <span class="field-label">KIE 영상 모델 <small>(인트로 영상 변환)</small></span>
