@@ -18,12 +18,12 @@
     gemini: "yeti_gemini_key",
     model: "yeti_model_daebon",      // 대본 공방과 공유
     imgModel: "yeti_img_model",
-    imgGemini: "yeti_img_gemini_key", // 이미지 전용 Google 키(글작성 키와 분리)
     textProvider: "yeti_text_provider", // 'claude' | 'gemini'
     geminiTextModel: "yeti_gemini_text_model",
-    provider: "yeti_img_provider",   // 'gemini' | 'kie'
+    provider: "yeti_img_provider",   // 항상 'kie'
     kie: "yeti_kie_key",
     kieModel: "yeti_kie_model",
+    kieVideoModel: "yeti_kie_video_model",
     typecast: "yeti_typecast_key",
     typecastVoice: "yeti_typecast_voice",      // 구버전(마이그레이션용)
     typecastVoiceKo: "yeti_typecast_voice_ko",
@@ -163,19 +163,13 @@
   const claudeModel = () => localStorage.getItem(LS.model) || "claude-opus-5";
   const textProvider = () => localStorage.getItem(LS.textProvider) || "claude";
   const geminiTextModel = () => localStorage.getItem(LS.geminiTextModel) || "gemini-2.5-flash";
-  // 이미지 생성 API (글작성 키와 분리)
-  const imgProvider = () => localStorage.getItem(LS.provider) || "gemini";
-  const imgGeminiKey = () => localStorage.getItem(LS.imgGemini) || "";
-  const imgModel = () => localStorage.getItem(LS.imgModel) || "gemini-2.5-flash-image";
+  // 이미지·영상 생성 API — KIE.ai 전용 (글작성 키와 분리)
   const kieKey = () => localStorage.getItem(LS.kie) || "";
   const kieModel = () => localStorage.getItem(LS.kieModel) || "nano-banana-2";
-  const imgKeyOk = () => imgProvider() === "kie" ? !!kieKey() : !!imgGeminiKey();
-  const imgCostWon = () => IMG_COST[imgProvider() === "kie" ? kieModel() : imgModel()] || 50;
-  const imgCostText = () => {
-    const won = imgCostWon();
-    const src = imgProvider() === "kie" ? "KIE.ai 크레딧" : "Google Gemini";
-    return `약 <b>${won}원/장</b> (${src} 기준 추정)`;
-  };
+  const kieVideoModel = () => localStorage.getItem(LS.kieVideoModel) || "veo3-fast";
+  const imgKeyOk = () => !!kieKey();
+  const imgCostWon = () => IMG_COST[kieModel()] || 30;
+  const imgCostText = () => `약 <b>${imgCostWon()}원/장</b> (KIE.ai 크레딧 기준 추정)`;
   const typecastKey = () => localStorage.getItem(LS.typecast) || "";
   const typecastVoice = () => (project.lang === "ja"
     ? (localStorage.getItem(LS.typecastVoiceJa) || localStorage.getItem(LS.typecastVoice))
@@ -263,22 +257,15 @@
     return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
   }
 
-  // ============ 이미지 생성 (제공자 분기) ============
-  async function genImage(prompt) {
-    return imgProvider() === "kie" ? genImageKIE(prompt) : genImageGemini(prompt);
-  }
-
-  // ---- KIE.ai (createTask → recordInfo 폴링) ----
-  async function genImageKIE(prompt) {
+  // ============ KIE.ai 공용 (createTask → recordInfo 폴링) ============
+  // 이미지·영상 모두 같은 흐름. maxTries 만큼 2초 간격 폴링. 결과 URL 반환.
+  async function kieTask(model, input, maxTries) {
     const key = kieKey();
     if (!key) throw new Error("NO_KIE_KEY");
     const create = await apiFetch(KIE_CREATE, {
       method: "POST",
       headers: { "content-type": "application/json", "authorization": "Bearer " + key },
-      body: JSON.stringify({
-        model: kieModel(),
-        input: { prompt: prompt + " . 16:9 widescreen cinematic composition, no text, no watermark, no letters.", aspect_ratio: "16:9", output_format: "png" }
-      })
+      body: JSON.stringify({ model, input })
     });
     if (!create.ok) {
       let d = ""; try { d = (await create.json()).msg; } catch (e) { d = await create.text(); }
@@ -287,7 +274,7 @@
     const cj = await create.json();
     const taskId = cj.data?.taskId || cj.data?.id || cj.taskId;
     if (!taskId) throw new Error("KIE: taskId 없음 " + JSON.stringify(cj).slice(0, 120));
-    for (let n = 0; n < 90; n++) {
+    for (let n = 0; n < (maxTries || 90); n++) {
       await sleep(2000);
       const q = await apiFetch(KIE_RECORD + encodeURIComponent(taskId), { headers: { "authorization": "Bearer " + key } });
       if (!q.ok) continue;
@@ -298,39 +285,30 @@
         if (typeof rj === "string") { try { rj = JSON.parse(rj); } catch (e) { rj = {}; } }
         const url = rj.resultUrls?.[0] || rj.result_urls?.[0] || (Array.isArray(rj.resultUrls) ? rj.resultUrls[0] : null);
         if (!url) throw new Error("KIE: 결과 URL 없음");
-        try { const r = await apiFetch(url); return await blobToDataURL(await r.blob()); }
-        catch (e) { return url; } // CORS로 바이트 못 가져오면 URL 그대로(미리보기는 됨, ZIP 제외)
+        return url;
       }
       if (st === "fail") throw new Error("KIE 실패: " + (qj.data.failMsg || "알 수 없음"));
     }
-    throw new Error("KIE 시간 초과(3분). 나중에 다시 시도하세요.");
+    throw new Error("KIE 시간 초과. 나중에 다시 시도하세요.");
   }
 
-  // ---- Google Gemini 직접 (이미지 전용 키) ----
-  async function genImageGemini(prompt) {
-    const key = imgGeminiKey();
-    if (!key) throw new Error("NO_GEMINI_KEY");
-    const model = imgModel();
-    const body = {
-      contents: [{ parts: [{ text: prompt + " . 16:9 widescreen cinematic composition, no text, no watermark, no letters." }] }]
-    };
-    if (/2\.0-flash-preview-image/.test(model)) {
-      body.generationConfig = { responseModalities: ["TEXT", "IMAGE"] };
-    }
-    const res = await fetch(GEMINI_BASE + model + ":generateContent?key=" + encodeURIComponent(key), {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body)
-    });
-    if (!res.ok) {
-      let d = ""; try { d = (await res.json()).error?.message; } catch (e) { d = await res.text(); }
-      throw new Error(`Gemini 이미지 ${res.status}: ${d}`);
-    }
-    const j = await res.json();
-    const parts = j.candidates?.[0]?.content?.parts || [];
-    for (const p of parts) {
-      if (p.inlineData?.data) return "data:" + (p.inlineData.mimeType || "image/png") + ";base64," + p.inlineData.data;
-    }
-    const txt = parts.map((p) => p.text || "").join(" ");
-    throw new Error("이미지가 생성되지 않았습니다. " + (txt || "모델 응답에 이미지 없음"));
+  // ---- KIE 이미지 생성 ----
+  async function genImage(prompt) {
+    const url = await kieTask(kieModel(), {
+      prompt: prompt + " . 16:9 widescreen cinematic composition, no text, no watermark, no letters.",
+      aspect_ratio: "16:9", output_format: "png"
+    }, 90);
+    try { const r = await apiFetch(url); return await blobToDataURL(await r.blob()); }
+    catch (e) { return url; } // CORS로 바이트 못 가져오면 URL 그대로(미리보기는 됨, ZIP 제외)
+  }
+
+  // ---- KIE 인트로 영상 생성 (이미지→영상 또는 텍스트→영상) ----
+  async function genVideoKIE(prompt, imageUrl) {
+    const input = { prompt: prompt, aspect_ratio: "16:9" };
+    // 인트로 이미지가 공개 URL(http)이면 image-to-video 입력으로 넣는다. (data URL은 못 넣음 → 텍스트→영상)
+    if (imageUrl && /^https?:\/\//.test(imageUrl)) { input.image_urls = [imageUrl]; input.image_url = imageUrl; }
+    const url = await kieTask(kieVideoModel(), input, 180); // 영상은 오래 걸림(최대 6분)
+    return url; // 영상은 URL 그대로 사용(미리보기/다운로드)
   }
 
   // ============ Gemini TTS ============
@@ -1353,11 +1331,27 @@ JSON만:
       ctl.appendChild(rec);
     }
     if (s.isIntro) {
-      const grok = el("button", "btn sm", "🎥 Grok 영상 프롬프트");
+      const kv = el("button", "btn sm btn-primary", s.videoUrl ? "🎞 인트로 영상 다시" : "🎞 인트로 영상 생성 (KIE)");
+      kv.onclick = () => genIntroVideoKIE(i, kv);
+      ctl.appendChild(kv);
+      const grok = el("button", "btn sm", "🎥 영상 프롬프트만");
       grok.onclick = () => genGrokIntro(i, grok);
       ctl.appendChild(grok);
     }
     right.appendChild(ctl);
+
+    if (s.isIntro && s.videoUrl) {
+      const vb = el("div", "grok-box");
+      vb.appendChild(el("div", "field-label", "🎞 KIE 인트로 영상"));
+      const vid = el("video"); vid.src = s.videoUrl; vid.controls = true; vid.style.width = "100%"; vid.style.borderRadius = "10px";
+      vb.appendChild(vid);
+      const va = el("div", "scene-actions");
+      const vopen = el("button", "btn sm", "새 탭에서 열기/저장");
+      vopen.onclick = () => window.open(s.videoUrl, "_blank");
+      va.appendChild(vopen);
+      vb.appendChild(va);
+      right.appendChild(vb);
+    }
 
     if (s.grokImage || s.grokVideo) {
       const gb = el("div", "grok-box");
@@ -1410,7 +1404,43 @@ JSON만: {"image":"...","video":"..."}`;
   function keyMissingMsgPlain(e) {
     const m = String(e.message);
     if (m.includes("NO_CLAUDE_KEY")) return "Anthropic 키 필요";
-    return m.slice(0, 60);
+    if (m.includes("NO_KIE_KEY")) return "KIE.ai 키 필요";
+    if (/Failed to fetch/.test(m)) return "CORS/네트워크 — 웹주소에선 KIE가 막힐 수 있어요(로컬 .bat 실행 권장)";
+    return m.slice(0, 80);
+  }
+
+  // 인트로 이미지를 KIE로 영상 변환
+  async function genIntroVideoKIE(i, btn) {
+    if (!imgKeyOk()) { toast("⚙ KIE.ai 키를 먼저 넣어주세요"); openKeys(); return; }
+    const s = project.scenes[i];
+    const orig = btn ? btn.textContent : "";
+    if (btn) { btn.disabled = true; btn.textContent = "영상 생성 중… (수분)"; }
+    try {
+      // 영상 프롬프트 확보: 없으면 먼저 생성
+      if (!s.grokVideo) { try { await genGrokIntroSilently(i); } catch (e) {} }
+      const prompt = s.grokVideo || s.text || project.title;
+      // 이미지가 공개 URL이면 이미지→영상, data URL(업로드/base64)이면 텍스트→영상
+      const imgUrl = (s.imageDataUrl && /^https?:\/\//.test(s.imageDataUrl)) ? s.imageDataUrl : null;
+      if (s.imageDataUrl && !imgUrl) toast("인트로 이미지가 파일이라 텍스트→영상으로 만듭니다");
+      s.videoUrl = await genVideoKIE(prompt, imgUrl);
+      saveProject(); render();
+      toast("인트로 영상 생성 완료 🎞");
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.textContent = orig; }
+      toast("영상 실패: " + keyMissingMsgPlain(e));
+    }
+  }
+  // 버튼/렌더 없이 grokVideo만 채우기 (영상 생성 전 프롬프트 확보용)
+  async function genGrokIntroSilently(i) {
+    const s = project.scenes[i];
+    const sys = "너는 영상 생성용 인트로 프롬프트 생성기다. 스포일러 금지. 출력에 텍스트·자막·말풍선 금지. 반드시 유효한 JSON만 출력.";
+    const usr =
+`인트로 장면: ${s.text}
+인물 설정: ${LANG[project.lang].setting}
+이 장면의 [영상 프롬프트]를 영어로 만들어줘. ACTION / CAMERA / MOOD 중심, 카메라는 push-in 계열 "Camera moves, the subject does not walk or change position." 포함. 끝에 "CRITICAL: NO text, NO subtitles, NO captions, NO written words."
+JSON만: {"video":"..."}`;
+    const r = await claudeJSON(sys, usr, 2000);
+    s.grokVideo = r.video || s.grokVideo || "";
   }
 
   function openPlayer(startIdx, single) {
@@ -1574,7 +1604,9 @@ JSON만: {"image":"...","video":"..."}`;
       name: "youtube_info.txt",
       bytes: strBytes(`■ 제목\n${project.title}\n\n■ 제목 옆 태그\n${project.titleTag}\n\n■ 설명\n${project.description}\n\n■ 태그\n${project.tags.join(", ")}\n\n■ 워터마크(왼쪽 위 문구)\n${project.watermark}`)
     });
-    files.push({ name: "capcut_guide.txt", bytes: strBytes("images/ 를 번호순으로 타임라인에 올리고, audio/ 의 같은 번호 음성을 아래에 맞추세요.\n인트로 외 이미지는 줌 인/아웃 효과, 자막은 subtitles.srt 가져오기.\n왼쪽 위 텍스트: " + project.watermark) });
+    const introVid = project.scenes.find((s) => s.isIntro && s.videoUrl);
+    const introLine = introVid ? `\n\n■ 인트로 영상(KIE 생성): 아래 링크에서 받아 맨 앞에 배치하세요.\n${introVid.videoUrl}` : "";
+    files.push({ name: "capcut_guide.txt", bytes: strBytes("images/ 를 번호순으로 타임라인에 올리고, audio/ 의 같은 번호 음성을 아래에 맞추세요.\n인트로 외 이미지는 줌 인/아웃 효과, 자막은 subtitles.srt 가져오기.\n왼쪽 위 텍스트: " + project.watermark + introLine) });
 
     if (files.length <= 4) { toast("먼저 이미지/음성을 생성하세요"); return; }
     const blob = makeZip(files);
@@ -1621,12 +1653,9 @@ JSON만: {"image":"...","video":"..."}`;
       $("#prodClaudeKey").value = claudeKey();
       $("#prodGeminiKey").value = geminiKey();
       $("#prodModel").value = claudeModel();
-      const provSel = $("#prodProvider");
-      if (provSel) { provSel.value = imgProvider(); provSel.dispatchEvent(new Event("change")); }
-      if ($("#prodImgGeminiKey")) $("#prodImgGeminiKey").value = imgGeminiKey();
-      if ($("#prodImgModel")) $("#prodImgModel").value = imgModel();
       if ($("#prodKieKey")) $("#prodKieKey").value = kieKey();
       if ($("#prodKieModel")) $("#prodKieModel").value = kieModel();
+      if ($("#prodKieVideoModel")) $("#prodKieVideoModel").value = kieVideoModel();
       $("#prodTypecastKey").value = typecastKey();
       $("#prodTypecastVoiceKo").value = localStorage.getItem(LS.typecastVoiceKo) || localStorage.getItem(LS.typecastVoice) || "";
       $("#prodTypecastVoiceJa").value = localStorage.getItem(LS.typecastVoiceJa) || "";
@@ -1650,23 +1679,15 @@ JSON만: {"image":"...","video":"..."}`;
     const textSel = $("#prodTextProvider");
     if (textSel) textSel.onchange = () => { $("#claudeTextField").hidden = textSel.value !== "claude"; };
 
-    const provSel = $("#prodProvider");
-    if (provSel) provSel.onchange = () => {
-      const kie = provSel.value === "kie";
-      if ($("#kieFields")) $("#kieFields").hidden = !kie;
-      if ($("#imgGeminiFields")) $("#imgGeminiFields").hidden = kie;
-    };
-
     $("#prodSaveKeys").onclick = () => {
       if (textSel) localStorage.setItem(LS.textProvider, textSel.value);
       localStorage.setItem(LS.claude, $("#prodClaudeKey").value.trim());
       localStorage.setItem(LS.gemini, $("#prodGeminiKey").value.trim());
       localStorage.setItem(LS.model, $("#prodModel").value.trim() || "claude-opus-5");
-      if (provSel) localStorage.setItem(LS.provider, provSel.value);
-      if ($("#prodImgGeminiKey")) localStorage.setItem(LS.imgGemini, $("#prodImgGeminiKey").value.trim());
-      if ($("#prodImgModel")) localStorage.setItem(LS.imgModel, $("#prodImgModel").value.trim() || "gemini-2.5-flash-image");
+      localStorage.setItem(LS.provider, "kie");
       if ($("#prodKieKey")) localStorage.setItem(LS.kie, $("#prodKieKey").value.trim());
       if ($("#prodKieModel")) localStorage.setItem(LS.kieModel, $("#prodKieModel").value.trim() || "nano-banana-2");
+      if ($("#prodKieVideoModel")) localStorage.setItem(LS.kieVideoModel, $("#prodKieVideoModel").value.trim() || "veo3-fast");
       localStorage.setItem(LS.typecast, $("#prodTypecastKey").value.trim());
       localStorage.setItem(LS.typecastVoiceKo, $("#prodTypecastVoiceKo").value.trim());
       localStorage.setItem(LS.typecastVoiceJa, $("#prodTypecastVoiceJa").value.trim());
