@@ -189,9 +189,8 @@
     tT = setTimeout(() => { t.classList.remove("show"); setTimeout(() => (t.hidden = true), 260); }, 2100);
   }
 
-  // ============ Claude JSON 호출 ============
+  // ============ Claude JSON 호출 (대본은 Claude 전용) ============
   async function claudeJSON(system, user, maxTokens) {
-    if (textProvider() === "gemini") return geminiJSON(system, user, maxTokens);
     const key = claudeKey();
     if (!key) throw new Error("NO_CLAUDE_KEY");
     const res = await fetch(CLAUDE_URL, {
@@ -529,13 +528,9 @@
   }
 
   function keyBar(body) {
-    const gemText = textProvider() === "gemini";
-    const needT = gemText ? !geminiKey() : !claudeKey();
-    if (!needT) return;
-    const textLabel = gemText ? "Google AI 키(대본 무료)" : "Anthropic 키";
+    if (claudeKey()) return;
     const bar = el("div", "keybar");
-    const txt = el("div", null,
-      "🔑 시작하려면 API 키가 필요해요 — " + `<b>${textLabel}</b>`);
+    const txt = el("div", null, "🔑 시작하려면 API 키가 필요해요 — <b>Anthropic(Claude) 키</b>");
     bar.appendChild(txt);
     const b = el("button", "btn sm btn-primary", "여기에 API 키 입력하기");
     b.onclick = openKeys;
@@ -1673,10 +1668,8 @@ JSON만: {"video":"..."}`;
     $("#prodProjPanel").hidden = true;
     const p = $("#prodKeyPanel"); p.hidden = !p.hidden;
     if (!p.hidden) {
-      const tp = $("#prodTextProvider");
-      if (tp) { tp.value = textProvider(); tp.dispatchEvent(new Event("change")); }
       $("#prodClaudeKey").value = claudeKey();
-      $("#prodGeminiKey").value = geminiKey();
+      if ($("#prodGeminiKey")) $("#prodGeminiKey").value = geminiKey();
       $("#prodModel").value = claudeModel();
       if ($("#prodKieKey")) $("#prodKieKey").value = kieKey();
       if ($("#prodKieModel")) $("#prodKieModel").value = kieModel();
@@ -1701,15 +1694,12 @@ JSON만: {"video":"..."}`;
 
     $("#prodSettings").onclick = openKeys;
     $("#prodProjects").onclick = () => { $("#prodKeyPanel").hidden = true; const p = $("#prodProjPanel"); p.hidden = !p.hidden; if (!p.hidden) renderProjList(); };
-    const textSel = $("#prodTextProvider");
-    if (textSel) textSel.onchange = () => { $("#claudeTextField").hidden = textSel.value !== "claude"; };
-
     if ($("#prodTestGemini")) $("#prodTestGemini").onclick = testGeminiKey;
 
     $("#prodSaveKeys").onclick = () => {
-      if (textSel) localStorage.setItem(LS.textProvider, textSel.value);
+      localStorage.setItem(LS.textProvider, "claude");
       localStorage.setItem(LS.claude, $("#prodClaudeKey").value.trim());
-      localStorage.setItem(LS.gemini, $("#prodGeminiKey").value.trim());
+      if ($("#prodGeminiKey")) localStorage.setItem(LS.gemini, $("#prodGeminiKey").value.trim());
       localStorage.setItem(LS.model, $("#prodModel").value.trim() || "claude-opus-5");
       localStorage.setItem(LS.provider, "kie");
       if ($("#prodKieKey")) localStorage.setItem(LS.kie, $("#prodKieKey").value.trim());
