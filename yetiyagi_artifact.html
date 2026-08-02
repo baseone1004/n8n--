@@ -2202,8 +2202,13 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
       throw new Error(`KIE ${create.status}: ${d}`);
     }
     const cj = await create.json();
+    // KIE는 HTTP 200이어도 본문 code로 오류를 알림 (예: 433=포인트 부족)
+    if (cj.code && cj.code !== 200) {
+      if (cj.code === 433 || /point|insufficient|credit|balance/i.test(cj.msg || "")) throw new Error("KIE_NO_CREDIT");
+      throw new Error(`KIE ${cj.code}: ${cj.msg || ""}`);
+    }
     const taskId = cj.data?.taskId || cj.data?.id || cj.taskId;
-    if (!taskId) throw new Error("KIE: taskId 없음 " + JSON.stringify(cj).slice(0, 120));
+    if (!taskId) throw new Error("KIE: " + (cj.msg || "taskId 없음") + " " + JSON.stringify(cj).slice(0, 100));
     for (let n = 0; n < (maxTries || 90); n++) {
       await sleep(2000);
       const q = await apiFetch(KIE_RECORD + encodeURIComponent(taskId), { headers: { "authorization": "Bearer " + key } });
@@ -3001,17 +3006,29 @@ ${scenes}`;
       s.imageDataUrl = await genImage(s.imagePrompt || s.text);
       saveProject();
       if (box) { box.innerHTML = ""; const im = el("img"); im.src = s.imageDataUrl; box.appendChild(im); }
+      return { ok: true };
     } catch (e) {
       if (box) { box.innerHTML = ""; box.textContent = "실패"; }
-      const m = String(e.message);
-      toast("이미지 실패: " + (/NO_(GEMINI|KIE)_KEY/.test(m) ? "이미지 API 키 필요" : /Failed to fetch/.test(m) ? "CORS/네트워크(로컬 실행 확인)" : m.slice(0, 60)));
+      toast("이미지 실패: " + kieErrMsg(e));
+      return { ok: false, credit: String(e.message).includes("KIE_NO_CREDIT") };
     }
+  }
+  // KIE/이미지 오류를 사람이 읽기 쉬운 한국어로
+  function kieErrMsg(e) {
+    const m = String(e.message);
+    if (m.includes("KIE_NO_CREDIT")) return "KIE 포인트(크레딧) 부족 — kie.ai에서 충전 후 다시 시도하세요";
+    if (/NO_(GEMINI|KIE)_KEY/.test(m)) return "이미지 API 키 필요";
+    if (/Failed to fetch/.test(m)) return "CORS/네트워크 — 웹주소에선 KIE가 막힐 수 있어요(로컬 .bat 실행)";
+    return m.slice(0, 70);
   }
   async function genAllImages() {
     if (!imgKeyOk()) { toast("⚙ 이미지 생성 API 키를 먼저 넣어주세요"); openKeys(); return; }
     const n = project.scenes.length;
     if (!confirm(`장면 ${n}개를 전부 생성하면 약 ${(imgCostWon() * n).toLocaleString("ko")}원이 들 수 있어요. 진행할까요?`)) return;
-    for (let i = 0; i < n; i++) { await genOneImage(i); }
+    for (let i = 0; i < n; i++) {
+      const r = await genOneImage(i);
+      if (r && r.credit) { toast("⛔ KIE 포인트 부족으로 중단했어요. kie.ai에서 충전 후 다시 시도하세요."); return; }
+    }
     toast("이미지 생성 완료");
   }
 
@@ -3392,6 +3409,7 @@ JSON만: {"image":"...","video":"..."}`;
   }
   function keyMissingMsgPlain(e) {
     const m = String(e.message);
+    if (m.includes("KIE_NO_CREDIT")) return "KIE 포인트(크레딧) 부족 — kie.ai에서 충전 후 다시 시도";
     if (m.includes("NO_CLAUDE_KEY")) return "Anthropic 키 필요";
     if (m.includes("NO_KIE_KEY")) return "KIE.ai 키 필요";
     if (/Failed to fetch/.test(m)) return "CORS/네트워크 — 웹주소에선 KIE가 막힐 수 있어요(로컬 .bat 실행 권장)";
