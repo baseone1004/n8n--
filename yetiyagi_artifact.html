@@ -2527,11 +2527,19 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
     body.prepend(e);
   }
   function keyMissingMsg(e) {
-    if (String(e.message).includes("NO_CLAUDE_KEY")) return "⚙ 키 설정에서 <b>Anthropic API 키</b>를 먼저 넣어주세요.";
-    if (String(e.message).includes("NO_GEMINI_KEY")) return "⚙ 키 설정에서 <b>Google AI(Gemini) 키</b>를 먼저 넣어주세요.";
-    if (String(e.message).includes("NO_KIE_KEY")) return "⚙ 키 설정에서 <b>KIE.ai 키</b>를 먼저 넣어주세요.";
-    if (String(e.message).includes("Failed to fetch")) return "네트워크/CORS 오류. 인터넷 연결과 키를 확인하세요. (게시본이 아닌 로컬 파일에서 실행해야 합니다.)";
-    return "오류: " + esc(e.message);
+    const m = String(e.message);
+    if (m.includes("NO_CLAUDE_KEY")) return "⚙ 키 설정에서 <b>Anthropic API 키</b>를 먼저 넣어주세요.";
+    if (m.includes("NO_GEMINI_KEY")) return "⚙ 키 설정에서 <b>✍️ 글작성(대본) API</b> 칸에 <b>Google AI 키(AIza…)</b>를 먼저 넣어주세요.";
+    if (m.includes("NO_KIE_KEY")) return "⚙ 키 설정에서 <b>KIE.ai 키</b>를 먼저 넣어주세요.";
+    // Gemini 인증 오류(잘못된 키/빈 키/키 위치 혼동)
+    if (/Gemini\(대본\)\s*(400|401|403)/.test(m) || /invalid authentication|API key not valid|API_KEY_INVALID|Expected OAuth/.test(m)) {
+      return "🔑 <b>글작성(대본) Google AI 키가 올바르지 않아요.</b><br>" +
+        "① 🔑 API 키 → <b>✍️ 글작성(대본) API</b> 칸에 <b>AIza…</b>로 시작하는 키를 넣었는지 확인하세요(🖼️ 이미지 칸이 아니라 글작성 칸!).<br>" +
+        "② 키는 <a href='https://aistudio.google.com/apikey' target='_blank' rel='noopener'>aistudio.google.com/apikey</a>에서 무료로 발급해요(OAuth 클라이언트 ID 아님).<br>" +
+        "③ 저장 후 다시 시도하세요. <small>(원본: " + esc(m) + ")</small>";
+    }
+    if (m.includes("Failed to fetch")) return "네트워크/CORS 오류. 인터넷 연결과 키를 확인하세요. (게시본이 아닌 로컬 파일에서 실행해야 합니다.)";
+    return "오류: " + esc(m);
   }
   function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
 
