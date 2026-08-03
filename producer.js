@@ -516,15 +516,20 @@
     const key = inworldKey();
     if (!key) throw new Error("NO_INWORLD_KEY");
     if (!inworldVoice()) throw new Error("NO_INWORLD_VOICE");
+    const isKorean = project.lang !== "ja";
+    const cleanText = String(text || "").replace(/\s+/g, " ").trim();
+    const spokenText = isKorean && inworldModel() === "inworld-tts-2"
+      ? "[한국어 원어민 여성처럼 자연스럽고 정확한 한국어 발음으로만, 차분한 조선시대 민담 구연 어조로 읽는다] " + cleanText
+      : cleanText;
     const res = await apiFetch(INWORLD_TTS_URL, {
       method: "POST",
       headers: { "content-type": "application/json", "authorization": "Basic " + key },
       body: JSON.stringify({
-        text: text.slice(0, 2000),
+        text: spokenText.slice(0, 2000),
         voiceId: inworldVoice(),
         modelId: inworldModel(),
         audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: 22050 },
-        language: project.lang === "ja" ? "ja-JP" : "ko-KR",
+        language: isKorean ? "ko-KR" : "ja-JP",
         deliveryMode: /[!！?？]|놀라|분노|울부짖|통곡|절규|기뻐|환호/.test(text) ? "CREATIVE" : "BALANCED",
         applyTextNormalization: "ON",
         enhanceGeneration: true
@@ -2344,10 +2349,16 @@ JSON만: {"video":"..."}`;
       if ($("#prodKieModel")) localStorage.setItem(LS.kieModel, $("#prodKieModel").value.trim() || "nano-banana-2");
       if ($("#prodKieRes")) localStorage.setItem(LS.kieRes, $("#prodKieRes").value);
       if ($("#prodKieVideoModel")) localStorage.setItem(LS.kieVideoModel, $("#prodKieVideoModel").value.trim() || "veo3-fast");
+      const oldInworldVoiceKo = localStorage.getItem(LS.inworldVoiceKo) || "";
+      const newInworldVoiceKo = $("#prodInworldVoiceKo") ? $("#prodInworldVoiceKo").value.trim() : oldInworldVoiceKo;
       if ($("#prodInworldKey")) localStorage.setItem(LS.inworld, $("#prodInworldKey").value.trim().replace(/^Basic\s+/i, ""));
-      if ($("#prodInworldVoiceKo")) localStorage.setItem(LS.inworldVoiceKo, $("#prodInworldVoiceKo").value.trim());
+      if ($("#prodInworldVoiceKo")) localStorage.setItem(LS.inworldVoiceKo, newInworldVoiceKo);
       if ($("#prodInworldVoiceJa")) localStorage.setItem(LS.inworldVoiceJa, $("#prodInworldVoiceJa").value.trim());
       if ($("#prodInworldModel")) localStorage.setItem(LS.inworldModel, $("#prodInworldModel").value);
+      if (oldInworldVoiceKo !== newInworldVoiceKo && project.lang === "ko") {
+        project.scenes.forEach((s) => { s.audioDataUrl = ""; s.durationSec = 0; });
+        saveProject();
+      }
       $("#prodKeyPanel").hidden = true;
       render();
       toast("키를 저장했어요");
