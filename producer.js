@@ -408,7 +408,7 @@
   // ---- KIE 이미지 생성 (주인공·화풍 고정 포함) ----
   async function genImage(prompt) {
     const full = charLockText() + prompt + styleLockText() + " 16:9 widescreen cinematic composition.";
-    const input = { prompt: full, aspect_ratio: "16:9", resolution: kieRes(), output_format: "png" };
+    const input = { prompt: full, image_input: [], aspect_ratio: "16:9", resolution: kieRes(), output_format: "png" };
     const refs = charRefUrls();
     if (refs.length) input.image_input = refs.slice(0, 3); // 주인공 참조로 일관성 강화(nano-banana-2 필드: image_input)
     const url = await kieTask(kieModel(), input, 90);
@@ -1377,8 +1377,9 @@ JSON 배열만: [{"name":"..","age":38,"look":".."}]`;
       if (box) { box.innerHTML = ""; const im = el("img"); im.src = s.imageDataUrl; box.appendChild(im); }
       return { ok: true };
     } catch (e) {
-      if (box) { box.innerHTML = ""; box.textContent = "실패"; }
-      toast("이미지 실패: " + kieErrMsg(e));
+      const reason = kieErrMsg(e);
+      if (box) { box.innerHTML = ""; box.textContent = "실패: " + reason; box.title = String(e.message || e); }
+      toast("이미지 실패: " + reason);
       return { ok: false, credit: String(e.message).includes("KIE_NO_CREDIT") };
     }
   }

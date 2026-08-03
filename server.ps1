@@ -7,7 +7,7 @@ try { $listener.Start() } catch {
   Write-Host "포트 $port 를 열 수 없습니다. 이미 실행 중이거나 다른 프로그램이 사용 중일 수 있어요." -ForegroundColor Yellow
   Read-Host "엔터를 누르면 닫힘"; exit
 }
-Start-Process "http://localhost:$port/index.html"
+# 브라우저는 사용자가 latest.html을 열 때만 실행합니다.
 Write-Host ""
 Write-Host "  옛이야기 스튜디오 서버 실행 중 (타입캐스트/KIE 중계 포함)" -ForegroundColor Green
 Write-Host "  주소: http://localhost:$port/index.html"
@@ -62,6 +62,7 @@ while ($listener.IsListening) {
       $fbytes = [System.IO.File]::ReadAllBytes($file)
       $ext = [System.IO.Path]::GetExtension($file).ToLower()
       if ($mime.ContainsKey($ext)) { $ctx.Response.ContentType = $mime[$ext] }
+      $ctx.Response.Headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
       $ctx.Response.OutputStream.Write($fbytes, 0, $fbytes.Length)
     } else { $ctx.Response.StatusCode = 404 }
     $ctx.Response.Close()
