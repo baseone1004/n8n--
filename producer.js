@@ -23,6 +23,7 @@
   };
   const INWORLD_TTS_URL = "https://api.inworld.ai/tts/v1/voice";
   const KIE_VIDEO_MODEL = "kling-2.6/image-to-video";
+  const DEFAULT_INWORLD_VOICE = "default-bbhejrkjoavwpl_ixpg3lw__design-voice-fc2ebf9a";
   let lastKieAssetUrl = "";
 
   const STEPS = [
@@ -161,7 +162,7 @@
   const kieKey = () => localStorage.getItem(LS.kie) || "";
   const kieModel = () => localStorage.getItem(LS.kieModel) || "nano-banana-2";
   const inworldKey = () => localStorage.getItem(LS.inworld) || "";
-  const inworldVoice = () => localStorage.getItem(LS.inworldVoice) || "";
+  const inworldVoice = () => localStorage.getItem(LS.inworldVoice) || DEFAULT_INWORLD_VOICE;
   const inworldModel = () => localStorage.getItem(LS.inworldModel) || "inworld-tts-2";
   const geminiVoice = () => localStorage.getItem(LS.geminiVoice) || "Kore";
   const imgKeyOk = () => imgProvider() === "kie" ? !!kieKey() : !!geminiKey();

@@ -126,12 +126,12 @@
 
             <div class="key-divider">Inworld TTS (기본 · 감정/속도 자동 적용)</div>
             <label class="field">
-              <span class="field-label">Inworld Basic API 키 <small>(Portal에서 복사한 Base64 credentials)</small></span>
-              <input type="password" id="prodInworldKey" placeholder="Base64 credentials" autocomplete="off" />
+              <span class="field-label">Inworld API 키 <small>(필수 · Portal → API Keys → Basic/Base64)</small></span>
+              <input type="password" id="prodInworldKey" placeholder="Inworld Basic API Key (Base64 credentials)" autocomplete="off" />
             </label>
             <label class="field">
-              <span class="field-label">Inworld 목소리 ID</span>
-              <input type="text" id="prodInworldVoice" placeholder="예: Ashley, Dennis 또는 복제 음성 ID" autocomplete="off" />
+              <span class="field-label">Inworld 목소리 ID <small>(황태후형 기본 음성 적용됨)</small></span>
+              <input type="text" id="prodInworldVoice" placeholder="default-bbhejrkjoavwpl_ixpg3lw__design-voice-fc2ebf9a" autocomplete="off" />
             </label>
             <label class="field">
               <span class="field-label">Inworld 모델</span>
@@ -141,7 +141,7 @@
                 <option value="inworld-tts-1.5-max">TTS 1.5 Max — 안정적 고품질</option>
               </select>
             </label>
-            <p class="settings-note">🔒 Basic 키 보호와 CORS 처리를 위해 <b>실행하기_윈도우.bat</b> 또는 로컬 서버로 여세요. 장면 분위기에 따라 말하기 속도와 TTS-2 연출 지시가 자동 적용됩니다.</p>
+            <p class="settings-note">✅ 황태후형 목소리 ID가 기본으로 들어 있습니다. 위에는 Inworld Portal의 <b>API Keys → Basic</b>에서 복사한 Base64 credentials만 넣으세요. 장면별 감정·속도는 자동 적용됩니다.</p>
 
             <div class="key-divider">대본 모델</div>
             <label class="field">
