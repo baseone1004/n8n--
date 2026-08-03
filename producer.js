@@ -1574,12 +1574,12 @@ JSON만: {"image":"...","video":"..."}`;
     let audio = null, timer = null, stopped = false;
     const overlay = el("div", "player");
     overlay.innerHTML =
-      "<div class='player-box'><div class='player-stage'><img class='player-img' id='pImg' alt=''></div>" +
+      "<div class='player-box'><div class='player-stage'><img class='player-img' id='pImg' alt=''><video class='player-img' id='pVideo' muted playsinline></video></div>" +
       "<div class='player-wm' id='pWm'></div><div class='player-cap' id='pCap'></div>" +
       "<button class='player-x' id='pX' title='닫기'>✕</button></div>";
     document.body.appendChild(overlay);
     $("#pWm").textContent = project.watermark;
-    function cleanup() { stopped = true; if (timer) clearTimeout(timer); if (audio) audio.pause(); overlay.remove(); }
+    function cleanup() { stopped = true; if (timer) clearTimeout(timer); if (audio) audio.pause(); const v = $("#pVideo"); if (v) v.pause(); overlay.remove(); }
     $("#pX").onclick = cleanup;
     overlay.addEventListener("click", (e) => { if (e.target === overlay) cleanup(); });
     document.addEventListener("keydown", function esc(e) { if (e.key === "Escape") { cleanup(); document.removeEventListener("keydown", esc); } });
@@ -1589,15 +1589,22 @@ JSON만: {"image":"...","video":"..."}`;
       if (idx >= project.scenes.length) { cleanup(); return; }
       const s = project.scenes[idx];
       const im = $("#pImg");
+      const video = $("#pVideo");
       const dur = s.durationSec || estDur(s.text);
       const big = s.isIntro ? 1.22 : 1.12;
       const z = s.zoom || "in";
-      im.style.transition = "none";
-      im.src = s.imageDataUrl || "";
-      im.style.opacity = s.imageDataUrl ? "1" : "0.2";
-      if (z === "in") { im.style.transform = "scale(1)"; requestAnimationFrame(() => { im.style.transition = `transform ${dur}s linear`; im.style.transform = `scale(${big})`; }); }
-      else if (z === "out") { im.style.transform = `scale(${big})`; requestAnimationFrame(() => { im.style.transition = `transform ${dur}s linear`; im.style.transform = "scale(1)"; }); }
-      else { im.style.transform = "scale(1.04)"; }
+      video.pause(); video.removeAttribute("src"); video.style.display = s.videoUrl ? "block" : "none";
+      im.style.display = s.videoUrl ? "none" : "block";
+      if (s.videoUrl) {
+        video.src = s.videoUrl; video.loop = dur > 5; video.currentTime = 0; video.play().catch(() => {});
+      } else {
+        im.style.transition = "none";
+        im.src = s.imageDataUrl || "";
+        im.style.opacity = s.imageDataUrl ? "1" : "0.2";
+        if (z === "in") { im.style.transform = "scale(1)"; requestAnimationFrame(() => { im.style.transition = `transform ${dur}s linear`; im.style.transform = `scale(${big})`; }); }
+        else if (z === "out") { im.style.transform = `scale(${big})`; requestAnimationFrame(() => { im.style.transition = `transform ${dur}s linear`; im.style.transform = "scale(1)"; }); }
+        else { im.style.transform = "scale(1.04)"; }
+      }
       $("#pCap").textContent = s.text;
       if (audio) { audio.pause(); audio = null; }
       if (s.audioDataUrl) { audio = new Audio(s.audioDataUrl); audio.play().catch(() => {}); }
@@ -1678,8 +1685,8 @@ JSON만: {"image":"...","video":"..."}`;
       "<div class='scene-no'>캡컷 사용법 (초보자용)</div>" +
       "<ol style='margin:8px 0 0;padding-left:20px;line-height:1.9;font-size:14px'>" +
       "<li>ZIP 압축을 풉니다.</li>" +
-      "<li>캡컷에서 새 프로젝트 → <b>images</b> 폴더의 사진을 번호 순서대로 타임라인에 올립니다.</li>" +
-      "<li><b>audio</b> 폴더의 같은 번호 음성을 각 사진 아래에 맞춥니다. (사진 길이 = 음성 길이)</li>" +
+      "<li>캡컷에서 새 프로젝트 → <b>videos</b> 폴더의 영상부터 번호 순서대로 올립니다. 영상이 없는 장면만 <b>images</b> 폴더의 같은 번호 사진을 사용합니다.</li>" +
+      "<li><b>audio</b> 폴더의 같은 번호 음성을 각 영상/사진 아래에 맞춥니다. 영상이 음성보다 짧으면 반복하거나 마지막 프레임을 늘립니다.</li>" +
       "<li>인트로(장면1)는 좀 더 크게/영상처럼, 나머지 사진은 <b>줌 인/줌 아웃</b> 효과를 줍니다.</li>" +
       "<li>자막: <b>subtitles.srt</b>를 캡컷 자막 가져오기로 불러옵니다.</li>" +
       "<li>왼쪽 위에 텍스트로 <b>“" + esc(project.watermark) + "”</b>를 넣습니다.</li>" +
@@ -1709,6 +1716,7 @@ JSON만: {"image":"...","video":"..."}`;
   function strBytes(s) { return new TextEncoder().encode(s); }
   async function doExport() {
     const files = [];
+    const bundledVideos = new Set();
     const pad = (n) => String(n + 1).padStart(2, "0");
     project.scenes.forEach((s, i) => {
       if (s.imageDataUrl) {
@@ -1724,6 +1732,18 @@ JSON만: {"image":"...","video":"..."}`;
         }
       }
     });
+    for (let i = 0; i < project.scenes.length; i++) {
+      const s = project.scenes[i];
+      if (!s.videoUrl) continue;
+      try {
+        const res = await apiFetch(s.videoUrl);
+        if (!res.ok) throw new Error(String(res.status));
+        const blob = await res.blob();
+        const ext = /webm/i.test(blob.type) ? "webm" : "mp4";
+        files.push({ name: `videos/scene_${pad(i)}.${ext}`, bytes: new Uint8Array(await blob.arrayBuffer()) });
+        bundledVideos.add(i);
+      } catch (e) { /* CORS/만료 URL은 아래 다운로드 링크로 보존 */ }
+    }
     if (project.thumb && project.thumb.imageDataUrl) {
       const tm = project.thumb.imageDataUrl.match(/^data:(image\/\w+);base64,(.*)$/);
       if (tm) files.push({ name: `thumbnail.${tm[1].split("/")[1].replace("jpeg", "jpg")}`, bytes: base64ToBytes(tm[2]) });
@@ -1734,12 +1754,13 @@ JSON만: {"image":"...","video":"..."}`;
     }
     files.push({ name: "subtitles.srt", bytes: strBytes(buildSRT()) });
     let cursor = 0;
-    const timeline = ["scene,start_sec,duration_sec,image,audio,zoom,emotion,speed"];
+    const timeline = ["scene,start_sec,duration_sec,media,audio,zoom,emotion,speed"];
     const sfx = ["scene,start_sec,effect_key,effect_name,volume_db,note"];
     project.scenes.forEach((s, i) => {
       const dur = s.durationSec || estDur(s.text);
       const voice = s.voiceDirection || inferVoiceDirection(s);
-      timeline.push([i + 1, cursor.toFixed(3), dur.toFixed(3), `images/scene_${pad(i)}`, `audio/scene_${pad(i)}`, s.zoom || "in", voice.emotion, voice.rate].join(","));
+      const media = bundledVideos.has(i) ? `videos/scene_${pad(i)}` : `images/scene_${pad(i)}`;
+      timeline.push([i + 1, cursor.toFixed(3), dur.toFixed(3), media, `audio/scene_${pad(i)}`, s.zoom || "in", voice.emotion, voice.rate].join(","));
       (s.sfx || inferSfx(s)).forEach((fx) => sfx.push([i + 1, (cursor + fx.offsetSec).toFixed(3), fx.key, fx.label, fx.volumeDb, "권장 효과음 직접 선택"].join(",")));
       cursor += dur;
     });
@@ -1753,7 +1774,7 @@ JSON만: {"image":"...","video":"..."}`;
       name: "youtube_info.txt",
       bytes: strBytes(`■ 제목\n${project.title}\n\n■ 제목 옆 태그\n${project.titleTag}\n\n■ 설명\n${project.description}\n\n■ 태그\n${project.tags.join(", ")}\n\n■ 워터마크(왼쪽 위 문구)\n${project.watermark}`)
     });
-    files.push({ name: "capcut_guide.txt", bytes: strBytes("images/ 를 번호순으로 타임라인에 올리고, audio/ 의 같은 번호 음성을 아래에 맞추세요.\n정확한 시작 시각·길이·줌·감정은 timeline.csv를 확인하세요.\n효과음 추천 위치와 볼륨은 sfx_cues.csv를 확인하세요.\n자막은 subtitles.srt 가져오기.\n왼쪽 위 텍스트: " + project.watermark + "\n완성 MP4를 내보낸 뒤 영상·음성·자막 싱크를 최종 검토하고 YouTube에 업로드하세요.") });
+    files.push({ name: "capcut_guide.txt", bytes: strBytes("videos/ 의 생성 영상을 번호순으로 먼저 올리고, 영상이 없는 장면만 images/ 의 같은 번호 사진을 사용하세요. audio/ 의 같은 번호 음성을 아래에 맞춥니다.\n영상이 음성보다 짧으면 반복하거나 마지막 프레임을 늘리세요.\n정확한 시작 시각·길이·미디어·감정은 timeline.csv를 확인하세요.\n효과음 추천 위치와 볼륨은 sfx_cues.csv를 확인하세요.\n자막은 subtitles.srt 가져오기.\n왼쪽 위 텍스트: " + project.watermark + "\n완성 MP4를 내보낸 뒤 영상·음성·자막 싱크를 최종 검토하고 YouTube에 업로드하세요.") });
 
     if (files.length <= 4) { toast("먼저 이미지/음성을 생성하세요"); return; }
     const blob = makeZip(files);
