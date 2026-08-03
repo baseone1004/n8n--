@@ -593,13 +593,16 @@
     const isKorean = project.lang !== "ja";
     let cleanText = String(text || "").replace(/\s+/g, " ").trim();
     if (isKorean) cleanText = koreanizeForTTS(cleanText); // 숫자·기호를 한글로 → 영어 발화 방지
+    // 한국어는 다국어 지원 모델(tts-2)로 강제 — 1.5/1 계열은 영어 위주라 한국어를 영어처럼 읽음
+    let useModel = inworldModel();
+    if (isKorean && !/tts-2/.test(useModel)) useModel = "inworld-tts-2";
     const res = await apiFetch(INWORLD_TTS_URL, {
       method: "POST",
       headers: { "content-type": "application/json", "authorization": "Basic " + key },
       body: JSON.stringify({
         text: cleanText.slice(0, 2000),
         voiceId: inworldVoice(),
-        modelId: inworldModel(),
+        modelId: useModel,
         audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: 22050 },
         language: isKorean ? "ko-KR" : "ja-JP",
         deliveryMode: isKorean ? "STABLE" : "BALANCED",
