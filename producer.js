@@ -101,7 +101,7 @@
   function migrateOldKoreanStyle(p) {
     if (p?.lang === "ko" && /clean contemporary Korean historical 2D cel-animation/i.test(p.style || "")) {
       p.style = STYLE_PRESETS.ko[3].tail;
-    } else if (p?.lang === "ko" && (!p.style || /semi-realistic|realistic faces|Korean manhwa|Korean folktale|retro Korean TV|picture-book watercolor|dark Korean folklore ink|traditional Korean minhwa/i.test(p.style))) {
+    } else if (p?.lang === "ko" && (!p.style || /semi-realistic|realistic faces|Korean manhwa|retro Korean TV|picture-book watercolor|dark Korean folklore ink|traditional Korean minhwa/i.test(p.style))) {
       p.style = defaultStyleFor("ko");
     }
     return p;
@@ -1149,12 +1149,19 @@ ${scenes.join("\n")}`;
     const grid = el("div", "style-list");
     stylePresetsFor(project.lang).forEach((preset) => {
       const chip = el("button", "style-chip" + (project.style === preset.tail ? " sel" : ""));
+      chip.type = "button";
       if (preset.preview) {
         const preview = el("div", "style-preview"); preview.style.backgroundImage = `url("${preset.preview}")`;
         chip.appendChild(preview);
       }
       chip.insertAdjacentHTML("beforeend", `<b>${esc(preset.name)}</b><span>${esc(preset.desc)}</span>`);
-      chip.onclick = () => { project.style = preset.tail; saveDebounced(); render(); };
+      chip.onclick = (event) => {
+        event.preventDefault();
+        project.style = preset.tail;
+        saveProject();
+        render();
+        toast(`그림체 선택: ${preset.name}`);
+      };
       grid.appendChild(chip);
     });
     body.appendChild(grid);
