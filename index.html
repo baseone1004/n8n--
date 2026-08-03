@@ -168,9 +168,13 @@
             </div>
             <label class="field">
               <span class="field-label">Inworld TTS 모델</span>
-              <select id="prodInworldModel"><option value="inworld-tts-2">inworld-tts-2 (감정 표현 추천)</option><option value="inworld-tts-1.5-max">inworld-tts-1.5-max</option></select>
+              <select id="prodInworldModel"><option value="inworld-tts-2">inworld-tts-2 (한국어 권장)</option><option value="inworld-tts-1.5-max">inworld-tts-1.5-max (영어 위주)</option></select>
             </label>
-            <p class="settings-note">선택한 한국어 보이스의 원래 음색으로 대본만 읽습니다. Voice ID나 TTS 모델을 바꾸고 저장하면 기존 음성을 자동으로 지웁니다.</p>
+            <div class="yt-row" style="margin:6px 0">
+              <button type="button" class="btn sm btn-primary" id="prodInworldSample">🔊 한국어 샘플 듣기</button>
+              <span id="prodInworldSampleResult" class="settings-note" style="margin:0"></span>
+            </div>
+            <p class="settings-note">🎧 <b>샘플 듣기</b>로 이 목소리가 한국어를 제대로 읽는지 5초 만에 확인하세요. 영어로 들리면, 위 <b>한국어 Voice ID</b>를 다른 걸로 바꿔 다시 들어보세요(디자인 음성보다 Inworld 기본 목소리가 한국어를 잘 읽어요).</p>
 
             <div class="key-divider">대본 모델</div>
             <label class="field">

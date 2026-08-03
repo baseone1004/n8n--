@@ -622,6 +622,34 @@
     return { dataUrl, durationSec: dur };
   }
 
+  // 현재 설정한 목소리로 짧은 한국어 문장을 바로 생성해 들려주기 (저장 전 테스트)
+  async function testInworldSample() {
+    const out = $("#prodInworldSampleResult");
+    const key = ($("#prodInworldKey")?.value || inworldKey()).trim().replace(/^Basic\s+/i, "");
+    const voiceId = ($("#prodInworldVoiceKo")?.value || inworldVoice()).trim();
+    const model = $("#prodInworldModel")?.value || "inworld-tts-2";
+    const useModel = /tts-2/.test(model) ? model : "inworld-tts-2";
+    if (!key || !voiceId) { if (out) out.textContent = "Inworld 키와 한국어 Voice ID를 먼저 넣으세요."; return; }
+    if (out) out.textContent = "샘플 생성 중… (tts-2)";
+    try {
+      const res = await apiFetch(INWORLD_TTS_URL, {
+        method: "POST", headers: { "content-type": "application/json", "authorization": "Basic " + key },
+        body: JSON.stringify({
+          text: "안녕하세요. 옛날 옛적에, 어느 산골 마을에 지혜로운 며느리가 살고 있었습니다.",
+          voiceId: voiceId, modelId: useModel,
+          audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: 22050 },
+          language: "ko-KR", applyTextNormalization: "OFF", temperature: 0.8
+        })
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) { if (out) out.textContent = "실패: " + String(j.message || JSON.stringify(j)).slice(0, 100); return; }
+      const b64 = j.audioContent || j.result?.audioContent;
+      if (!b64) { if (out) out.textContent = "오디오가 없어요."; return; }
+      new Audio("data:audio/wav;base64," + b64).play();
+      if (out) out.innerHTML = "▶ 재생! <b>한국어로 들리면</b> 이 목소리 OK. <b>영어로 들리면</b> Voice ID를 다른 걸로 바꿔 다시 들어보세요.";
+    } catch (e) { if (out) out.textContent = "오류: " + String(e.message).slice(0, 80); }
+  }
+
   async function checkInworldVoice() {
     const out = $("#prodCheckInworldVoiceResult");
     const key = ($("#prodInworldKey")?.value || inworldKey()).trim().replace(/^Basic\s+/i, "");
@@ -2476,6 +2504,7 @@ JSON만: {"video":"..."}`;
     $("#prodSettings").onclick = openKeys;
     if ($("#prodCheckInworldVoice")) $("#prodCheckInworldVoice").onclick = checkInworldVoice;
     if ($("#prodLoadInworldVoices")) $("#prodLoadInworldVoices").onclick = loadInworldVoices;
+    if ($("#prodInworldSample")) $("#prodInworldSample").onclick = testInworldSample;
     if ($("#prodInworldVoiceList")) $("#prodInworldVoiceList").onchange = function () {
       if (!this.value) return;
       $("#prodInworldVoiceKo").value = this.value;
