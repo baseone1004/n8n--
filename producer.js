@@ -557,12 +557,42 @@
       a.src = dataUrl;
     });
   }
+  // 사이-한글 숫자 변환 (숫자를 영어로 읽는 문제 방지)
+  function sinoKorean(numStr) {
+    let n = parseInt(numStr, 10);
+    if (isNaN(n)) return numStr;
+    if (n === 0) return "영";
+    const d = ["", "일", "이", "삼", "사", "오", "육", "칠", "팔", "구"];
+    const small = ["", "십", "백", "천"], big = ["", "만", "억", "조", "경"];
+    const groups = [];
+    while (n > 0) { groups.push(n % 10000); n = Math.floor(n / 10000); }
+    let s = "";
+    for (let g = groups.length - 1; g >= 0; g--) {
+      let gv = groups[g], gs = "";
+      for (let p = 3; p >= 0; p--) {
+        const digit = Math.floor(gv / Math.pow(10, p)) % 10;
+        if (digit > 0) gs += (digit === 1 && p > 0 ? "" : d[digit]) + small[p];
+      }
+      if (gs) s += gs + big[g];
+    }
+    return s || numStr;
+  }
+  // Inworld에 보내기 전 한국어 정리: 숫자→한글, 영어로 읽힐 기호 제거
+  function koreanizeForTTS(text) {
+    return String(text)
+      .replace(/(\d[\d,]*)/g, (m) => sinoKorean(m.replace(/,/g, "")))
+      .replace(/%/g, "퍼센트").replace(/&/g, "그리고").replace(/\$/g, "달러")
+      .replace(/[#*_`~<>\[\]{}|/\\^=+]/g, " ")
+      .replace(/[A-Za-z]+/g, " ")   // 남은 영문 토큰 제거(영어 발화 방지)
+      .replace(/\s+/g, " ").trim();
+  }
   async function genInworld(text) {
     const key = inworldKey();
     if (!key) throw new Error("NO_INWORLD_KEY");
     if (!inworldVoice()) throw new Error("NO_INWORLD_VOICE");
-    const cleanText = String(text || "").replace(/\s+/g, " ").trim();
     const isKorean = project.lang !== "ja";
+    let cleanText = String(text || "").replace(/\s+/g, " ").trim();
+    if (isKorean) cleanText = koreanizeForTTS(cleanText); // 숫자·기호를 한글로 → 영어 발화 방지
     const res = await apiFetch(INWORLD_TTS_URL, {
       method: "POST",
       headers: { "content-type": "application/json", "authorization": "Basic " + key },
@@ -573,8 +603,8 @@
         audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: 22050 },
         language: isKorean ? "ko-KR" : "ja-JP",
         deliveryMode: isKorean ? "STABLE" : "BALANCED",
-        applyTextNormalization: "ON",
-        enhanceGeneration: true
+        applyTextNormalization: "OFF", // ON이면 숫자·기호를 영어로 읽어버림 → OFF
+        temperature: 0.8
       })
     });
     if (!res.ok) {

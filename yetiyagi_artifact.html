@@ -436,6 +436,11 @@ textarea {
   color: var(--ink); padding: 10px 12px; border-radius: 9px; cursor: pointer;
   transition: all .12s;
 }
+.style-preview {
+  width: 100%; aspect-ratio: 16 / 9; margin-bottom: 9px; border-radius: 8px;
+  background-size: cover; background-position: center;
+  background-repeat: no-repeat; border: 1px solid var(--line);
+}
 .style-chip:hover { border-color: var(--seal); background: var(--paper); }
 .style-chip.sel { border-color: var(--seal); background: rgba(139,92,246,0.14); box-shadow: 0 0 0 2px rgba(139,92,246,0.35); }
 .style-chip.sel b::before { content: "✓ "; }
@@ -787,7 +792,7 @@ textarea {
             </label>
             <div id="geminiTextField">
               <label class="field">
-                <span class="field-label">Google AI(Gemini) API 키 <small>(대본 무료 + Gemini 음성)</small></span>
+                <span class="field-label">Google AI(Gemini) API 키 <small>(대본 작성 전용)</small></span>
                 <input type="password" id="prodGeminiKey" placeholder="AIza..." autocomplete="off" />
               </label>
               <div class="yt-row" style="margin:0 0 6px">
@@ -843,65 +848,50 @@ textarea {
             </label>
             <label class="field">
               <span class="field-label">KIE 영상 모델 <small>(인트로 영상 변환)</small></span>
-              <input type="text" id="prodKieVideoModel" list="kieVideoList" placeholder="veo3-fast" />
+              <input type="text" id="prodKieVideoModel" list="kieVideoList" placeholder="veo3_fast" />
               <datalist id="kieVideoList">
-                <option value="veo3-fast"></option>
+                <option value="veo3_fast"></option>
                 <option value="veo3"></option>
-                <option value="kling-v2"></option>
-                <option value="runway-gen3"></option>
-                <option value="sora-2"></option>
+                <option value="veo3_lite"></option>
               </datalist>
             </label>
             <p class="settings-note">💰 이미지 약 15~60원/장 · 영상은 모델별로 수백~수천원/편. <br>⚠ KIE API는 서버용이라 <b>웹주소에선 막힐(CORS)</b> 수 있어요. 그럴 땐 <b>수익분석_켜기.bat</b>(로컬 서버)로 열거나, KIE 웹에서 뽑아 <b>올리기</b>로 넣으세요. 영상 모델 이름은 본인 KIE 계정에서 쓰는 이름으로 넣으세요.</p>
 
-            <div class="key-divider">음성 (선택)</div>
-            <p class="settings-note" style="margin-bottom:8px">🇰🇷 한국어 / 🇯🇵 일본어 목소리를 각각 저장해두면, 언어를 바꿀 때 <b>자동으로 해당 언어 목소리</b>로 생성됩니다. Gemini 음성은 위 <b>글작성 Google AI 키</b>를 함께 씁니다.</p>
-            <div class="editor-row">
-              <label class="field" style="flex:1">
-                <span class="field-label">🇰🇷 Gemini 한국어 목소리</span>
-                <select id="prodGeminiVoiceKo"></select>
-              </label>
-              <label class="field" style="flex:1">
-                <span class="field-label">🇯🇵 Gemini 일본어 목소리</span>
-                <select id="prodGeminiVoiceJa"></select>
-              </label>
-            </div>
-            <p class="settings-note">위 목소리로 음성 단계의 'Gemini 음성' 버튼이 생성됩니다. 아래 타입캐스트는 선택 사항이에요.</p>
-
-            <div class="key-divider">타입캐스트 (선택 · 안 되면 업로드 사용)</div>
+            <div class="key-divider">인월드 음성</div>
             <label class="field">
-              <span class="field-label">타입캐스트(Typecast) API 키</span>
-              <input type="password" id="prodTypecastKey" placeholder="Typecast API Key" autocomplete="off" />
-            </label>
-            <label class="field">
-              <span class="field-label">목소리 목록에서 골라 언어별로 넣기</span>
-              <div class="yt-row" style="margin:0">
-                <select id="prodTcVoiceSelect" style="flex:1"><option value="">목록을 불러오세요</option></select>
-                <button type="button" class="btn sm" id="prodTcLoadVoices">목소리 불러오기</button>
-              </div>
-              <div class="yt-row" style="margin-top:6px">
-                <button type="button" class="btn sm" id="prodTcToKo">▲ 한국어에 넣기</button>
-                <button type="button" class="btn sm" id="prodTcToJa">▲ 일본어에 넣기</button>
-              </div>
+              <span class="field-label">Inworld API 키</span>
+              <input type="password" id="prodInworldKey" placeholder="Inworld API Key" autocomplete="off" />
             </label>
             <div class="editor-row">
               <label class="field" style="flex:1">
-                <span class="field-label">🇰🇷 한국어 voice_id</span>
-                <input type="text" id="prodTypecastVoiceKo" placeholder="tc_..." autocomplete="off" />
+                <span class="field-label">🇰🇷 한국어 Voice ID</span>
+                <input type="text" id="prodInworldVoiceKo" placeholder="default-bbhe..." autocomplete="off" />
               </label>
               <label class="field" style="flex:1">
-                <span class="field-label">🇯🇵 일본어 voice_id</span>
-                <input type="text" id="prodTypecastVoiceJa" placeholder="tc_..." autocomplete="off" />
+                <span class="field-label">🇯🇵 일본어 Voice ID</span>
+                <input type="text" id="prodInworldVoiceJa" placeholder="일본어 목소리 ID (선택)" autocomplete="off" />
               </label>
             </div>
-            <p class="settings-note">⭐ 타입캐스트 API는 <b>수익분석_켜기.bat</b>(로컬 서버)로 열 때만 작동해요(CORS 우회). 웹주소에선 <b>음성 올리기</b>를 쓰세요.</p>
+            <div class="editor-row" style="align-items:center">
+              <select id="prodInworldVoiceList" style="flex:1"><option value="">내 목소리를 불러오세요</option></select>
+              <button type="button" class="btn sm" id="prodLoadInworldVoices">📥 내 목소리 불러오기</button>
+            </div>
+            <div class="editor-row" style="align-items:center">
+              <button type="button" class="btn sm" id="prodCheckInworldVoice">🔎 한국어 음성 정보 확인</button>
+              <div id="prodCheckInworldVoiceResult" class="settings-note"></div>
+            </div>
+            <label class="field">
+              <span class="field-label">Inworld TTS 모델</span>
+              <select id="prodInworldModel"><option value="inworld-tts-2">inworld-tts-2 (감정 표현 추천)</option><option value="inworld-tts-1.5-max">inworld-tts-1.5-max</option></select>
+            </label>
+            <p class="settings-note">선택한 한국어 보이스의 원래 음색으로 대본만 읽습니다. Voice ID나 TTS 모델을 바꾸고 저장하면 기존 음성을 자동으로 지웁니다.</p>
 
             <div class="key-divider">대본 모델</div>
             <label class="field">
               <span class="field-label">대본 생성 모델</span>
               <input type="text" id="prodModel" list="modelList" placeholder="claude-opus-5" />
             </label>
-            <p class="settings-note">키는 이 브라우저에만 저장됩니다. Anthropic: <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> · Google AI: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> · KIE: <a href="https://kie.ai" target="_blank" rel="noopener">kie.ai</a> · Typecast: <a href="https://typecast.ai" target="_blank" rel="noopener">typecast.ai</a></p>
+            <p class="settings-note">키는 이 브라우저에만 저장됩니다. Google AI: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> · KIE: <a href="https://kie.ai" target="_blank" rel="noopener">kie.ai</a> · Inworld: <a href="https://platform.inworld.ai" target="_blank" rel="noopener">platform.inworld.ai</a></p>
             <button class="btn btn-primary sm" id="prodSaveKeys">저장</button>
           </div>
 
@@ -1957,6 +1947,7 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
   const TTS_MODEL = "gemini-2.5-flash-preview-tts";
   const KIE_CREATE = "https://api.kie.ai/api/v1/jobs/createTask";
   const KIE_RECORD = "https://api.kie.ai/api/v1/jobs/recordInfo?taskId=";
+  const KIE_UPLOAD_BASE64 = "https://kieai.redpandaai.co/api/file-base64-upload";
   // 이미지 1장당 예상 비용(원) — 대략치. 환율/모델에 따라 달라질 수 있음.
   const IMG_COST = {
     "gemini-2.5-flash-image": 55, "gemini-2.5-flash-image-preview": 55,
@@ -1976,16 +1967,20 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
     kieVideoModel: "yeti_kie_video_model",
     kieRes: "yeti_kie_res",
     channelName: "yeti_channel_name",
-    typecast: "yeti_typecast_key",
-    typecastVoice: "yeti_typecast_voice",      // 구버전(마이그레이션용)
-    typecastVoiceKo: "yeti_typecast_voice_ko",
-    typecastVoiceJa: "yeti_typecast_voice_ja",
+    inworld: "yeti_inworld_key",
+    inworldVoiceKo: "yeti_inworld_voice_ko",
+    inworldVoiceJa: "yeti_inworld_voice_ja",
+    inworldModel: "yeti_inworld_model",
+    inworldSpeechRev: "yeti_inworld_speech_rev",
     geminiVoice: "yeti_gemini_voice",          // 구버전
     geminiVoiceKo: "yeti_gemini_voice_ko",
     geminiVoiceJa: "yeti_gemini_voice_ja",
     projects: "yeti_projects"
   };
-  const TYPECAST_URL = "https://api.typecast.ai/v1/text-to-speech";
+  const INWORLD_TTS_URL = "https://api.inworld.ai/tts/v1/voice";
+  const INWORLD_SPEECH_REV = "pure-ko-v2";
+  const KIE_VEO_GENERATE = "https://api.kie.ai/api/v1/veo/generate";
+  const KIE_VEO_STATUS = "https://api.kie.ai/api/v1/veo/record-info";
   const GEMINI_VOICES = [
     ["Kore", "Kore — 차분·기본 (여)"], ["Aoede", "Aoede — 부드러움 (여)"], ["Leda", "Leda — 밝고 또렷 (여)"],
     ["Callirrhoe", "Callirrhoe — 편안함 (여)"], ["Sulafat", "Sulafat — 따뜻함 (여)"], ["Achernar", "Achernar — 또렷 (여)"],
@@ -2005,7 +2000,7 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
     { key: "export", name: "캡컷 내보내기" }
   ];
   const stepOf = (k) => STEPS.findIndex((s) => s.key === k);
-  function goStep(k) { stepIdx = stepOf(k); render(); }
+  function goStep(k) { stepIdx = stepOf(k); project.lastStep = k; saveProject(); render(); }
 
   // 언어별 설정 (한국 야담 / 일본 괴담·옛이야기)
   const LANG = {
@@ -2028,14 +2023,15 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
     ? "\n\n중요: 결과의 모든 텍스트(제목·설명·태그·대본 등)는 반드시 자연스러운 '일본어'로 작성한다."
     : "";
 
-  // 언어별 그림체 프리셋 — 한국: 반실사 웹툰(만화)풍 / 일본: 부드러운 애니 셀화풍
+  // 언어별 그림체 프리셋 — 한국: 참고 이미지형 2D 민담 애니 / 일본: 부드러운 애니 셀화풍
   const STYLE_PRESETS = {
     ko: [
-      { name: "반실사 웹툰 (기본)", desc: "정제된 실사 얼굴 + 웹툰 채색, 차분한 색감", tail: "semi-realistic Korean webtoon manhwa illustration, detailed painterly rendering, refined realistic faces, muted earthy color palette, soft cinematic lighting, mature historical drama mood" },
-      { name: "반실사 웹툰 · 진한 명암", desc: "강한 그림자·대비, 묵직한 분위기", tail: "semi-realistic Korean webtoon manhwa illustration, detailed rendering, refined realistic faces, strong dramatic chiaroscuro shadows, high contrast, deep moody color grading, cinematic" },
-      { name: "반실사 웹툰 · 부드러운 톤", desc: "은은한 파스텔, 따뜻하고 잔잔", tail: "semi-realistic Korean webtoon manhwa illustration, soft gentle rendering, refined realistic faces, muted soft pastel palette, warm diffused lighting, calm nostalgic mood" },
-      { name: "반실사 웹툰 · 디테일 강화", desc: "정교한 선·질감, 섬세한 묘사", tail: "highly detailed semi-realistic Korean manhwa illustration, intricate linework and textures, refined realistic faces, rich painterly detail, natural muted colors, cinematic depth" },
-      { name: "반실사 웹툰 · 수채 느낌", desc: "수채화로 물든 부드러운 채색", tail: "semi-realistic Korean manhwa illustration with watercolor-washed coloring, refined realistic faces, soft blended tones, delicate linework, gentle painterly mood" }
+      { name: "부드러운 시대극 웹툰", desc: "단정한 얼굴·부드러운 셀 명암·따뜻한 자연색", preview: "assets/style-ko-soft-webtoon.png", tail: "soft premium Korean historical webtoon illustration, elegant realistic-but-drawn faces, smooth clean ink lines, gentle cel shading, warm natural earth palette, polished detailed Joseon village backgrounds, emotional and approachable" },
+      { name: "영화풍 만화", desc: "성숙한 인물·붓질 질감·극적인 따뜻한 조명", preview: "assets/style-ko-cinematic-manhwa.png", tail: "cinematic painterly Korean historical manhwa, mature proportional faces, refined brush rendering over crisp line art, dramatic warm rim light, deep burgundy and navy palette, richly textured historical interiors" },
+      { name: "강렬한 웹툰 (추천)", desc: "마음에 든 기존 3번째 이미지·역동적 구도·강한 명암", preview: "assets/style-ko-webtoon.png", tail: "bold modern Korean historical webtoon illustration, angular expressive faces, dynamic cinematic perspective, crisp variable ink lines, strong cel shadows, high-contrast teal and orange palette, graphic detailed palace and Joseon village backgrounds" },
+      { name: "2D 애니 스타일", desc: "참고 이미지 그대로·둥근 얼굴·큰 눈·파스텔 한복·밝은 조선 마을", preview: "assets/style-ko-reference-2d-anime.png", tail: "exactly match the selected reference look: warm cheerful Korean folktale 2D animation, cute rounded faces with large sparkling eyes, tiny nose and mouth, slim graceful figures, fine warm-brown outlines, bright pastel hanbok with delicate traditional floral patterns, light soft cel shading, airy watercolor-like sunny Joseon village backgrounds, cream peach mint sky-blue palette, wholesome storybook mood, clean hand-drawn animation frame, no dark dramatic shadows, no photorealism, no 3D" },
+      { name: "파스텔 2D 애니", desc: "복숭아·하늘·크림색의 낮은 대비와 부드러운 분위기", preview: "assets/style-ko-pastel-anime.png", tail: "pastel Korean historical 2D animation, natural adult proportions, delicate clean outlines, soft peach sky-blue cream and sage palette, low contrast, gentle cel shading, subtle paper texture, warm dreamy sunlight, beautiful simplified Joseon village backgrounds, no chibi" },
+      { name: "어두운 미스터리 웹툰", desc: "각진 중년 얼굴·날카로운 눈빛·달빛과 붉은 포인트", preview: "assets/style-ko-mystery-webtoon.png", tail: "dark mystery Korean historical webtoon, angular mature faces, sharp expressive eyes, dynamic low-angle framing, crisp black ink, dramatic hard cel shadows, moonlit blue palette with restrained red accents, detailed government courtyards" }
     ],
     ja: [
       { name: "애니 셀화 (기본)", desc: "깔끔한 셀 채색, 정겨운 옛이야기 느낌", tail: "traditional Japanese folktale anime illustration, clean cel shading, flat soft colors, gentle rounded faces, hand-painted rural scenery, warm nostalgic wholesome mood" },
@@ -2046,6 +2042,15 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
     ]
   };
   const stylePresetsFor = (lang) => STYLE_PRESETS[lang] || STYLE_PRESETS.ko;
+  const defaultStyleFor = (lang) => lang === "ko" ? STYLE_PRESETS.ko[2].tail : stylePresetsFor(lang)[0].tail;
+  function migrateOldKoreanStyle(p) {
+    if (p?.lang === "ko" && (/clean contemporary Korean historical 2D cel-animation/i.test(p.style || "") || /^warm cheerful Korean folktale 2D animation/i.test(p.style || ""))) {
+      p.style = STYLE_PRESETS.ko[3].tail;
+    } else if (p?.lang === "ko" && (!p.style || /semi-realistic|realistic faces|Korean manhwa|retro Korean TV|picture-book watercolor|dark Korean folklore ink|traditional Korean minhwa/i.test(p.style))) {
+      p.style = defaultStyleFor("ko");
+    }
+    return p;
+  }
 
   // 대본 규칙(정제본 v11.3) — 제목 패턴 / 인트로 / 고정 멘트
   const TITLE_PATTERNS =
@@ -2082,6 +2087,8 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
     return {
       id: "p" + Date.now(),
       createdAt: Date.now(),
+      updatedAt: Date.now(),
+      lastStep: "category",
       lang: lang,
       category: "",
       topics: [],
@@ -2090,7 +2097,7 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
       titleTag: "",
       description: "",
       tags: [],
-      style: STYLE_PRESETS[lang][0].tail,
+      style: defaultStyleFor(lang),
       scenes: [],       // {text, imagePrompt, imageDataUrl, audioDataUrl, durationSec, isIntro, zoom}
       characters: [],   // {name, look, imageDataUrl, imageUrl} — 모든 장면에 고정되는 주인공
       watermark: LANG[lang].watermark,
@@ -2113,8 +2120,9 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
   // ============ 키/설정 ============
   const claudeKey = () => localStorage.getItem(LS.claude) || "";
   const geminiKey = () => localStorage.getItem(LS.gemini) || "";
+  const isGeminiApiKey = (key) => /^(?:AIza|AQ[._-]?)[0-9A-Za-z._-]{15,}$/.test((key || "").trim());
   const claudeModel = () => localStorage.getItem(LS.model) || "claude-opus-5";
-  const textProvider = () => localStorage.getItem(LS.textProvider) || "claude";
+  const textProvider = () => localStorage.getItem(LS.textProvider) || "gemini";
   const geminiTextModel = () => {
     const m = localStorage.getItem(LS.geminiTextModel);
     // 신규 사용자에게 막힌 옛 모델명은 최신 별칭으로 자동 교정
@@ -2124,15 +2132,19 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
   // 이미지·영상 생성 API — KIE.ai 전용 (글작성 키와 분리)
   const kieKey = () => localStorage.getItem(LS.kie) || "";
   const kieModel = () => localStorage.getItem(LS.kieModel) || "nano-banana-2";
-  const kieVideoModel = () => localStorage.getItem(LS.kieVideoModel) || "veo3-fast";
+  const kieVideoModel = () => {
+    const model = localStorage.getItem(LS.kieVideoModel) || "veo3_fast";
+    return ({ "veo3-fast": "veo3_fast", "veo3-lite": "veo3_lite" })[model] || model;
+  };
   const imgKeyOk = () => !!kieKey();
   const imgCostWon = () => IMG_COST[kieModel()] || 30;
   const imgCostText = () => `약 <b>${imgCostWon()}원/장</b> (KIE.ai 크레딧 기준 추정)`;
   const channelName = () => localStorage.getItem(LS.channelName) || "설루온";
-  const typecastKey = () => localStorage.getItem(LS.typecast) || "";
-  const typecastVoice = () => (project.lang === "ja"
-    ? (localStorage.getItem(LS.typecastVoiceJa) || localStorage.getItem(LS.typecastVoice))
-    : (localStorage.getItem(LS.typecastVoiceKo) || localStorage.getItem(LS.typecastVoice))) || "";
+  const inworldKey = () => localStorage.getItem(LS.inworld) || "";
+  const inworldVoice = () => (project.lang === "ja"
+    ? localStorage.getItem(LS.inworldVoiceJa)
+    : localStorage.getItem(LS.inworldVoiceKo)) || "default-bbhejrkjoavwpl_ixpg3lw__design-voice-fc2ebf9a";
+  const inworldModel = () => localStorage.getItem(LS.inworldModel) || "inworld-tts-2";
   const geminiVoice = () => (project.lang === "ja"
     ? (localStorage.getItem(LS.geminiVoiceJa) || localStorage.getItem(LS.geminiVoice))
     : (localStorage.getItem(LS.geminiVoiceKo) || localStorage.getItem(LS.geminiVoice))) || "Kore";
@@ -2152,7 +2164,13 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
   async function claudeJSON(system, user, maxTokens) {
     if (textProvider() === "gemini") return geminiJSON(system, user, maxTokens);
     const key = claudeKey();
-    if (!key) throw new Error("NO_CLAUDE_KEY");
+    if (!key) {
+      if (geminiKey()) {
+        localStorage.setItem(LS.textProvider, "gemini");
+        return geminiJSON(system, user, maxTokens);
+      }
+      throw new Error("NO_CLAUDE_KEY");
+    }
     const res = await fetch(CLAUDE_URL, {
       method: "POST",
       headers: {
@@ -2170,6 +2188,10 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
     });
     if (!res.ok) {
       let d = ""; try { d = (await res.json()).error?.message; } catch (e) { d = await res.text(); }
+      if (geminiKey() && /credit balance is too low|purchase credits|plans\s*&\s*billing|insufficient.*credit/i.test(d || "")) {
+        localStorage.setItem(LS.textProvider, "gemini");
+        return geminiJSON(system, user, maxTokens);
+      }
       throw new Error(`Claude ${res.status}: ${d}`);
     }
     const j = await res.json();
@@ -2180,14 +2202,15 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
   async function geminiJSON(system, user, maxTokens) {
     const key = geminiKey();
     if (!key) throw new Error("NO_GEMINI_KEY");
+    if (!isGeminiApiKey(key)) throw new Error("INVALID_GEMINI_KEY_TYPE");
     // 최신 Gemini는 thinking 토큰이 출력 한도를 잡아먹으므로 넉넉히(최소 16000) 확보
     const cap = Math.min(Math.max(maxTokens || 8000, 16000), 60000);
     const call = (noThink) => {
       const gen = { temperature: 0.95, maxOutputTokens: cap, responseMimeType: "application/json" };
       // thinking(생각) 토큰이 출력 한도를 잡아먹어 JSON이 잘리는 것 방지 → 끔
       if (noThink) gen.thinkingConfig = { thinkingBudget: 0 };
-      return fetch(GEMINI_BASE + geminiTextModel() + ":generateContent?key=" + encodeURIComponent(key), {
-        method: "POST", headers: { "content-type": "application/json" },
+      return fetch(GEMINI_BASE + geminiTextModel() + ":generateContent", {
+        method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key },
         body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ parts: [{ text: user }] }], generationConfig: gen })
       });
     };
@@ -2258,6 +2281,20 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
   function blobToDataURL(blob) {
     return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
   }
+  async function uploadImageToKIE(dataUrl, fileName) {
+    if (/^https?:\/\//.test(dataUrl || "")) return dataUrl;
+    if (!/^data:image\//.test(dataUrl || "")) throw new Error("영상 변환용 이미지 파일이 없습니다");
+    const res = await apiFetch(KIE_UPLOAD_BASE64, {
+      method: "POST",
+      headers: { "content-type": "application/json", "authorization": "Bearer " + kieKey() },
+      body: JSON.stringify({ base64Data: dataUrl, uploadPath: "images/intro", fileName: fileName || ("intro-" + Date.now() + ".png") })
+    });
+    const j = await res.json();
+    if (!res.ok || (j.code && j.code !== 200) || j.success === false) throw new Error("KIE 이미지 업로드 실패: " + (j.msg || res.status));
+    const url = j.data?.downloadUrl || j.data?.fileUrl || j.downloadUrl || j.fileUrl;
+    if (!url) throw new Error("KIE 이미지 업로드 URL 없음");
+    return url;
+  }
 
   // ============ KIE.ai 공용 (createTask → recordInfo 폴링) ============
   // 이미지·영상 모두 같은 흐름. maxTries 만큼 2초 간격 폴링. 결과 URL 반환.
@@ -2300,17 +2337,28 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
   }
 
   // ---- 일관성(캐릭터·화풍) 고정 ----
+  function characterAge(c) {
+    const saved = parseInt(c?.age, 10);
+    if (saved >= 1 && saved <= 100) return saved;
+    const source = `${c?.name || ""} ${c?.look || ""}`;
+    const explicit = source.match(/(?:age|aged|나이)\s*[:：]?\s*(\d{1,3})/i);
+    if (explicit) return Math.max(1, Math.min(100, parseInt(explicit[1], 10)));
+    if (/대감|고관대작|정승|판서/.test(source)) return 58;
+    if (/과부/.test(source)) return 38;
+    if (/노파|노인|할머니|할아버지/.test(source)) return 70;
+    return 40;
+  }
   // 모든 장면에 같은 주인공 외형을 강제
   function charLockText() {
     const cs = (project.characters || []).filter((c) => c.look);
     if (!cs.length) return "";
     return "Keep these recurring characters IDENTICAL in every image — same face, hairstyle, age and clothing every time: " +
-      cs.map((c) => `[${c.name}] ${c.look}`).join("; ") + ". ";
+      cs.map((c) => `[${c.name}] exactly ${characterAge(c)} years old; ${c.look}`).join("; ") + ". The visible face and body must match each exact numeric age. ";
   }
   // 화풍 고정 + 실사화 방지 (nano-banana가 실사로 튀는 것 차단)
   function styleLockText() {
     return " . Art style (keep EXACTLY the same across all images): " + (project.style || "flat 2D Korean webtoon manhwa illustration") +
-      ". Flat 2D drawn cel-shaded webtoon/manhwa illustration. CRITICAL: NOT photorealistic, NOT a real photograph, NOT 3D render, NOT realistic skin/lighting — it must look hand-drawn like the reference style. no text, no letters, no watermark.";
+      ". Follow the selected style literally: keep its character proportions, face design, line weight, shading method, palette and background rendering identical across every scene. CRITICAL: hand-drawn 2D only, NOT photorealistic, NOT a real photograph, NOT 3D render, and do not mix in another illustration style. no text, no letters, no watermark.";
   }
   // 캐릭터 참조 이미지(공개 URL만) — nano-banana 이미지 조건부 생성용
   function charRefUrls() {
@@ -2320,12 +2368,36 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
   const kieRes = () => localStorage.getItem(LS.kieRes) || "2K"; // 해상도(1K/2K/4K) — 기본 2K로 비용 절약(4K 기본은 비쌈)
 
   // ---- KIE 이미지 생성 (주인공·화풍 고정 포함) ----
-  async function genImage(prompt) {
+  function safeImagePrompt(prompt, strict) {
+    let p = String(prompt || "")
+      .replace(/\b(corpse|dead body|lifeless body|cadaver)\b/gi, "an unconscious person receiving help")
+      .replace(/\b(dead|dying|killed|murdered|slain)\b/gi, "in grave danger")
+      .replace(/\b(kill|murder|execute|suicide|self-harm)\b/gi, "prevent a tragedy")
+      .replace(/\b(blood|bloody|gore|gory|wound|wounded|injury|injured)\b/gi, "visible distress")
+      .replace(/\b(strangle|choke|stab|slash|behead|dismember|torture)\w*\b/gi, "threaten")
+      .replace(/\b(nude|naked|sexual|erotic)\b/gi, "fully clothed")
+      .replace(/\b(weapon|knife|sword|blade|gun)\b/gi, "non-threatening traditional object");
+    if (strict) {
+      p = p.replace(/\b(violence|violent|attack|assault|abuse|revenge|threat|horror|terrifying)\w*\b/gi, "dramatic emotional conflict");
+    }
+    return p + " Family-friendly Korean folktale illustration. Gentle non-graphic emotional storytelling; everyone is fully clothed and visibly safe; calm symbolic staging suitable for all ages.";
+  }
+  const isSensitiveKieError = (e) => /sensitive|flagged|moderation|safety|unsafe content/i.test(String(e?.message || e));
+  async function genImage(prompt, onSourceUrl) {
     const full = charLockText() + prompt + styleLockText() + " 16:9 widescreen cinematic composition.";
-    const input = { prompt: full, aspect_ratio: "16:9", resolution: kieRes(), output_format: "png" };
+    const input = { prompt: full, image_input: [], aspect_ratio: "16:9", resolution: kieRes(), output_format: "png" };
     const refs = charRefUrls();
     if (refs.length) input.image_input = refs.slice(0, 3); // 주인공 참조로 일관성 강화(nano-banana-2 필드: image_input)
-    const url = await kieTask(kieModel(), input, 90);
+    input.prompt = safeImagePrompt(full, false);
+    let url;
+    try {
+      url = await kieTask(kieModel(), input, 90);
+    } catch (e) {
+      if (!isSensitiveKieError(e)) throw e;
+      input.prompt = safeImagePrompt(full, true);
+      url = await kieTask(kieModel(), input, 90);
+    }
+    if (onSourceUrl) onSourceUrl(url);
     try { const r = await apiFetch(url); return await blobToDataURL(await r.blob()); }
     catch (e) { return url; } // CORS로 바이트 못 가져오면 URL 그대로(미리보기는 됨, ZIP 제외)
   }
@@ -2334,7 +2406,7 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
   async function genCharImage(idx) {
     const c = project.characters[idx];
     const prompt = "Character reference sheet, single full-body character, front view, neutral standing pose, clear visible face, plain light background. " +
-      c.look + styleLockText();
+      c.look + ` CRITICAL AGE LOCK: exactly ${characterAge(c)} years old. Face, skin, hair and body must visibly match age ${characterAge(c)}, never younger or older. ` + styleLockText();
     const url = await kieTask(kieModel(), { prompt, aspect_ratio: "3:4", resolution: kieRes(), output_format: "png" }, 90);
     c.imageUrl = url; // 조건부 생성용 원본 URL 보관
     try { const r = await apiFetch(url); c.imageDataUrl = await blobToDataURL(await r.blob()); }
@@ -2343,12 +2415,50 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
   }
 
   // ---- KIE 인트로 영상 생성 (이미지→영상 또는 텍스트→영상) ----
+  async function kieVeoTask(prompt, imageUrl) {
+    const key = kieKey();
+    if (!key) throw new Error("NO_KIE_KEY");
+    const body = {
+      prompt,
+      model: kieVideoModel(),
+      aspect_ratio: "16:9",
+      enableFallback: true,
+      enableTranslation: true,
+      generationType: imageUrl ? "FIRST_AND_LAST_FRAMES_2_VIDEO" : "TEXT_2_VIDEO"
+    };
+    if (imageUrl) body.imageUrls = [imageUrl];
+    const created = await apiFetch(KIE_VEO_GENERATE, {
+      method: "POST",
+      headers: { "content-type": "application/json", "authorization": "Bearer " + key },
+      body: JSON.stringify(body)
+    });
+    const cj = await created.json().catch(() => ({}));
+    if (!created.ok || cj.code !== 200 || !cj.data?.taskId) {
+      throw new Error(`KIE ${created.status}: ${cj.msg || "Veo 영상 작업 생성 실패"}`);
+    }
+    const taskId = cj.data.taskId;
+    for (let n = 0; n < 180; n++) {
+      await sleep(2000);
+      const status = await apiFetch(KIE_VEO_STATUS + "?taskId=" + encodeURIComponent(taskId), {
+        headers: { "authorization": "Bearer " + key }
+      });
+      const sj = await status.json().catch(() => ({}));
+      const data = sj.data || {};
+      if (data.successFlag === 1) {
+        const response = data.response || {};
+        const url = response.resultUrls?.[0] || response.originUrls?.[0] || data.resultUrls?.[0];
+        if (!url) throw new Error("KIE 영상 결과 URL 없음");
+        return url;
+      }
+      if (data.successFlag === 2 || data.successFlag === 3) {
+        throw new Error("KIE 영상 실패: " + (data.errorMessage || sj.msg || "다시 시도해주세요"));
+      }
+    }
+    throw new Error("KIE 영상 생성 시간 초과");
+  }
+
   async function genVideoKIE(prompt, imageUrl) {
-    const input = { prompt: prompt, aspect_ratio: "16:9" };
-    // 인트로 이미지가 공개 URL(http)이면 image-to-video 입력으로 넣는다. (data URL은 못 넣음 → 텍스트→영상)
-    if (imageUrl && /^https?:\/\//.test(imageUrl)) { input.image_urls = [imageUrl]; input.image_url = imageUrl; }
-    const url = await kieTask(kieVideoModel(), input, 180); // 영상은 오래 걸림(최대 6분)
-    return url; // 영상은 URL 그대로 사용(미리보기/다운로드)
+    return kieVeoTask(prompt, imageUrl);
   }
 
   // ============ Gemini TTS ============
@@ -2362,8 +2472,8 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: geminiVoice() } } }
       }
     };
-    const res = await fetch(GEMINI_BASE + TTS_MODEL + ":generateContent?key=" + encodeURIComponent(key), {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body)
+    const res = await fetch(GEMINI_BASE + TTS_MODEL + ":generateContent", {
+      method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body)
     });
     if (!res.ok) {
       let d = ""; try { d = (await res.json()).error?.message; } catch (e) { d = await res.text(); }
@@ -2378,7 +2488,7 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
     return { dataUrl: "data:audio/wav;base64," + bytesToBase64(wav), durationSec: (wav.length - 44) / 2 / rate };
   }
 
-  // ============ 타입캐스트 TTS ============
+  // ============ Inworld TTS ============
   function measureAudio(dataUrl) {
     return new Promise((res) => {
       const a = new Audio();
@@ -2387,73 +2497,124 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
       a.src = dataUrl;
     });
   }
-  async function genTypecast(text) {
-    const key = typecastKey();
-    if (!key) throw new Error("NO_TYPECAST_KEY");
-    if (!typecastVoice()) throw new Error("NO_TYPECAST_VOICE");
-    const res = await apiFetch(TYPECAST_URL, {
+  // 사이-한글 숫자 변환 (숫자를 영어로 읽는 문제 방지)
+  function sinoKorean(numStr) {
+    let n = parseInt(numStr, 10);
+    if (isNaN(n)) return numStr;
+    if (n === 0) return "영";
+    const d = ["", "일", "이", "삼", "사", "오", "육", "칠", "팔", "구"];
+    const small = ["", "십", "백", "천"], big = ["", "만", "억", "조", "경"];
+    const groups = [];
+    while (n > 0) { groups.push(n % 10000); n = Math.floor(n / 10000); }
+    let s = "";
+    for (let g = groups.length - 1; g >= 0; g--) {
+      let gv = groups[g], gs = "";
+      for (let p = 3; p >= 0; p--) {
+        const digit = Math.floor(gv / Math.pow(10, p)) % 10;
+        if (digit > 0) gs += (digit === 1 && p > 0 ? "" : d[digit]) + small[p];
+      }
+      if (gs) s += gs + big[g];
+    }
+    return s || numStr;
+  }
+  // Inworld에 보내기 전 한국어 정리: 숫자→한글, 영어로 읽힐 기호 제거
+  function koreanizeForTTS(text) {
+    return String(text)
+      .replace(/(\d[\d,]*)/g, (m) => sinoKorean(m.replace(/,/g, "")))
+      .replace(/%/g, "퍼센트").replace(/&/g, "그리고").replace(/\$/g, "달러")
+      .replace(/[#*_`~<>\[\]{}|/\\^=+]/g, " ")
+      .replace(/[A-Za-z]+/g, " ")   // 남은 영문 토큰 제거(영어 발화 방지)
+      .replace(/\s+/g, " ").trim();
+  }
+  async function genInworld(text) {
+    const key = inworldKey();
+    if (!key) throw new Error("NO_INWORLD_KEY");
+    if (!inworldVoice()) throw new Error("NO_INWORLD_VOICE");
+    const isKorean = project.lang !== "ja";
+    let cleanText = String(text || "").replace(/\s+/g, " ").trim();
+    if (isKorean) cleanText = koreanizeForTTS(cleanText); // 숫자·기호를 한글로 → 영어 발화 방지
+    const res = await apiFetch(INWORLD_TTS_URL, {
       method: "POST",
-      headers: { "content-type": "application/json", "authorization": "Bearer " + key },
+      headers: { "content-type": "application/json", "authorization": "Basic " + key },
       body: JSON.stringify({
-        voice_id: typecastVoice(),
-        text: text,
-        model: "ssfm-v30",
-        language: project.lang === "ja" ? "jpn" : "kor",
-        output: { audio_format: "wav" }
+        text: cleanText.slice(0, 2000),
+        voiceId: inworldVoice(),
+        modelId: inworldModel(),
+        audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: 22050 },
+        language: isKorean ? "ko-KR" : "ja-JP",
+        deliveryMode: isKorean ? "STABLE" : "BALANCED",
+        applyTextNormalization: "OFF", // ON이면 숫자·기호를 영어로 읽어버림 → OFF
+        temperature: 0.8
       })
     });
     if (!res.ok) {
       let d = ""; try { d = JSON.stringify(await res.json()); } catch (e) { d = await res.text(); }
-      throw new Error(`Typecast ${res.status}: ${d.slice(0, 120)}`);
+      throw new Error(`Inworld ${res.status}: ${d.slice(0, 120)}`);
     }
-    const ct = res.headers.get("content-type") || "";
-    let dataUrl;
-    if (ct.includes("application/json")) {
-      const j = await res.json();
-      const b64 = j.audio || j.audio_base64 || j.data;
-      const url = j.audio_url || j.url;
-      if (b64) dataUrl = "data:audio/wav;base64," + b64;
-      else if (url) { const r = await fetch(url); dataUrl = await blobToDataURL(await r.blob()); }
-      else throw new Error("Typecast: 오디오를 찾을 수 없음");
-    } else {
-      dataUrl = await blobToDataURL(await res.blob());
-    }
+    const j = await res.json();
+    const b64 = j.audioContent || j.result?.audioContent;
+    if (!b64) throw new Error("Inworld: 오디오를 찾을 수 없음");
+    const dataUrl = "data:audio/wav;base64," + b64;
     const dur = (await measureAudio(dataUrl)) || estDur(text);
     return { dataUrl, durationSec: dur };
   }
 
-  async function loadTypecastVoices() {
-    const key = ($("#prodTypecastKey").value || typecastKey()).trim();
-    if (!key) { toast("타입캐스트 API 키를 먼저 넣어주세요"); return; }
-    const btn = $("#prodTcLoadVoices"); const sel = $("#prodTcVoiceSelect");
-    if (btn) { btn.disabled = true; btn.textContent = "불러오는 중…"; }
+  async function checkInworldVoice() {
+    const out = $("#prodCheckInworldVoiceResult");
+    const key = ($("#prodInworldKey")?.value || inworldKey()).trim().replace(/^Basic\s+/i, "");
+    const voiceId = ($("#prodInworldVoiceKo")?.value || inworldVoice()).trim();
+    if (!key || !voiceId) { if (out) out.textContent = "API 키와 한국어 Voice ID를 먼저 넣어주세요."; return; }
+    if (out) out.textContent = "음성 정보를 확인하는 중…";
     try {
-      let data = null;
-      for (const url of ["https://api.typecast.ai/v1/voices", "https://api.typecast.ai/v2/voices"]) {
-        try {
-          const r = await apiFetch(url, { headers: { "authorization": "Bearer " + key } });
-          if (r.ok) { data = await r.json(); break; }
-        } catch (e) {}
-      }
-      if (!data) throw new Error("목소리 목록을 불러오지 못했어요(CORS/키 확인).");
-      const arr = Array.isArray(data) ? data : (data.voices || data.result || data.data || []);
-      if (!arr.length) throw new Error("목소리가 없습니다.");
-      sel.innerHTML = "";
-      arr.forEach((v) => {
-        const id = v.voice_id || v.id || v.actor_id || v.voiceId;
-        const name = v.name || v.voice_name || v.display_name || v.title || id;
-        const lang = v.language || v.lang || (Array.isArray(v.languages) ? v.languages.join("/") : "");
-        if (!id) return;
-        const o = el("option", null, esc(name) + (lang ? ` (${esc(String(lang))})` : ""));
-        o.value = id; sel.appendChild(o);
+      const res = await apiFetch("https://api.inworld.ai/voices/v1/voices/" + encodeURIComponent(voiceId), {
+        headers: { "authorization": "Basic " + key }
       });
-      const cur = typecastVoice();
-      if (cur) sel.value = cur;
-      toast(arr.length + "개 불러옴 · 아래 '한국어에 넣기/일본어에 넣기'로 지정하세요");
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.message || j.error?.message || `조회 실패 ${res.status}`);
+      const langs = j.promptLanguages || j.languages || [];
+      const korean = j.langCode === "KO_KR" || j.langCode === "AUTO" || langs.some((x) => /^ko(?:-|$)/i.test(x));
+      const gender = ({ female: "여성", male: "남성", neutral: "중성" })[j.gender] || j.gender || "정보 없음";
+      const age = ({ middle_aged: "중년", elderly: "노년", young: "청년" })[j.ageGroup] || j.ageGroup || "정보 없음";
+      if (out) out.innerHTML = `${korean ? "✅" : "⚠️"} <b>${korean ? "한국어 사용 가능" : "한국어 보이스로 등록되지 않음"}</b> · 기본 언어 ${esc(j.langCode || "정보 없음")} · ${esc(gender)} · ${esc(age)}<br>${esc(j.description || "음색 설명 없음")}`;
     } catch (e) {
-      toast("실패: " + String(e.message).slice(0, 60));
-    } finally {
-      if (btn) { btn.disabled = false; btn.textContent = "목소리 불러오기"; }
+      if (out) out.textContent = "확인 실패: " + String(e.message || e).slice(0, 120);
+    }
+  }
+
+  function voiceSupportsKorean(v) {
+    const langs = v.promptLanguages || v.languages || [];
+    return v.langCode === "KO_KR" || v.langCode === "AUTO" || langs.some((x) => /^ko(?:-|_|$)/i.test(x));
+  }
+
+  async function loadInworldVoices() {
+    const out = $("#prodCheckInworldVoiceResult");
+    const select = $("#prodInworldVoiceList");
+    const key = ($("#prodInworldKey")?.value || inworldKey()).trim().replace(/^Basic\s+/i, "");
+    if (!key) { if (out) out.textContent = "Inworld API 키를 먼저 넣어주세요."; return; }
+    if (out) out.textContent = "내 목소리를 불러오는 중…";
+    try {
+      const res = await apiFetch("https://api.inworld.ai/voices/v1/voices", {
+        headers: { "authorization": "Basic " + key }
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.message || j.error?.message || `목록 조회 실패 ${res.status}`);
+      const voices = (j.voices || j.data?.voices || []).slice().sort((a, b) => Number(voiceSupportsKorean(b)) - Number(voiceSupportsKorean(a)));
+      select.innerHTML = "";
+      select.appendChild(new Option(voices.length ? `내 목소리 ${voices.length}개 중 선택` : "등록된 목소리가 없습니다", ""));
+      voices.forEach((v) => {
+        const ko = voiceSupportsKorean(v);
+        const gender = ({ female: "여성", male: "남성", neutral: "중성" })[v.gender] || v.gender || "성별 미등록";
+        const age = ({ middle_aged: "중년", elderly: "노년", young: "청년" })[v.ageGroup] || v.ageGroup || "연령 미등록";
+        const option = new Option(`${ko ? "🇰🇷" : "⚠️"} ${v.displayName || v.voiceId} · ${v.langCode || "언어 미등록"} · ${gender} · ${age}`, v.voiceId);
+        option.dataset.korean = ko ? "1" : "0";
+        option.dataset.description = v.description || "";
+        select.appendChild(option);
+      });
+      const saved = $("#prodInworldVoiceKo")?.value || inworldVoice();
+      if ([...select.options].some((o) => o.value === saved)) select.value = saved;
+      if (out) out.textContent = voices.length ? "목소리를 선택하면 한국어 Voice ID에 자동으로 들어갑니다." : "인월드 계정에 등록된 목소리가 없습니다.";
+    } catch (e) {
+      if (out) out.textContent = "목소리 불러오기 실패: " + String(e.message || e).slice(0, 120);
     }
   }
 
@@ -2555,6 +2716,7 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
 
   // ============ 렌더 ============
   function render() {
+    migrateOldKoreanStyle(project);
     renderStepper();
     const body = $("#prodBody");
     body.innerHTML = "";
@@ -2591,7 +2753,7 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
       // 단계 번호를 눌러서 바로 이동
       st.title = "이 단계로 이동";
       st.style.cursor = busy ? "default" : "pointer";
-      if (!busy) st.onclick = () => { if (i !== stepIdx) { stepIdx = i; render(); } };
+      if (!busy) st.onclick = () => { if (i !== stepIdx) { stepIdx = i; project.lastStep = STEPS[i].key; saveProject(); render(); } };
       w.appendChild(st);
     });
   }
@@ -2600,7 +2762,7 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
     const nav = $("#prodNav"); nav.innerHTML = "";
     const back = el("button", "btn sm", "← 뒤로");
     back.disabled = stepIdx === 0 || busy;
-    back.onclick = () => { if (stepIdx > 0) { stepIdx--; render(); } };
+    back.onclick = () => { if (stepIdx > 0) { stepIdx--; project.lastStep = STEPS[stepIdx].key; saveProject(); render(); } };
     nav.appendChild(back);
     // 오른쪽 버튼은 각 단계 렌더가 필요 시 추가
     const right = el("div", "editor-buttons");
@@ -2630,6 +2792,7 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
     const m = String(e.message);
     if (m.includes("NO_CLAUDE_KEY")) return "⚙ 키 설정에서 <b>Anthropic API 키</b>를 먼저 넣어주세요.";
     if (m.includes("NO_GEMINI_KEY")) return "⚙ 키 설정에서 <b>✍️ 글작성(대본) API</b> 칸에 <b>Google AI 키(AIza…)</b>를 먼저 넣어주세요.";
+    if (m.includes("INVALID_GEMINI_KEY_TYPE")) return "🔑 <b>Google AI API 키 형식이 아닙니다.</b><br><b>AQ… 또는 AIza…</b>로 시작하는 키를 넣어주세요. OAuth 클라이언트 ID와 Google 로그인은 사용하지 않습니다.";
     if (m.includes("NO_KIE_KEY")) return "⚙ 키 설정에서 <b>KIE.ai 키</b>를 먼저 넣어주세요.";
     // Gemini 모델 사용 불가(404/deprecated)
     if (/Gemini\(대본\)\s*404/.test(m) || /no longer available|is not found|not supported|update your code to use a newer model/.test(m)) {
@@ -2652,22 +2815,22 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
     const out = $("#prodTestGeminiResult");
     const key = ($("#prodGeminiKey").value || "").trim();
     const set = (msg, ok) => { if (out) { out.innerHTML = msg; out.style.color = ok ? "var(--good)" : "var(--danger)"; } };
-    if (!key) { set("❌ 키가 비었어요. AIza…로 시작하는 키를 넣으세요.", false); return; }
+    if (!key) { set("❌ 키가 비었어요. AQ… 또는 AIza…로 시작하는 키를 넣으세요.", false); return; }
     if (/apps\.googleusercontent\.com/.test(key) || key.includes(".apps.")) {
-      set("❌ 이건 <b>OAuth 클라이언트 ID</b>예요. 대본용은 <b>AIza…</b> API 키가 필요합니다.", false); return;
+      set("❌ 이건 <b>OAuth 클라이언트 ID</b>예요. 대본용은 <b>AQ… 또는 AIza…</b> API 키가 필요합니다.", false); return;
     }
-    if (!/^AIza/.test(key)) { set("⚠ 보통 <b>AIza</b>로 시작해요. 그래도 테스트해볼게요…", false); }
-    else set("⏳ 테스트 중…", true);
+    if (!isGeminiApiKey(key)) { set("❌ Google AI API 키 형식이 아니에요. AQ… 또는 AIza… 키를 확인하세요.", false); return; }
+    set("⏳ 테스트 중…", true);
     try {
-      const res = await fetch(GEMINI_BASE + geminiTextModel() + ":generateContent?key=" + encodeURIComponent(key), {
-        method: "POST", headers: { "content-type": "application/json" },
+      const res = await fetch(GEMINI_BASE + geminiTextModel() + ":generateContent", {
+        method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key },
         body: JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }], generationConfig: { maxOutputTokens: 5 } })
       });
       if (res.ok) { set("✅ 키 정상! <b>저장</b>을 누른 뒤 대본을 만들 수 있어요.", true); return; }
       let d = ""; try { d = (await res.json()).error?.message || ""; } catch (e) { d = await res.text(); }
       if (res.status === 400 && /API key not valid|API_KEY_INVALID/.test(d)) set("❌ 잘못된 키예요. <a href='https://aistudio.google.com/apikey' target='_blank' rel='noopener'>aistudio.google.com/apikey</a>에서 새로 발급하세요.", false);
       else if (/SERVICE_DISABLED|has not been used|is disabled/.test(d)) set("❌ 이 키 프로젝트에서 <b>Generative Language API</b>가 꺼져 있어요. 콘솔에서 사용 설정 후 다시 시도.", false);
-      else if (res.status === 401 || /OAuth|invalid authentication/.test(d)) set("❌ 키가 인식되지 않아요(OAuth 오류). <b>AIza…</b> API 키가 맞는지 확인하세요(로그인 ID 아님).", false);
+      else if (res.status === 401 || /OAuth|invalid authentication/.test(d)) set("❌ 키가 인식되지 않아요. <b>AQ… 또는 AIza…</b> Google AI API 키인지 확인하세요(로그인 ID 아님).", false);
       else set("❌ 오류 " + res.status + ": " + esc(d.slice(0, 90)), false);
     } catch (e) { set("❌ 네트워크 오류: " + esc(String(e.message).slice(0, 60)), false); }
   }
@@ -2680,7 +2843,9 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
     if (!key) { set("❌ 먼저 Google AI 키를 넣으세요.", false); return; }
     set("⏳ 불러오는 중…", true);
     try {
-      const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=" + encodeURIComponent(key));
+      const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", {
+        headers: { "x-goog-api-key": key }
+      });
       if (!res.ok) {
         let d = ""; try { d = (await res.json()).error?.message || ""; } catch (e) { d = await res.text(); }
         set("❌ 목록 실패: " + esc(d.slice(0, 90)), false); return;
@@ -2779,7 +2944,7 @@ ${trend && trend.length ? "★ 최근 30일 실제로 조회수가 높았던 영
       project.topicIdx = -1;
       busy = false; goStep("topic");
     } catch (e) {
-      busy = false; renderCategory(body); showErr(body, keyMissingMsg(e));
+      busy = false; render(); showErr($("#prodBody"), keyMissingMsg(e));
     } finally { busy = false; }
   }
 
@@ -3015,7 +3180,7 @@ ${items.join("\n\n")}`;
       const n = project.scenes.length;
       const PB = 5; // 한 번에 5장면씩 → 잘림 위험 최소화
       const charBlock = (project.characters || []).filter((c) => c.look).length
-        ? "\n고정 주인공(등장할 때 항상 이 외형 그대로 묘사):\n" + project.characters.filter((c) => c.look).map((c) => `- ${c.name}: ${c.look}`).join("\n") + "\n"
+        ? "\n고정 주인공(등장할 때 항상 이 외형·숫자 나이 그대로 묘사):\n" + project.characters.filter((c) => c.look).map((c) => `- ${c.name}, 정확히 ${characterAge(c)}세: ${c.look}`).join("\n") + "\n"
         : "";
       const sys = "너는 대본을 나노 바나나(이미지 생성)용 영어 프롬프트로 바꾸는 전문가다. 각 장면을 한 컷으로 그릴 수 있게 시각적으로 구체화한다. 반드시 유효한 JSON 배열만 출력.";
       const mkUsr = (scenes) =>
@@ -3025,6 +3190,9 @@ ${items.join("\n\n")}`;
 아래 ${scenes.length}개 장면을 각각 위 화풍으로 그릴 영어 이미지 프롬프트로 만들어줘. 규칙:
 - 각 프롬프트는 완결된 영어 문장 2~4개. 콤마 키워드 나열 금지.
 - 인물은 ${LANG[project.lang].setting} 를 명시하고, 같은 인물은 장면마다 같은 복식·머리로 일관되게.
+- '과부'는 혼인 상태일 뿐 노인을 뜻하지 않는다. 노인 단서가 없으면 30~45세로 그리고 백발·깊은 주름·노파 외모를 금지한다.
+- '대감·고관대작·정승·판서'는 젊다는 단서가 없으면 50~65세의 중후하고 권위 있는 남성으로 그리고 청년·소년 얼굴을 금지한다.
+- 모든 인물의 숫자 나이와 얼굴 연령을 일치시키고, 신분이나 호칭만으로 임의로 젊거나 늙게 바꾸지 않는다.
 - 장면마다 샷을 다르게. '정면에서 두 손 모은' 반복 금지.
 - 배경은 실제 로케이션. 회색 스튜디오 배경 금지.
 - 각 프롬프트 끝에 반드시: "no text, no letters, no words, no modern objects. ${project.style}"
@@ -3056,14 +3224,25 @@ ${scenes.join("\n")}`;
 
   function renderPrompt(body) {
     body.appendChild(el("h2", "prod-h", "이미지 프롬프트"));
-    body.appendChild(el("p", "prod-sub", `그림체를 고르면 모든 장면에 적용돼요. ${project.lang === "ja" ? "일본 민담용 애니 셀화풍" : "한국 야담용 반실사 웹툰풍"} 중에서 선택하세요.`));
+    body.appendChild(el("p", "prod-sub", project.lang === "ja" ? "일본 민담용 애니 셀화풍을 선택하세요." : "미리보기 이미지를 보고 한국 시대극 그림체를 선택하세요. 추천 기본값은 강렬한 웹툰입니다."));
 
     body.appendChild(el("div", "field-label", "그림체 고르기"));
     const grid = el("div", "style-list");
     stylePresetsFor(project.lang).forEach((preset) => {
       const chip = el("button", "style-chip" + (project.style === preset.tail ? " sel" : ""));
-      chip.innerHTML = `<b>${esc(preset.name)}</b><span>${esc(preset.desc)}</span>`;
-      chip.onclick = () => { project.style = preset.tail; saveDebounced(); render(); };
+      chip.type = "button";
+      if (preset.preview) {
+        const preview = el("div", "style-preview"); preview.style.backgroundImage = `url("${preset.preview}")`;
+        chip.appendChild(preview);
+      }
+      chip.insertAdjacentHTML("beforeend", `<b>${esc(preset.name)}</b><span>${esc(preset.desc)}</span>`);
+      chip.onclick = (event) => {
+        event.preventDefault();
+        project.style = preset.tail;
+        saveProject();
+        render();
+        toast(`그림체 선택: ${preset.name}`);
+      };
       grid.appendChild(chip);
     });
     body.appendChild(grid);
@@ -3155,6 +3334,11 @@ ${scenes.join("\n")}`;
     nameIn.style.marginBottom = "6px";
     nameIn.oninput = () => { c.name = nameIn.value; saveDebounced(); };
     right.appendChild(nameIn);
+    const ageIn = el("input"); ageIn.type = "number"; ageIn.min = "1"; ageIn.max = "100"; ageIn.value = String(characterAge(c)); ageIn.placeholder = "나이 (숫자)";
+    ageIn.style.marginBottom = "6px";
+    ageIn.oninput = () => { c.age = Math.max(1, Math.min(100, parseInt(ageIn.value, 10) || characterAge(c))); saveDebounced(); };
+    right.appendChild(el("div", "field-label", "나이 (숫자로 직접 수정)"));
+    right.appendChild(ageIn);
     const ta = el("textarea"); ta.value = c.look || ""; ta.style.minHeight = "60px"; ta.placeholder = "고정 외형(영어)";
     ta.oninput = () => { c.look = ta.value; saveDebounced(); };
     right.appendChild(ta);
@@ -3192,11 +3376,16 @@ ${scenes.join("\n")}`;
 
 이 이야기에 반복 등장하는 핵심 주인공 1~4명을 뽑아줘.
 - name: 한국어 이름/호칭(예: 젊은 선비, 주모, 최 대감)
-- look: 장면마다 똑같이 유지할 고정 외형을 '영어'로 자세히 — 성별, 나이대, 얼굴 특징, 머리 모양/색, 상의·하의·외투와 색, 소품. ${LANG[project.lang].setting} 반영. 완결 영어 문장 1~2개.
-JSON 배열만: [{"name":"..","look":".."}]`;
+- age: 대본 단서를 근거로 확정한 숫자 나이
+- look: 장면마다 똑같이 유지할 고정 외형을 '영어'로 자세히 — 성별, 정확한 숫자 나이, 얼굴 특징, 머리 모양/색, 상의·하의·외투와 색, 소품. ${LANG[project.lang].setting} 반영. 완결 영어 문장 1~2개.
+나이 규칙:
+- '과부'는 혼인 상태이지 노인이 아니다. 다른 단서가 없으면 30~45세이며 백발·깊은 주름·노파 외모를 금지한다.
+- '대감·고관대작·정승·판서'는 젊다는 단서가 없으면 50~65세의 중후하고 권위 있는 남성이다. 청년 얼굴을 금지한다.
+- '노파·노인·할머니·할아버지'가 명시된 경우에만 65세 이상으로 정한다.
+JSON 배열만: [{"name":"..","age":38,"look":".."}]`;
       const arr = await claudeJSON(sys, usr, 2000);
       project.characters = (Array.isArray(arr) ? arr : []).slice(0, 4)
-        .map((c) => ({ name: c.name || "", look: c.look || "", imageDataUrl: "", imageUrl: "" }));
+        .map((c) => ({ name: c.name || "", age: Math.max(1, Math.min(100, parseInt(c.age, 10) || characterAge(c))), look: c.look || "", imageDataUrl: "", imageUrl: "" }));
       saveProject();
       busy = false; render();
     } catch (e) {
@@ -3251,9 +3440,23 @@ JSON 배열만: [{"name":"..","look":".."}]`;
       dl.onclick = () => downloadOneImage(i);
       acts.appendChild(dl);
     }
+    if (s.isIntro) {
+      const videoBtn = el("button", "btn sm btn-primary", s.videoUrl ? "🎞 인트로 영상 다시 만들기" : "🎞 이 이미지로 영상 만들기");
+      videoBtn.disabled = !s.imageDataUrl;
+      videoBtn.onclick = () => genIntroVideoKIE(i, videoBtn);
+      acts.appendChild(videoBtn);
+    }
     right.appendChild(acts);
     row.appendChild(right);
     c.appendChild(row);
+    if (s.isIntro && s.videoUrl) {
+      const videoBox = el("div", "grok-box");
+      videoBox.appendChild(el("div", "field-label", "🎞 완성된 인트로 영상"));
+      const video = el("video"); video.src = s.videoUrl; video.controls = true; video.style.width = "100%"; video.style.borderRadius = "10px";
+      videoBox.appendChild(video);
+      const open = el("button", "btn sm", "영상 열기·다운로드"); open.onclick = () => window.open(s.videoUrl, "_blank");
+      videoBox.appendChild(open); c.appendChild(videoBox);
+    }
     return c;
   }
 
@@ -3261,6 +3464,7 @@ JSON 배열만: [{"name":"..","look":".."}]`;
     const reader = new FileReader();
     reader.onload = () => {
       project.scenes[i].imageDataUrl = reader.result;
+      project.scenes[i].imageUrl = "";
       saveProject();
       const box = $("#img-" + i);
       if (box) { box.innerHTML = ""; const im = el("img"); im.src = reader.result; box.appendChild(im); }
@@ -3298,13 +3502,14 @@ JSON 배열만: [{"name":"..","look":".."}]`;
     const box = $("#img-" + i);
     if (box) { box.innerHTML = ""; box.appendChild(el("div", "spinner")); }
     try {
-      s.imageDataUrl = await genImage(s.imagePrompt || s.text);
+      s.imageDataUrl = await genImage(s.imagePrompt || s.text, (url) => { s.imageUrl = url; });
       saveProject();
       if (box) { box.innerHTML = ""; const im = el("img"); im.src = s.imageDataUrl; box.appendChild(im); }
       return { ok: true };
     } catch (e) {
-      if (box) { box.innerHTML = ""; box.textContent = "실패"; }
-      toast("이미지 실패: " + kieErrMsg(e));
+      const reason = kieErrMsg(e);
+      if (box) { box.innerHTML = ""; box.textContent = "실패: " + reason; box.title = String(e.message || e); }
+      toast("이미지 실패: " + reason);
       return { ok: false, credit: String(e.message).includes("KIE_NO_CREDIT") };
     }
   }
@@ -3312,6 +3517,7 @@ JSON 배열만: [{"name":"..","look":".."}]`;
   function kieErrMsg(e) {
     const m = String(e.message);
     if (m.includes("KIE_NO_CREDIT")) return "KIE 433: 이 API 키로 '포인트 부족' 응답. 크레딧이 있어도 뜨면 → ① kie.ai/logs 에서 실제 사유 확인 ② API 키에 사용한도 걸렸는지 확인 ③ 해상도 1K로 낮춰보기";
+    if (/sensitive|flagged|moderation|safety/i.test(m)) return "안전 필터 재시도 후에도 거절됨 — 프롬프트의 죽음·폭력 표현을 더 부드럽게 바꿔주세요";
     if (/NO_(GEMINI|KIE)_KEY/.test(m)) return "이미지 API 키 필요";
     if (/Failed to fetch/.test(m)) return "CORS/네트워크 — 웹주소에선 KIE가 막힐 수 있어요(로컬 .bat 실행)";
     return m.slice(0, 70);
@@ -3336,7 +3542,7 @@ JSON 배열만: [{"name":"..","look":".."}]`;
   // ---- 5.5 썸네일 ----
   function renderThumb(body) {
     body.appendChild(el("h2", "prod-h", "썸네일"));
-    body.appendChild(el("p", "prod-sub", "클릭을 부르는 <b>썸네일 카피 4종</b>을 만들고, 고른 카피에 맞춰 <b>썸네일 이미지</b>(글자 들어갈 자리 비움)를 생성합니다. 글자는 캡컷/편집기에서 얹으세요."));
+    body.appendChild(el("p", "prod-sub", "참고 이미지처럼 <b>2D 민담 이미지 + 큰 다색 글자</b>가 합쳐진 완성 썸네일 4종을 만들고, 마음에 드는 하나를 클릭해 선택합니다."));
 
     const t = project.thumb || (project.thumb = { copies: [], chosen: -1, imagePrompt: "", imageDataUrl: "" });
 
@@ -3349,16 +3555,25 @@ JSON 배열만: [{"name":"..","look":".."}]`;
       const list = el("div", "topic-list");
       t.copies.forEach((c, i) => {
         const card = el("div", "topic-card" + (t.chosen === i ? " sel" : ""));
+        if (c.finalDataUrl) {
+          const preview = el("img"); preview.src = c.finalDataUrl; preview.alt = `썸네일 후보 ${i + 1}`;
+          preview.style.width = "100%"; preview.style.maxWidth = "520px"; preview.style.borderRadius = "10px"; preview.style.marginBottom = "10px";
+          card.appendChild(preview);
+        }
         card.appendChild(el("div", "topic-rank", c.pos || (i < 2 ? "좌측 4줄" : "하단 2줄")));
         const lines = el("div", "topic-title");
         lines.style.whiteSpace = "pre-line"; lines.style.fontSize = "18px";
         lines.textContent = (c.lines || []).join("\n");
         card.appendChild(lines);
         if (c.imageKo) card.appendChild(el("div", "topic-hook", "🖼 " + esc(c.imageKo)));
-        card.onclick = () => { t.chosen = i; saveDebounced(); render(); };
+        card.onclick = () => { t.chosen = i; t.imageDataUrl = c.imageDataUrl || ""; t.finalDataUrl = c.finalDataUrl || ""; saveDebounced(); render(); };
         list.appendChild(card);
       });
       body.appendChild(list);
+
+      const makeFour = el("button", "btn btn-primary", t.copies.every((c) => c.finalDataUrl) ? "↻ 이미지+글자 4개 다시 생성" : `✨ 이미지+글자 4개 생성 (약 ${(imgCostWon() * 4).toLocaleString("ko")}원)`);
+      makeFour.onclick = () => genFourThumbCandidates(makeFour);
+      body.appendChild(makeFour);
 
       if (t.chosen >= 0) {
         const box = el("div", "scene");
@@ -3437,7 +3652,7 @@ JSON 배열만: [{"name":"..","look":".."}]`;
 - 결말·정체·범인을 알 수 없게. 단서는 1~2개만. 뻔한 완료형 '~했다' 금지.
 - 4개의 사건 골격이 서로 달라야 함.
 - imageKo: 감정이 터지는 순간 한 컷(설명적 전신 금지, 얼굴/시선/동작 정점). 밤이어도 얼굴 보이게.
-- imageEn: 위 장면의 영어 이미지 프롬프트(완결 문장 2~3개). ${LANG[project.lang].setting}. 카피 자리(좌측4줄→왼쪽, 하단2줄→아래)를 비운다. 얼굴 잘 보이게, 어둠으로 덮지 않기. 글자/자막/말풍선 절대 없음.
+- imageEn: 위 장면의 영어 이미지 프롬프트(완결 문장 2~3개). ${LANG[project.lang].setting}. 현재 선택한 화풍을 정확히 적용한다: ${project.style}. 카피 자리(좌측4줄→왼쪽, 하단2줄→아래)를 비운다. 얼굴 잘 보이게, 어둠으로 덮지 않기. 글자/자막/말풍선 절대 없음.
 JSON만:
 {"copies":[
  {"pos":"좌측 4줄","lines":["..","..","..",".."],"imageKo":"..","imageEn":".."},
@@ -3466,10 +3681,54 @@ JSON만:
         " . emotional climax moment, face clearly visible, warm readable lighting, leave empty space for title text. no text, no letters, no captions, no speech bubbles. " + project.style;
       t.imagePrompt = prompt;
       t.imageDataUrl = await genImage(prompt);
+      c.imageDataUrl = t.imageDataUrl;
       saveProject(); render();
     } catch (e) {
       if (box) { box.innerHTML = ""; box.textContent = "실패"; }
       toast("썸네일 실패: " + (/NO_(GEMINI|KIE)_KEY/.test(String(e.message)) ? "이미지 API 키 필요" : String(e.message).slice(0, 60)));
+    }
+  }
+
+  async function composeThumbCandidate(c, imageDataUrl) {
+    const lines = (c.lines || []).filter((x) => x && x.trim());
+    const leftMode = /좌측/.test(c.pos || "") || lines.length >= 3;
+    const img = await loadImg(imageDataUrl);
+    try { await document.fonts.load("900 100px 'Nanum Myeongjo'"); await document.fonts.ready; } catch (e) {}
+    const W = 1280, H = 720;
+    const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    const ctx = cv.getContext("2d"); drawCover(ctx, img, W, H);
+    ctx.textBaseline = "alphabetic"; ctx.lineJoin = "round";
+    if (leftMode) {
+      const fs = Math.round(H * 0.135); ctx.font = `900 ${fs}px 'Nanum Myeongjo', 'Malgun Gothic', sans-serif`; ctx.textAlign = "left";
+      const lh = fs * 1.12, x = Math.round(W * 0.04); let y = Math.round((H - lh * lines.length) / 2) + fs;
+      lines.forEach((line) => { drawTextOutlined(ctx, line, x, y, fs); y += lh; });
+    } else {
+      const fs = Math.round(H * 0.11); ctx.font = `900 ${fs}px 'Nanum Myeongjo', 'Malgun Gothic', sans-serif`; ctx.textAlign = "center";
+      const lh = fs * 1.15; let y = H - Math.round(H * 0.06) - lh * (lines.length - 1);
+      lines.forEach((line) => { drawTextOutlined(ctx, line, W / 2, y, fs); y += lh; });
+    }
+    return cv.toDataURL("image/png");
+  }
+
+  async function genFourThumbCandidates(btn) {
+    const t = project.thumb;
+    if (!imgKeyOk()) { toast("⚙ 이미지 생성 API 키를 먼저 넣어주세요"); openKeys(); return; }
+    if (!confirm(`썸네일 후보 이미지 4장을 만들고 글자를 합성합니다. 약 ${(imgCostWon() * 4).toLocaleString("ko")}원입니다. 진행할까요?`)) return;
+    btn.disabled = true;
+    let made = 0;
+    try {
+      for (let i = 0; i < Math.min(4, t.copies.length); i++) {
+        const c = t.copies[i]; btn.textContent = `썸네일 만드는 중… (${i + 1}/4)`;
+        const prompt = (c.imageEn || c.imageKo || project.title) +
+          " . Use the exact currently selected illustration style for character design, linework, shading, palette and background: " + project.style + ". Strong emotional thumbnail composition with a clearly readable face. Keep the requested text area visually uncluttered. no text, no letters, no captions, no speech bubbles.";
+        c.imageDataUrl = await genImage(prompt);
+        c.finalDataUrl = await composeThumbCandidate(c, c.imageDataUrl);
+        made++; saveProject();
+      }
+      t.chosen = 0; t.imageDataUrl = t.copies[0]?.imageDataUrl || ""; t.finalDataUrl = t.copies[0]?.finalDataUrl || "";
+      saveProject(); render(); toast("완성 썸네일 4개를 만들었습니다");
+    } catch (e) {
+      saveProject(); render(); toast(`썸네일 ${made}개 생성 후 중단: ${kieErrMsg(e)}`);
     }
   }
 
@@ -3530,7 +3789,9 @@ JSON만:
     ctx.lineWidth = Math.max(6, fs * 0.16); ctx.strokeStyle = "#000";
     ctx.strokeText(text, x, y);
     ctx.shadowColor = "transparent";
-    ctx.fillStyle = "#fff2b0"; // 노란빛 흰색 — 야담 썸네일 감성
+    const colors = ["#b9ff48", "#ff674d", "#55e5ff", "#ffd84d"];
+    let colorIndex = 0; for (let i = 0; i < text.length; i++) colorIndex = (colorIndex + text.charCodeAt(i)) % colors.length;
+    ctx.fillStyle = colors[colorIndex]; // 참고 썸네일처럼 줄마다 초록·빨강·하늘·노랑
     ctx.fillText(text, x, y);
     ctx.restore();
   }
@@ -3538,15 +3799,15 @@ JSON만:
   // ---- 6. 음성·자막 ----
   function renderVoice(body) {
     body.appendChild(el("h2", "prod-h", "음성 · 자막"));
-    const hasTC = !!typecastKey() && !!typecastVoice();
-    body.appendChild(el("p", "prod-sub", hasTC
-      ? "<b>타입캐스트 API</b>로 장면별 음성을 자동 생성합니다. (파일 업로드·Gemini 음성도 가능) 음성 길이에 맞춰 자막(SRT)이 자동 싱크됩니다."
-      : "타입캐스트 <b>API 키/voice_id</b>를 ⚙에 넣으면 버튼 한 번으로 자동 생성돼요. 없으면 타입캐스트 앱에서 만든 음성을 <b>올리기</b>로 넣으세요. (Gemini 음성도 가능)"));
+    const hasInworld = !!inworldKey() && !!inworldVoice();
+    body.appendChild(el("p", "prod-sub", hasInworld
+      ? "<b>인월드 TTS</b>로 장면별 감정을 자동 반영해 음성을 생성합니다. 음성 길이에 맞춰 자막(SRT)이 자동으로 동기화됩니다."
+      : "⚙ API 키에서 <b>Inworld API 키와 Voice ID</b>를 저장하면 장면별 음성을 자동 생성합니다."));
 
-    if (!hasTC) {
+    if (!hasInworld) {
       const kb = el("div", "keybar"); kb.style.marginBottom = "16px";
-      kb.innerHTML = "🗣 타입캐스트 API로 자동 생성하려면 키가 필요해요.";
-      const b = el("button", "btn sm btn-primary", "타입캐스트 키 입력"); b.onclick = openKeys;
+      kb.innerHTML = "🗣 인월드 음성 생성을 위한 API 키가 필요해요.";
+      const b = el("button", "btn sm btn-primary", "인월드 키 입력"); b.onclick = openKeys;
       kb.appendChild(b); body.appendChild(kb);
     }
 
@@ -3560,19 +3821,15 @@ JSON만:
       c.appendChild(el("div", null, esc(s.text)));
       const acts = el("div", "scene-actions");
 
-      const tc = el("button", "btn sm btn-primary", "🗣 타입캐스트 음성");
-      tc.onclick = () => genOneTypecast(i, tc);
-      acts.appendChild(tc);
+      const iw = el("button", "btn sm btn-primary", "🗣 인월드 음성");
+      iw.onclick = () => genOneInworld(i, iw);
+      acts.appendChild(iw);
 
       const up = el("label", "btn sm", "🎙 음성 올리기");
       const file = el("input"); file.type = "file"; file.accept = "audio/*"; file.style.display = "none";
       file.onchange = () => { if (file.files[0]) loadAudioFile(i, file.files[0]); };
       up.appendChild(file);
       acts.appendChild(up);
-
-      const gen = el("button", "btn sm btn-ghost", "Gemini 음성");
-      gen.onclick = () => genOneVoice(i, gen);
-      acts.appendChild(gen);
 
       if (s.audioDataUrl) {
         const au = el("audio"); au.controls = true; au.src = s.audioDataUrl; au.style.height = "34px"; au.style.maxWidth = "220px";
@@ -3582,32 +3839,31 @@ JSON만:
       pkg.appendChild(c);
     });
     body.appendChild(pkg);
-    navBtn("전체 타입캐스트 음성 생성", genAllTypecast);
-    navBtn("전체 Gemini 음성 생성", genAllVoices);
+    navBtn("전체 인월드 음성 생성", genAllInworld);
     navBtn("편집·미리보기 →", () => { goStep("edit"); }, true);
   }
 
-  async function genOneTypecast(i, btn) {
+  async function genOneInworld(i, btn) {
     const s = project.scenes[i];
-    if (!typecastKey() || !typecastVoice()) { toast("⚙에 타입캐스트 키/voice_id를 넣어주세요"); openKeys(); return; }
+    if (!inworldKey() || !inworldVoice()) { toast("⚙에 인월드 API 키와 Voice ID를 넣어주세요"); openKeys(); return; }
     if (btn) { btn.disabled = true; btn.textContent = "생성 중…"; }
     try {
-      const r = await genTypecast(s.text);
+      const r = await genInworld(s.text);
       s.audioDataUrl = r.dataUrl; s.durationSec = r.durationSec;
       saveProject(); render();
     } catch (e) {
       const m = String(e.message);
-      toast("타입캐스트 실패: " + (/NO_TYPECAST_VOICE/.test(m) ? "voice_id 필요" : /NO_TYPECAST_KEY/.test(m) ? "API 키 필요" : /Failed to fetch/.test(m) ? "CORS/네트워크(웹은 막힐 수 있음 → 업로드 사용)" : m.slice(0, 70)));
-      if (btn) { btn.disabled = false; btn.textContent = "🗣 타입캐스트 음성"; }
+      toast("인월드 실패: " + (/NO_INWORLD_VOICE/.test(m) ? "Voice ID 필요" : /NO_INWORLD_KEY/.test(m) ? "API 키 필요" : m.slice(0, 70)));
+      if (btn) { btn.disabled = false; btn.textContent = "🗣 인월드 음성"; }
     }
   }
-  async function genAllTypecast() {
-    if (!typecastKey() || !typecastVoice()) { toast("⚙에 타입캐스트 키/voice_id를 넣어주세요"); openKeys(); return; }
+  async function genAllInworld() {
+    if (!inworldKey() || !inworldVoice()) { toast("⚙에 인월드 API 키와 Voice ID를 넣어주세요"); openKeys(); return; }
     for (let i = 0; i < project.scenes.length; i++) {
-      try { const r = await genTypecast(project.scenes[i].text); project.scenes[i].audioDataUrl = r.dataUrl; project.scenes[i].durationSec = r.durationSec; }
+      try { const r = await genInworld(project.scenes[i].text); project.scenes[i].audioDataUrl = r.dataUrl; project.scenes[i].durationSec = r.durationSec; }
       catch (e) { toast("일부 실패: " + String(e.message).slice(0, 50)); break; }
     }
-    saveProject(); render(); toast("타입캐스트 음성 생성 완료");
+    saveProject(); render(); toast("인월드 음성 생성 완료");
   }
 
   function loadAudioFile(i, fileObj) {
@@ -3807,8 +4063,15 @@ JSON만: {"image":"...","video":"..."}`;
       if (!s.grokVideo) { try { await genGrokIntroSilently(i); } catch (e) {} }
       const prompt = s.grokVideo || s.text || project.title;
       // 이미지가 공개 URL이면 이미지→영상, data URL(업로드/base64)이면 텍스트→영상
-      const imgUrl = (s.imageDataUrl && /^https?:\/\//.test(s.imageDataUrl)) ? s.imageDataUrl : null;
-      if (s.imageDataUrl && !imgUrl) toast("인트로 이미지가 파일이라 텍스트→영상으로 만듭니다");
+      if (!s.imageDataUrl) throw new Error("먼저 인트로 이미지를 생성하거나 올려주세요");
+      let imgUrl = s.imageUrl || (/^https?:\/\//.test(s.imageDataUrl) ? s.imageDataUrl : "");
+      if (!imgUrl) {
+        if (btn) btn.textContent = "이미지 업로드 중…";
+        imgUrl = await uploadImageToKIE(s.imageDataUrl, `intro-scene-${i + 1}-${Date.now()}.png`);
+        s.imageUrl = imgUrl;
+        saveProject();
+      }
+      if (btn) btn.textContent = "영상 생성 중… (수분)";
       s.videoUrl = await genVideoKIE(prompt, imgUrl);
       saveProject(); render();
       toast("인트로 영상 생성 완료 🎞");
@@ -4027,20 +4290,30 @@ JSON만: {"video":"..."}`;
 
   let _projCache = null;   // 메모리 캐시 (IDB에서 로드)
   let _projLoaded = false; // IDB 최초 로드 완료 여부
+  let _pendingProjectSave = false;
 
   function loadProjects() {
     if (_projCache === null) { try { _projCache = JSON.parse(localStorage.getItem(LS.projects)) || []; } catch (e) { _projCache = []; } }
     return _projCache;
   }
   function persistProjects() {
-    idbSet("projects", _projCache).catch(() => {});
+    // 현재 목록을 덮기 전에 직전 전체 목록을 복구용으로 한 번 더 보관한다.
+    idbGet("projects").then((old) => {
+      if (Array.isArray(old) && old.length) return idbSet("projects_backup", old);
+    }).then(() => idbSet("projects", _projCache)).catch(() => {});
     // 가벼운 백업(이미지 제외)도 localStorage에 — IDB 못 쓰는 환경 대비
     try {
-      const light = _projCache.map((p) => ({ ...p, scenes: (p.scenes || []).map((s) => ({ ...s, imageDataUrl: "", audioDataUrl: "" })), characters: (p.characters || []).map((c) => ({ ...c, imageDataUrl: "" })), thumb: p.thumb ? { ...p.thumb, imageDataUrl: "", finalDataUrl: "" } : p.thumb }));
+      const light = _projCache.map((p) => ({ ...p, scenes: (p.scenes || []).map((s) => ({ ...s, imageDataUrl: "", audioDataUrl: "" })), characters: (p.characters || []).map((c) => ({ ...c, imageDataUrl: "" })), thumb: p.thumb ? { ...p.thumb, imageDataUrl: "", finalDataUrl: "", copies: (p.thumb.copies || []).map((c) => ({ ...c, imageDataUrl: "", finalDataUrl: "" })) } : p.thumb }));
+      const previous = localStorage.getItem(LS.projects);
+      if (previous) localStorage.setItem("yeti_projects_backup", previous);
       localStorage.setItem(LS.projects, JSON.stringify(light));
     } catch (e) {}
   }
   function saveProject() {
+    project.lastStep = STEPS[stepIdx]?.key || project.lastStep || "category";
+    project.updatedAt = Date.now();
+    // IndexedDB가 아직 로딩 중일 때 빈 캐시로 기존 프로젝트를 덮지 않는다.
+    if (!_projLoaded) { _pendingProjectSave = true; return; }
     const all = loadProjects();
     const idx = all.findIndex((p) => p.id === project.id);
     const meta = { ...project };
@@ -4050,15 +4323,31 @@ JSON만: {"video":"..."}`;
   // 최초 IDB 로드 — 이미지 포함 전체 프로젝트 복원
   function initProjectStore() {
     idbGet("projects").then(async (list) => {
+      let local = [];
+      try { local = JSON.parse(localStorage.getItem(LS.projects)) || []; } catch (e) {}
       if (list === undefined) {
         // 최초 실행: 기존 localStorage 데이터를 IDB로 이관
         const ls = loadProjects();
         if (ls.length) { _projCache = ls; await idbSet("projects", ls).catch(() => {}); }
         else _projCache = [];
       } else {
-        _projCache = Array.isArray(list) ? list : [];
+        const merged = new Map();
+        [...(Array.isArray(list) ? list : []), ...(Array.isArray(local) ? local : [])].forEach((p) => {
+          if (!p?.id) return;
+          const old = merged.get(p.id);
+          if (!old || (p.updatedAt || 0) > (old.updatedAt || 0)) merged.set(p.id, p);
+        });
+        _projCache = [...merged.values()].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      }
+      if (!_projCache.length) {
+        let backup = await idbGet("projects_backup").catch(() => []);
+        if (!Array.isArray(backup) || !backup.length) {
+          try { backup = JSON.parse(localStorage.getItem("yeti_projects_backup")) || []; } catch (e) { backup = []; }
+        }
+        if (Array.isArray(backup) && backup.length) _projCache = backup;
       }
       _projLoaded = true;
+      if (_pendingProjectSave) { _pendingProjectSave = false; saveProject(); }
       if ($("#prodProjPanel") && !$("#prodProjPanel").hidden) renderProjList();
     }).catch(() => { _projLoaded = true; loadProjects(); });
   }
@@ -4071,9 +4360,15 @@ JSON만: {"video":"..."}`;
     all.forEach((p) => {
       const it = el("div", "proj-item");
       const t = el("div", "pi-title", esc(p.title || p.topics?.[p.topicIdx]?.title || p.category || "제목 미정"));
-      t.onclick = () => { project = p; if (!project.characters) project.characters = []; stepIdx = p.scenes?.length ? 2 : 1; $("#prodProjPanel").hidden = true; render(); };
+      t.onclick = () => {
+        project = migrateOldKoreanStyle(p); if (!project.characters) project.characters = [];
+        const savedStep = stepOf(project.lastStep || "");
+        stepIdx = savedStep >= 0 ? savedStep : (p.scenes?.length ? stepOf("script") : p.topics?.length ? stepOf("topic") : 0);
+        $("#prodProjPanel").hidden = true; saveProject(); render(); toast(`${STEPS[stepIdx].name} 단계부터 이어서 작업합니다`);
+      };
       it.appendChild(t);
-      it.appendChild(el("div", "pi-meta", new Date(p.createdAt).toLocaleDateString("ko")));
+      const savedStep = stepOf(p.lastStep || "");
+      it.appendChild(el("div", "pi-meta", `이어하기 · ${savedStep >= 0 ? STEPS[savedStep].name : "대본·정보"} · ${new Date(p.updatedAt || p.createdAt).toLocaleString("ko")}`));
       const del = el("button", null, "삭제");
       del.onclick = () => { _projCache = loadProjects().filter((x) => x.id !== p.id); persistProjects(); renderProjList(); };
       it.appendChild(del);
@@ -4096,11 +4391,10 @@ JSON만: {"video":"..."}`;
       if ($("#prodKieModel")) $("#prodKieModel").value = kieModel();
       if ($("#prodKieRes")) $("#prodKieRes").value = kieRes();
       if ($("#prodKieVideoModel")) $("#prodKieVideoModel").value = kieVideoModel();
-      $("#prodTypecastKey").value = typecastKey();
-      $("#prodTypecastVoiceKo").value = localStorage.getItem(LS.typecastVoiceKo) || localStorage.getItem(LS.typecastVoice) || "";
-      $("#prodTypecastVoiceJa").value = localStorage.getItem(LS.typecastVoiceJa) || "";
-      $("#prodGeminiVoiceKo").value = localStorage.getItem(LS.geminiVoiceKo) || localStorage.getItem(LS.geminiVoice) || "Kore";
-      $("#prodGeminiVoiceJa").value = localStorage.getItem(LS.geminiVoiceJa) || localStorage.getItem(LS.geminiVoice) || "Kore";
+      if ($("#prodInworldKey")) $("#prodInworldKey").value = inworldKey();
+      if ($("#prodInworldVoiceKo")) $("#prodInworldVoiceKo").value = localStorage.getItem(LS.inworldVoiceKo) || "default-bbhejrkjoavwpl_ixpg3lw__design-voice-fc2ebf9a";
+      if ($("#prodInworldVoiceJa")) $("#prodInworldVoiceJa").value = localStorage.getItem(LS.inworldVoiceJa) || "";
+      if ($("#prodInworldModel")) $("#prodInworldModel").value = inworldModel();
     }
   }
 
@@ -4117,6 +4411,17 @@ JSON만: {"video":"..."}`;
     });
 
     $("#prodSettings").onclick = openKeys;
+    if ($("#prodCheckInworldVoice")) $("#prodCheckInworldVoice").onclick = checkInworldVoice;
+    if ($("#prodLoadInworldVoices")) $("#prodLoadInworldVoices").onclick = loadInworldVoices;
+    if ($("#prodInworldVoiceList")) $("#prodInworldVoiceList").onchange = function () {
+      if (!this.value) return;
+      $("#prodInworldVoiceKo").value = this.value;
+      const option = this.selectedOptions[0];
+      const out = $("#prodCheckInworldVoiceResult");
+      if (out) out.textContent = option.dataset.korean === "1"
+        ? "✅ 한국어 지원 목소리입니다. 아래 저장을 누르세요. " + (option.dataset.description || "")
+        : "⚠️ 이 목소리는 한국어로 등록되지 않아 외국인 억양이나 이상한 발음이 날 수 있습니다.";
+    };
     $("#prodProjects").onclick = () => { $("#prodKeyPanel").hidden = true; const p = $("#prodProjPanel"); p.hidden = !p.hidden; if (!p.hidden) renderProjList(); };
     const textSel = $("#prodTextProvider");
     if (textSel) textSel.onchange = () => {
@@ -4129,6 +4434,16 @@ JSON만: {"video":"..."}`;
     if ($("#prodLoadGeminiModels")) $("#prodLoadGeminiModels").onclick = loadGeminiModels;
 
     $("#prodSaveKeys").onclick = () => {
+      const enteredGeminiKey = $("#prodGeminiKey") ? $("#prodGeminiKey").value.trim() : "";
+      if ((textSel ? textSel.value : textProvider()) === "gemini" && !isGeminiApiKey(enteredGeminiKey)) {
+        const out = $("#prodTestGeminiResult");
+        if (out) {
+          out.innerHTML = "❌ <b>AQ… 또는 AIza…</b>로 시작하는 Google AI API 키를 넣어주세요.";
+          out.style.color = "var(--danger)";
+        }
+        toast("Google AI API 키 형식을 확인하세요");
+        return;
+      }
       if ($("#prodChannelName")) localStorage.setItem(LS.channelName, $("#prodChannelName").value.trim() || "설루온");
       if (textSel) localStorage.setItem(LS.textProvider, textSel.value);
       localStorage.setItem(LS.claude, $("#prodClaudeKey").value.trim());
@@ -4139,30 +4454,26 @@ JSON만: {"video":"..."}`;
       if ($("#prodKieKey")) localStorage.setItem(LS.kie, $("#prodKieKey").value.trim());
       if ($("#prodKieModel")) localStorage.setItem(LS.kieModel, $("#prodKieModel").value.trim() || "nano-banana-2");
       if ($("#prodKieRes")) localStorage.setItem(LS.kieRes, $("#prodKieRes").value);
-      if ($("#prodKieVideoModel")) localStorage.setItem(LS.kieVideoModel, $("#prodKieVideoModel").value.trim() || "veo3-fast");
-      localStorage.setItem(LS.typecast, $("#prodTypecastKey").value.trim());
-      localStorage.setItem(LS.typecastVoiceKo, $("#prodTypecastVoiceKo").value.trim());
-      localStorage.setItem(LS.typecastVoiceJa, $("#prodTypecastVoiceJa").value.trim());
-      localStorage.setItem(LS.geminiVoiceKo, $("#prodGeminiVoiceKo").value);
-      localStorage.setItem(LS.geminiVoiceJa, $("#prodGeminiVoiceJa").value);
+      if ($("#prodKieVideoModel")) localStorage.setItem(LS.kieVideoModel, $("#prodKieVideoModel").value.trim() || "veo3_fast");
+      const oldInworldVoiceKo = localStorage.getItem(LS.inworldVoiceKo) || "";
+      const newInworldVoiceKo = $("#prodInworldVoiceKo") ? $("#prodInworldVoiceKo").value.trim() : oldInworldVoiceKo;
+      const oldInworldModel = localStorage.getItem(LS.inworldModel) || "inworld-tts-2";
+      const newInworldModel = $("#prodInworldModel") ? $("#prodInworldModel").value : oldInworldModel;
+      const oldSpeechRev = localStorage.getItem(LS.inworldSpeechRev) || "";
+      if ($("#prodInworldKey")) localStorage.setItem(LS.inworld, $("#prodInworldKey").value.trim().replace(/^Basic\s+/i, ""));
+      if ($("#prodInworldVoiceKo")) localStorage.setItem(LS.inworldVoiceKo, newInworldVoiceKo);
+      if ($("#prodInworldVoiceJa")) localStorage.setItem(LS.inworldVoiceJa, $("#prodInworldVoiceJa").value.trim());
+      if ($("#prodInworldModel")) localStorage.setItem(LS.inworldModel, newInworldModel);
+      localStorage.setItem(LS.inworldSpeechRev, INWORLD_SPEECH_REV);
+      const resetInworldAudio = project.lang === "ko" && (oldInworldVoiceKo !== newInworldVoiceKo || oldInworldModel !== newInworldModel || oldSpeechRev !== INWORLD_SPEECH_REV);
+      if (resetInworldAudio) {
+        project.scenes.forEach((s) => { s.audioDataUrl = ""; s.durationSec = 0; });
+        saveProject();
+      }
       $("#prodKeyPanel").hidden = true;
       render();
-      toast("키를 저장했어요");
+      toast(resetInworldAudio ? "저장 완료 · 기존 음성을 지웠어요. 인월드 음성을 새로 생성하세요" : "키를 저장했어요");
     };
-
-    // Gemini 목소리 드롭다운(한/일) 채우기
-    ["#prodGeminiVoiceKo", "#prodGeminiVoiceJa"].forEach((sid) => {
-      const sel = $(sid); if (!sel || sel.options.length) return;
-      GEMINI_VOICES.forEach(([v, label]) => { const o = el("option", null, label); o.value = v; sel.appendChild(o); });
-    });
-    $("#prodGeminiVoiceKo").value = localStorage.getItem(LS.geminiVoiceKo) || localStorage.getItem(LS.geminiVoice) || "Kore";
-    $("#prodGeminiVoiceJa").value = localStorage.getItem(LS.geminiVoiceJa) || localStorage.getItem(LS.geminiVoice) || "Kore";
-
-    // 타입캐스트 목소리 목록 불러오기 + 언어별 지정
-    const tcLoad = $("#prodTcLoadVoices");
-    if (tcLoad) tcLoad.onclick = () => loadTypecastVoices();
-    if ($("#prodTcToKo")) $("#prodTcToKo").onclick = () => { const v = $("#prodTcVoiceSelect").value; if (v) { $("#prodTypecastVoiceKo").value = v; toast("한국어 목소리로 지정"); } };
-    if ($("#prodTcToJa")) $("#prodTcToJa").onclick = () => { const v = $("#prodTcVoiceSelect").value; if (v) { $("#prodTypecastVoiceJa").value = v; toast("일본어 목소리로 지정"); } };
 
     // 언어 전환 (한국어 / 日本語)
     const langT = $("#langToggle");
@@ -4175,7 +4486,7 @@ JSON만: {"video":"..."}`;
         if (started && b.dataset.lang !== project.lang &&
             !confirm("언어를 바꾸면 새 프로젝트로 시작합니다. 계속할까요?")) return;
         if (started && b.dataset.lang !== project.lang) { project = newProject(b.dataset.lang); stepIdx = 0; }
-        else { project.lang = b.dataset.lang; if (!project.scenes.length) { project.style = STYLE_PRESETS[project.lang][0].tail; project.watermark = LANG[project.lang].watermark; } }
+        else { project.lang = b.dataset.lang; if (!project.scenes.length) { project.style = defaultStyleFor(project.lang); project.watermark = LANG[project.lang].watermark; } }
         syncLang(); render();
       });
       syncLang();
