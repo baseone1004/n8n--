@@ -9,7 +9,7 @@ try { $listener.Start() } catch {
 }
 Start-Process "http://localhost:$port/index.html"
 Write-Host ""
-Write-Host "  옛이야기 스튜디오 서버 실행 중 (타입캐스트/KIE 중계 포함)" -ForegroundColor Green
+Write-Host "  옛이야기 스튜디오 서버 실행 중 (Inworld/KIE 중계 포함)" -ForegroundColor Green
 Write-Host "  주소: http://localhost:$port/index.html"
 Write-Host "  (이 창을 닫으면 종료됩니다. 켜 두세요.)"
 Write-Host ""
