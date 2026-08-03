@@ -350,12 +350,23 @@
   }
 
   // ---- 일관성(캐릭터·화풍) 고정 ----
+  function characterAge(c) {
+    const saved = parseInt(c?.age, 10);
+    if (saved >= 1 && saved <= 100) return saved;
+    const source = `${c?.name || ""} ${c?.look || ""}`;
+    const explicit = source.match(/(?:age|aged|나이)\s*[:：]?\s*(\d{1,3})/i);
+    if (explicit) return Math.max(1, Math.min(100, parseInt(explicit[1], 10)));
+    if (/대감|고관대작|정승|판서/.test(source)) return 58;
+    if (/과부/.test(source)) return 38;
+    if (/노파|노인|할머니|할아버지/.test(source)) return 70;
+    return 40;
+  }
   // 모든 장면에 같은 주인공 외형을 강제
   function charLockText() {
     const cs = (project.characters || []).filter((c) => c.look);
     if (!cs.length) return "";
     return "Keep these recurring characters IDENTICAL in every image — same face, hairstyle, age and clothing every time: " +
-      cs.map((c) => `[${c.name}] ${c.look}`).join("; ") + ". ";
+      cs.map((c) => `[${c.name}] exactly ${characterAge(c)} years old; ${c.look}`).join("; ") + ". The visible face and body must match each exact numeric age. ";
   }
   // 화풍 고정 + 실사화 방지 (nano-banana가 실사로 튀는 것 차단)
   function styleLockText() {
@@ -384,7 +395,7 @@
   async function genCharImage(idx) {
     const c = project.characters[idx];
     const prompt = "Character reference sheet, single full-body character, front view, neutral standing pose, clear visible face, plain light background. " +
-      c.look + styleLockText();
+      c.look + ` CRITICAL AGE LOCK: exactly ${characterAge(c)} years old. Face, skin, hair and body must visibly match age ${characterAge(c)}, never younger or older. ` + styleLockText();
     const url = await kieTask(kieModel(), { prompt, aspect_ratio: "3:4", resolution: kieRes(), output_format: "png" }, 90);
     c.imageUrl = url; // 조건부 생성용 원본 URL 보관
     try { const r = await apiFetch(url); c.imageDataUrl = await blobToDataURL(await r.blob()); }
@@ -1065,7 +1076,7 @@ ${items.join("\n\n")}`;
       const n = project.scenes.length;
       const PB = 5; // 한 번에 5장면씩 → 잘림 위험 최소화
       const charBlock = (project.characters || []).filter((c) => c.look).length
-        ? "\n고정 주인공(등장할 때 항상 이 외형 그대로 묘사):\n" + project.characters.filter((c) => c.look).map((c) => `- ${c.name}: ${c.look}`).join("\n") + "\n"
+        ? "\n고정 주인공(등장할 때 항상 이 외형·숫자 나이 그대로 묘사):\n" + project.characters.filter((c) => c.look).map((c) => `- ${c.name}, 정확히 ${characterAge(c)}세: ${c.look}`).join("\n") + "\n"
         : "";
       const sys = "너는 대본을 나노 바나나(이미지 생성)용 영어 프롬프트로 바꾸는 전문가다. 각 장면을 한 컷으로 그릴 수 있게 시각적으로 구체화한다. 반드시 유효한 JSON 배열만 출력.";
       const mkUsr = (scenes) =>
@@ -1075,6 +1086,9 @@ ${items.join("\n\n")}`;
 아래 ${scenes.length}개 장면을 각각 위 화풍으로 그릴 영어 이미지 프롬프트로 만들어줘. 규칙:
 - 각 프롬프트는 완결된 영어 문장 2~4개. 콤마 키워드 나열 금지.
 - 인물은 ${LANG[project.lang].setting} 를 명시하고, 같은 인물은 장면마다 같은 복식·머리로 일관되게.
+- '과부'는 혼인 상태일 뿐 노인을 뜻하지 않는다. 노인 단서가 없으면 30~45세로 그리고 백발·깊은 주름·노파 외모를 금지한다.
+- '대감·고관대작·정승·판서'는 젊다는 단서가 없으면 50~65세의 중후하고 권위 있는 남성으로 그리고 청년·소년 얼굴을 금지한다.
+- 모든 인물의 숫자 나이와 얼굴 연령을 일치시키고, 신분이나 호칭만으로 임의로 젊거나 늙게 바꾸지 않는다.
 - 장면마다 샷을 다르게. '정면에서 두 손 모은' 반복 금지.
 - 배경은 실제 로케이션. 회색 스튜디오 배경 금지.
 - 각 프롬프트 끝에 반드시: "no text, no letters, no words, no modern objects. ${project.style}"
@@ -1205,6 +1219,11 @@ ${scenes.join("\n")}`;
     nameIn.style.marginBottom = "6px";
     nameIn.oninput = () => { c.name = nameIn.value; saveDebounced(); };
     right.appendChild(nameIn);
+    const ageIn = el("input"); ageIn.type = "number"; ageIn.min = "1"; ageIn.max = "100"; ageIn.value = String(characterAge(c)); ageIn.placeholder = "나이 (숫자)";
+    ageIn.style.marginBottom = "6px";
+    ageIn.oninput = () => { c.age = Math.max(1, Math.min(100, parseInt(ageIn.value, 10) || characterAge(c))); saveDebounced(); };
+    right.appendChild(el("div", "field-label", "나이 (숫자로 직접 수정)"));
+    right.appendChild(ageIn);
     const ta = el("textarea"); ta.value = c.look || ""; ta.style.minHeight = "60px"; ta.placeholder = "고정 외형(영어)";
     ta.oninput = () => { c.look = ta.value; saveDebounced(); };
     right.appendChild(ta);
@@ -1242,11 +1261,16 @@ ${scenes.join("\n")}`;
 
 이 이야기에 반복 등장하는 핵심 주인공 1~4명을 뽑아줘.
 - name: 한국어 이름/호칭(예: 젊은 선비, 주모, 최 대감)
-- look: 장면마다 똑같이 유지할 고정 외형을 '영어'로 자세히 — 성별, 나이대, 얼굴 특징, 머리 모양/색, 상의·하의·외투와 색, 소품. ${LANG[project.lang].setting} 반영. 완결 영어 문장 1~2개.
-JSON 배열만: [{"name":"..","look":".."}]`;
+- age: 대본 단서를 근거로 확정한 숫자 나이
+- look: 장면마다 똑같이 유지할 고정 외형을 '영어'로 자세히 — 성별, 정확한 숫자 나이, 얼굴 특징, 머리 모양/색, 상의·하의·외투와 색, 소품. ${LANG[project.lang].setting} 반영. 완결 영어 문장 1~2개.
+나이 규칙:
+- '과부'는 혼인 상태이지 노인이 아니다. 다른 단서가 없으면 30~45세이며 백발·깊은 주름·노파 외모를 금지한다.
+- '대감·고관대작·정승·판서'는 젊다는 단서가 없으면 50~65세의 중후하고 권위 있는 남성이다. 청년 얼굴을 금지한다.
+- '노파·노인·할머니·할아버지'가 명시된 경우에만 65세 이상으로 정한다.
+JSON 배열만: [{"name":"..","age":38,"look":".."}]`;
       const arr = await claudeJSON(sys, usr, 2000);
       project.characters = (Array.isArray(arr) ? arr : []).slice(0, 4)
-        .map((c) => ({ name: c.name || "", look: c.look || "", imageDataUrl: "", imageUrl: "" }));
+        .map((c) => ({ name: c.name || "", age: Math.max(1, Math.min(100, parseInt(c.age, 10) || characterAge(c))), look: c.look || "", imageDataUrl: "", imageUrl: "" }));
       saveProject();
       busy = false; render();
     } catch (e) {
