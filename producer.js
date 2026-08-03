@@ -243,12 +243,32 @@
     let t = text.trim();
     const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (fence) t = fence[1].trim();
-    const s = t.indexOf("{"), e = t.lastIndexOf("}");
-    const a = t.indexOf("["), b = t.lastIndexOf("]");
-    let cut = t;
-    if (a >= 0 && (a < s || s < 0)) cut = t.slice(a, b + 1);
-    else if (s >= 0) cut = t.slice(s, e + 1);
-    return JSON.parse(cut);
+    try { return JSON.parse(t); } catch (_) { /* 아래에서 첫 JSON 값만 추출 */ }
+
+    const obj = t.indexOf("{");
+    const arr = t.indexOf("[");
+    const start = obj < 0 ? arr : arr < 0 ? obj : Math.min(obj, arr);
+    if (start < 0) throw new Error("AI 응답에서 JSON을 찾지 못했습니다.");
+
+    const stack = [];
+    let quoted = false, escaped = false;
+    for (let i = start; i < t.length; i++) {
+      const ch = t[i];
+      if (quoted) {
+        if (escaped) escaped = false;
+        else if (ch === "\\") escaped = true;
+        else if (ch === '"') quoted = false;
+        continue;
+      }
+      if (ch === '"') { quoted = true; continue; }
+      if (ch === "{" || ch === "[") stack.push(ch);
+      else if (ch === "}" || ch === "]") {
+        const open = stack.pop();
+        if ((ch === "}" && open !== "{") || (ch === "]" && open !== "[")) break;
+        if (!stack.length) return JSON.parse(t.slice(start, i + 1));
+      }
+    }
+    throw new Error("AI 응답의 JSON이 중간에 잘렸습니다. 다시 시도해 주세요.");
   }
 
   // ============ 이미지 생성 (제공자 분기) ============
