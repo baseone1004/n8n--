@@ -9,6 +9,7 @@
   const LS = {
     claude: "yeti_api_key",          // 대본 공방과 공유
     gemini: "yeti_gemini_key",
+    textProvider: "yeti_text_provider",
     model: "yeti_model_daebon",      // 대본 공방과 공유
     imgModel: "yeti_img_model",
     provider: "yeti_img_provider",   // 'gemini' | 'kie'
@@ -155,7 +156,13 @@
   // ============ 키/설정 ============
   const claudeKey = () => localStorage.getItem(LS.claude) || "";
   const geminiKey = () => localStorage.getItem(LS.gemini) || "";
-  const claudeModel = () => localStorage.getItem(LS.model) || "claude-opus-5";
+  const textProvider = () => localStorage.getItem(LS.textProvider) || "gemini";
+  const textModel = () => {
+    const saved = localStorage.getItem(LS.model) || "";
+    if (textProvider() === "gemini") return !saved || /^claude/i.test(saved) ? "gemini-2.5-flash-lite" : saved;
+    return !saved || /^gemini/i.test(saved) ? "claude-sonnet-4-5" : saved;
+  };
+  const textKeyOk = () => textProvider() === "gemini" ? !!geminiKey() : !!claudeKey();
   const imgModel = () => localStorage.getItem(LS.imgModel) || "gemini-2.5-flash-image";
   const imgProvider = () => localStorage.getItem(LS.provider) || "kie";
   const kieKey = () => localStorage.getItem(LS.kie) || "";
@@ -176,7 +183,33 @@
     tT = setTimeout(() => { t.classList.remove("show"); setTimeout(() => (t.hidden = true), 260); }, 2100);
   }
 
-  // ============ Claude JSON 호출 ============
+  // ============ 글쓰기 AI JSON 호출 (Gemini 무료 / Claude 선택) ============
+  async function aiJSON(system, user, maxTokens) {
+    if (textProvider() === "gemini") return geminiJSON(system, user, maxTokens);
+    return claudeJSON(system, user, maxTokens);
+  }
+  async function geminiJSON(system, user, maxTokens) {
+    const key = geminiKey();
+    if (!key) throw new Error("NO_GEMINI_TEXT_KEY");
+    const res = await fetch(GEMINI_BASE + encodeURIComponent(textModel()) + ":generateContent?key=" + encodeURIComponent(key), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: "user", parts: [{ text: user }] }],
+        generationConfig: { maxOutputTokens: maxTokens || 8000, responseMimeType: "application/json" }
+      })
+    });
+    if (!res.ok) {
+      let d = ""; try { d = (await res.json()).error?.message; } catch (e) { d = await res.text(); }
+      if (res.status === 429) throw new Error("GEMINI_FREE_LIMIT: 무료 사용 한도에 도달했습니다. 잠시 후 다시 시도하세요.");
+      throw new Error(`Gemini 글쓰기 ${res.status}: ${d}`);
+    }
+    const j = await res.json();
+    const text = (j.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
+    if (!text) throw new Error("Gemini 글쓰기 응답이 비어 있습니다.");
+    return parseJSON(text);
+  }
   async function claudeJSON(system, user, maxTokens) {
     const key = claudeKey();
     if (!key) throw new Error("NO_CLAUDE_KEY");
@@ -189,7 +222,7 @@
         "anthropic-dangerous-direct-browser-access": "true"
       },
       body: JSON.stringify({
-        model: claudeModel(),
+        model: textModel(),
         max_tokens: maxTokens || 8000,
         system: system,
         messages: [{ role: "user", content: user }]
@@ -512,13 +545,14 @@
   }
 
   function keyBar(body) {
-    const needC = !claudeKey(), needI = !imgKeyOk();
-    if (!needC && !needI) return;
+    const needText = !textKeyOk(), needI = !imgKeyOk();
+    if (!needText && !needI) return;
     const imgLabel = imgProvider() === "kie" ? "KIE.ai 키" : "Google AI 키";
+    const textLabel = textProvider() === "gemini" ? "Gemini 글쓰기 키" : "Anthropic 키";
     const bar = el("div", "keybar");
     const txt = el("div", null,
       "🔑 시작하려면 API 키가 필요해요 — " +
-      (needC ? "<b>Anthropic 키</b>" : "") + (needC && needI ? " · " : "") +
+      (needText ? `<b>${textLabel}</b>` : "") + (needText && needI ? " · " : "") +
       (needI ? `<b>${imgLabel}</b>` : ""));
     bar.appendChild(txt);
     const b = el("button", "btn sm btn-primary", "여기에 API 키 입력하기");
@@ -569,7 +603,9 @@
     body.prepend(e);
   }
   function keyMissingMsg(e) {
-    if (String(e.message).includes("NO_CLAUDE_KEY")) return "⚙ 키 설정에서 <b>Anthropic API 키</b>를 먼저 넣어주세요.";
+    if (String(e.message).includes("NO_CLAUDE_KEY")) return "⚙ 글쓰기 엔진이 Claude입니다. <b>Anthropic API 키</b>를 넣어주세요.";
+    if (String(e.message).includes("NO_GEMINI_TEXT_KEY")) return "⚙ <b>Google AI(Gemini) API 키</b>를 넣어주세요.";
+    if (String(e.message).includes("GEMINI_FREE_LIMIT")) return "Gemini 무료 사용 한도에 도달했습니다. 잠시 후 다시 시도하거나 Google AI Studio에서 사용량을 확인하세요.";
     if (String(e.message).includes("NO_GEMINI_KEY")) return "⚙ 키 설정에서 <b>Google AI(Gemini) 키</b>를 먼저 넣어주세요.";
     if (String(e.message).includes("NO_KIE_KEY")) return "⚙ 키 설정에서 <b>KIE.ai 키</b>를 먼저 넣어주세요.";
     if (String(e.message).includes("Failed to fetch")) return "네트워크/CORS 오류. 인터넷 연결과 키를 확인하세요. (게시본이 아닌 로컬 파일에서 실행해야 합니다.)";
@@ -638,7 +674,7 @@ ${TITLE_PATTERNS}
   ... (정확히 10개)
 ]
 ${trend && trend.length ? "★ 최근 30일 실제로 조회수가 높았던 영상들(근거로 삼아라):\n" + trend.map((t) => `- ${t.title} (조회 ${t.views.toLocaleString()})`).join("\n") + "\n위 실제 사례와 소재·후킹이 얼마나 닮았는지를 근거로 score를 매겨라. 실제 대박 영상과 매우 유사하면 높게, 동떨어지면 낮게.\n" : ""}score는 '떡상(대박) 확률' 추정 정수(%)다. 40~95 사이에서 현실적으로 분산(전부 90+ 금지). 클릭률·소재 신선함·감정 강도·위 실제 데이터와의 유사도를 종합.${langDirective()}`;
-      const arr = await claudeJSON(sys, usr, 4000);
+      const arr = await aiJSON(sys, usr, 4000);
       project.topics = (Array.isArray(arr) ? arr : []).slice(0, 10)
         .map((t) => ({ ...t, title: formatSeoTitle(t.title, project.lang), score: Math.max(0, Math.min(100, parseInt(t.score, 10) || 70)) }))
         .sort((a, b) => b.score - a.score);
@@ -706,7 +742,7 @@ JSON만:
  "scenes":[ {"beat":"장면1 한 줄 요약(=인트로 도입)","isIntro":true}, {"beat":"장면2 한 줄 요약","isIntro":false} ]
 }
 scenes는 정확히 ${SCENE_COUNT}개. 각 beat는 한 컷 이미지로 그릴 수 있는 한 장면. 전체가 이어지는 완결된 이야기.`;
-      const pkg = await claudeJSON(sysO, usrO, 6000);
+      const pkg = await aiJSON(sysO, usrO, 6000);
       project.title = formatSeoTitle(pkg.title || topic.title, project.lang);
       project.titleTag = pkg.titleTag || "";
       project.description = pkg.description || "";
@@ -747,7 +783,7 @@ ${end === n ? `\n마지막 장면은 이 이야기에 맞는 주제 한 문장 +
 ${langDirective()}
 JSON 배열만, 정확히 ${end - b}개: ["장면 대본", ...]`;
         try {
-          const arr = await claudeJSON(sysN, usrN, 12000);
+          const arr = await aiJSON(sysN, usrN, 12000);
           (arr || []).forEach((t, k) => { if (project.scenes[b + k]) project.scenes[b + k].text = String(t); });
         } catch (e) {
           for (let i = b; i < end; i++) if (!project.scenes[i].text) project.scenes[i].text = "(이 장면 생성 실패 — 편집에서 직접 쓰거나 다시 시도)";
@@ -809,7 +845,7 @@ JSON 배열만, 정확히 ${end - b}개: ["장면 대본", ...]`;
     busy = true; loading(body, "주인공 외형과 영상 미술 기준을 고정하는 중…"); renderNav();
     try {
       const story = project.scenes.map((s) => s.text).join("\n").slice(0, 12000);
-      const r = await claudeJSON("너는 시대극 캐릭터·미술 설정 감독이다. 반드시 유효한 JSON 객체만 출력한다.",
+      const r = await aiJSON("너는 시대극 캐릭터·미술 설정 감독이다. 반드시 유효한 JSON 객체만 출력한다.",
 `다음 이야기에서 가장 중요한 주인공 한 명을 선정하고 모든 장면에서 절대 바뀌지 않을 외형 기준을 작성하라.
 언어/시대 기준: ${LANG[project.lang].setting}
 선택된 그림체: ${project.style}
@@ -869,7 +905,7 @@ ${story}`, 5000);
     if (text.length < 100) { toast("분리할 대본을 100자 이상 붙여넣어 주세요"); return; }
     btn.disabled = true; btn.textContent = "분석 중…";
     try {
-      const result = await claudeJSON("너는 영상 편집용 장면 분리 전문가다. 반드시 유효한 JSON 객체만 출력한다.",
+      const result = await aiJSON("너는 영상 편집용 장면 분리 전문가다. 반드시 유효한 JSON 객체만 출력한다.",
 `다음 대본을 장소·시간·등장인물·핵심 행동·감정 전환 기준으로 장면 분리하라.
 - 장면당 한 컷 이미지로 표현 가능한 내용
 - 원문 문장을 삭제하거나 요약하지 말고 순서대로 모두 보존
@@ -937,7 +973,7 @@ JSON 배열만, 장면 순서대로 정확히 ${project.scenes.length}개:
 
 장면들:
 ${scenes}`;
-      const arr = await claudeJSON(sys, usr, 8000);
+      const arr = await aiJSON(sys, usr, 8000);
       (arr || []).forEach((p, i) => { if (project.scenes[i]) project.scenes[i].imagePrompt = String(p); });
       saveProject();
       busy = false; goStep("prompt");
@@ -1244,7 +1280,7 @@ JSON만:
  {"pos":"인기 야담형","topLine":"짧은 대사","mainLines":["첫째 줄","둘째 줄","셋째 줄"],"imageKo":"..","imageEn":".."},
  {"pos":"인기 야담형","topLine":"짧은 대사","mainLines":["첫째 줄","둘째 줄","셋째 줄"],"imageKo":"..","imageEn":".."}
 ]}`;
-      const r = await claudeJSON(sys, usr, 4000);
+      const r = await aiJSON(sys, usr, 4000);
       project.thumb = { copies: (r.copies || []).slice(0, 4).map((c) => ({ ...c, lines: [c.topLine || "", ...(c.mainLines || [])].filter(Boolean) })), chosen: 0, imagePrompt: "", imageDataUrl: "" };
       saveProject();
       busy = false; render();
@@ -1521,7 +1557,7 @@ JSON만:
 - image: 인물 동작·위치·배경·조명을 산문 영어로. 끝에 "no text no letters no words no modern objects." 그리고 스타일 라인 그대로 붙이기: "${STYLE_LINE}"
 - video: 이미지에 이미 있는 외형·세팅·그림체는 반복하지 말고 ACTION / CAMERA / MOOD만. 카메라는 push-in 계열, "Camera moves, the subject does not walk or change position." 포함. 장면 대사(큰따옴표)가 있으면 그 대사 그대로 lip-sync(입만 움직임), 없으면 완전 무음("Completely silent. Mute audio."). 끝에 "CRITICAL: NO text, NO subtitles, NO captions, NO speech bubbles, NO written words."
 JSON만: {"image":"...","video":"..."}`;
-      const r = await claudeJSON(sys, usr, 3000);
+      const r = await aiJSON(sys, usr, 3000);
       s.grokImage = r.image || ""; s.grokVideo = r.video || "";
       saveProject(); render();
       toast("Grok 인트로 프롬프트 생성 완료");
@@ -1533,6 +1569,8 @@ JSON만: {"image":"...","video":"..."}`;
   function keyMissingMsgPlain(e) {
     const m = String(e.message);
     if (m.includes("NO_CLAUDE_KEY")) return "Anthropic 키 필요";
+    if (m.includes("NO_GEMINI_TEXT_KEY")) return "Gemini 키 필요";
+    if (m.includes("GEMINI_FREE_LIMIT")) return "Gemini 무료 한도 도달 · 잠시 후 다시 시도";
     return m.slice(0, 60);
   }
 
@@ -1785,7 +1823,8 @@ JSON만: {"image":"...","video":"..."}`;
     if (!p.hidden) {
       $("#prodClaudeKey").value = claudeKey();
       $("#prodGeminiKey").value = geminiKey();
-      $("#prodModel").value = claudeModel();
+      $("#prodTextProvider").value = textProvider();
+      $("#prodModel").value = textModel();
       $("#prodImgModel").value = imgModel();
       const provSel = $("#prodProvider");
       if (provSel) { provSel.value = imgProvider(); provSel.dispatchEvent(new Event("change")); }
@@ -1811,6 +1850,13 @@ JSON만: {"image":"...","video":"..."}`;
     $("#prodSettings").onclick = openKeys;
     $("#prodProjects").onclick = () => { $("#prodKeyPanel").hidden = true; const p = $("#prodProjPanel"); p.hidden = !p.hidden; if (!p.hidden) renderProjList(); };
     const provSel = $("#prodProvider");
+    const textProvSel = $("#prodTextProvider");
+    const syncTextModel = () => {
+      const current = $("#prodModel").value.trim();
+      if (textProvSel.value === "gemini" && (!current || /^claude/i.test(current))) $("#prodModel").value = "gemini-2.5-flash-lite";
+      if (textProvSel.value === "claude" && (!current || /^gemini/i.test(current))) $("#prodModel").value = "claude-sonnet-4-5";
+    };
+    if (textProvSel) textProvSel.onchange = syncTextModel;
     const syncProvFields = () => {
       const kie = provSel.value === "kie";
       $("#kieFields").hidden = !kie;
@@ -1821,7 +1867,8 @@ JSON만: {"image":"...","video":"..."}`;
     $("#prodSaveKeys").onclick = () => {
       localStorage.setItem(LS.claude, $("#prodClaudeKey").value.trim());
       localStorage.setItem(LS.gemini, $("#prodGeminiKey").value.trim());
-      localStorage.setItem(LS.model, $("#prodModel").value.trim() || "claude-opus-5");
+      localStorage.setItem(LS.textProvider, textProvSel ? textProvSel.value : "gemini");
+      localStorage.setItem(LS.model, $("#prodModel").value.trim() || (textProvSel?.value === "claude" ? "claude-sonnet-4-5" : "gemini-2.5-flash-lite"));
       localStorage.setItem(LS.imgModel, $("#prodImgModel").value.trim() || "gemini-2.5-flash-image");
       localStorage.setItem(LS.provider, provSel ? provSel.value : "gemini");
       localStorage.setItem(LS.kie, $("#prodKieKey").value.trim());
@@ -1866,7 +1913,7 @@ JSON만: {"image":"...","video":"..."}`;
 
     render();
     // 키가 없으면 처음부터 입력창을 열어 눈에 띄게
-    if (!claudeKey()) openKeys();
+    if (!textKeyOk()) openKeys();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

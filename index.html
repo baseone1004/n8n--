@@ -62,10 +62,34 @@
 
           <!-- 키 설정 패널 -->
           <div class="settings-panel" id="prodKeyPanel" hidden>
+            <div class="key-divider">글쓰기 AI (주제·대본·프롬프트)</div>
             <label class="field">
-              <span class="field-label">Anthropic API 키 <small>(대본·주제·프롬프트 생성)</small></span>
+              <span class="field-label">글쓰기 엔진</span>
+              <select id="prodTextProvider">
+                <option value="gemini">Gemini 무료 · Google AI 키 사용 (권장)</option>
+                <option value="claude">Claude · Anthropic 키 사용 (선택)</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field-label">Google AI(Gemini) API 키 <small>(무료 글쓰기 · Gemini 이미지 예비 기능)</small></span>
+              <input type="password" id="prodGeminiKey" placeholder="AIza..." autocomplete="off" />
+            </label>
+            <label class="field">
+              <span class="field-label">Anthropic API 키 <small>(Claude를 선택할 때만 필요)</small></span>
               <input type="password" id="prodClaudeKey" placeholder="sk-ant-..." autocomplete="off" />
             </label>
+            <label class="field">
+              <span class="field-label">글쓰기 모델</span>
+              <input type="text" id="prodModel" list="modelList" placeholder="gemini-2.5-flash-lite" />
+              <datalist id="modelList">
+                <option value="gemini-2.5-flash-lite"></option>
+                <option value="gemini-3.5-flash"></option>
+                <option value="gemini-2.5-flash"></option>
+                <option value="claude-sonnet-4-5"></option>
+              </datalist>
+            </label>
+            <p class="settings-note">Gemini 무료 사용량은 Google AI Studio 프로젝트의 무료 한도 안에서 제공됩니다. 한도를 넘으면 잠시 기다렸다가 다시 시도하세요.</p>
+            <div class="key-divider">이미지 생성</div>
             <label class="field">
               <span class="field-label">이미지 생성 방식</span>
               <select id="prodProvider">
@@ -74,10 +98,6 @@
               </select>
             </label>
             <div id="geminiFields">
-              <label class="field">
-                <span class="field-label">Google AI(Gemini) API 키 <small>(나노 바나나 이미지)</small></span>
-                <input type="password" id="prodGeminiKey" placeholder="AIza..." autocomplete="off" />
-              </label>
               <label class="field">
                 <span class="field-label">이미지 모델</span>
                 <input type="text" id="prodImgModel" list="imgModelList" placeholder="gemini-2.5-flash-image" />
@@ -130,11 +150,6 @@
             </label>
             <p class="settings-note">Google Cloud에서 만든 <b>웹 애플리케이션</b> OAuth 클라이언트 ID를 입력하세요. 클라이언트 보안 비밀번호는 입력하지 않습니다. 저장한 뒤 왼쪽의 <b>내 채널 분석</b>에서 Google 로그인을 진행하세요.</p>
 
-            <div class="key-divider">대본 모델</div>
-            <label class="field">
-              <span class="field-label">대본 생성 모델</span>
-              <input type="text" id="prodModel" list="modelList" placeholder="claude-opus-5" />
-            </label>
             <p class="settings-note">키는 이 브라우저에만 저장됩니다. Anthropic: <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> · Google AI: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> · KIE: <a href="https://kie.ai" target="_blank" rel="noopener">kie.ai</a> · Inworld: <a href="https://platform.inworld.ai" target="_blank" rel="noopener">platform.inworld.ai</a></p>
             <button class="btn btn-primary sm" id="prodSaveKeys">저장</button>
           </div>
