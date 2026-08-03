@@ -436,9 +436,8 @@ textarea {
   transition: all .12s;
 }
 .style-preview {
-  width: 100%; aspect-ratio: 1 / 1; margin-bottom: 9px; border-radius: 8px;
-  background-image: url("assets/style-previews-ko.png");
-  background-size: 500% 100%; background-position: var(--style-pos, 0%) center;
+  width: 100%; aspect-ratio: 16 / 9; margin-bottom: 9px; border-radius: 8px;
+  background-size: cover; background-position: center;
   background-repeat: no-repeat; border: 1px solid var(--line);
 }
 .style-chip:hover { border-color: var(--seal); background: var(--paper); }

@@ -78,16 +78,14 @@
     ? "\n\n중요: 결과의 모든 텍스트(제목·설명·태그·대본 등)는 반드시 자연스러운 '일본어'로 작성한다."
     : "";
 
-  const KO_FOLK_2D_STYLE = "Korean folktale 2D animation illustration, expressive rounded cartoon faces with large readable emotions, clean dark outlines, simple cel shading, hand-painted watercolor and gouache Joseon countryside backgrounds, warm muted earthy colors, soft paper texture, nostalgic YouTube folktale storytelling look";
-
   // 언어별 그림체 프리셋 — 한국: 참고 이미지형 2D 민담 애니 / 일본: 부드러운 애니 셀화풍
   const STYLE_PRESETS = {
     ko: [
-      { name: "2D 민담 애니 (기본)", desc: "참고 이미지처럼 둥근 표정·굵은 선·수채 배경", tail: KO_FOLK_2D_STYLE },
-      { name: "2D 민담 애니 · 밝고 따뜻", desc: "따뜻한 햇살과 정겨운 농촌 색감", tail: KO_FOLK_2D_STYLE + ", bright warm daylight, cheerful rural palette, friendly wholesome mood" },
-      { name: "2D 민담 애니 · 감정 강조", desc: "눈물·놀람·분노가 크게 읽히는 표정", tail: KO_FOLK_2D_STYLE + ", highly expressive emotional faces, clear dramatic gestures, strong storybook emotion" },
-      { name: "2D 민담 애니 · 어두운 야담", desc: "밤·괴담에도 얼굴은 밝고 선명하게", tail: KO_FOLK_2D_STYLE + ", moody blue night atmosphere, readable illuminated faces, dramatic folklore mystery" },
-      { name: "2D 민담 애니 · 담채화", desc: "종이 질감과 옅은 전통 수채 채색", tail: KO_FOLK_2D_STYLE + ", delicate Korean ink-and-watercolor wash, visible paper grain, soft desaturated pigments" }
+      { name: "복고풍 셀 애니", desc: "둥근 얼굴·굵은 선·선명한 평면 채색", preview: "assets/style-ko-cel.png", tail: "retro Korean TV folktale 2D cel animation, chibi-influenced rounded expressive faces, very clean thick black outlines, flat saturated cel colors, minimal shading, simple hand-painted village background" },
+      { name: "수채 동화책", desc: "연필선·투명 수채·따뜻한 종이 질감", preview: "assets/style-ko-watercolor.png", tail: "gentle Korean children's picture-book watercolor illustration, soft pencil contours, loose transparent watercolor washes, visible cream paper grain, simplified warm faces, airy pastoral Joseon countryside" },
+      { name: "강렬한 웹툰", desc: "각진 표정·역동적 구도·강한 명암", preview: "assets/style-ko-webtoon.png", tail: "bold modern Korean historical webtoon illustration, angular expressive faces, dynamic cinematic perspective, crisp variable ink lines, strong cel shadows, high-contrast teal and orange palette, graphic detailed palace background" },
+      { name: "먹선 괴담", desc: "거친 붓선·남색 먹물·으스스한 밤", preview: "assets/style-ko-horror-ink.png", tail: "dark Korean folklore ink animation, scratchy expressive brush lines, elongated stylized figures, indigo black-and-white palette with one red accent, misty ink-wash moonlit background, eerie hand-drawn texture" },
+      { name: "전통 민화", desc: "해학적 비율·광물 안료·장식적 산수", preview: "assets/style-ko-minhwa.png", tail: "traditional Korean minhwa folk painting adapted for animation, flat frontal figures, intentionally naive humorous proportions, decorative patterns, mineral pigment colors, bold contour lines, parchment texture, symbolic mountains clouds flowers and animals" }
     ],
     ja: [
       { name: "애니 셀화 (기본)", desc: "깔끔한 셀 채색, 정겨운 옛이야기 느낌", tail: "traditional Japanese folktale anime illustration, clean cel shading, flat soft colors, gentle rounded faces, hand-painted rural scenery, warm nostalgic wholesome mood" },
@@ -99,7 +97,7 @@
   };
   const stylePresetsFor = (lang) => STYLE_PRESETS[lang] || STYLE_PRESETS.ko;
   function migrateOldKoreanStyle(p) {
-    if (p?.lang === "ko" && (!p.style || /semi-realistic|realistic faces|Korean manhwa/i.test(p.style))) p.style = KO_FOLK_2D_STYLE;
+    if (p?.lang === "ko" && (!p.style || /semi-realistic|realistic faces|Korean manhwa|Korean folktale 2D animation illustration/i.test(p.style))) p.style = STYLE_PRESETS.ko[0].tail;
     return p;
   }
 
@@ -1134,10 +1132,9 @@ ${scenes.join("\n")}`;
     body.appendChild(el("div", "field-label", "그림체 고르기"));
     const grid = el("div", "style-list");
     stylePresetsFor(project.lang).forEach((preset) => {
-      const previewIndex = stylePresetsFor(project.lang).indexOf(preset);
       const chip = el("button", "style-chip" + (project.style === preset.tail ? " sel" : ""));
-      if (project.lang === "ko") {
-        const preview = el("div", "style-preview"); preview.style.setProperty("--style-pos", `${previewIndex * 25}%`);
+      if (preset.preview) {
+        const preview = el("div", "style-preview"); preview.style.backgroundImage = `url("${preset.preview}")`;
         chip.appendChild(preview);
       }
       chip.insertAdjacentHTML("beforeend", `<b>${esc(preset.name)}</b><span>${esc(preset.desc)}</span>`);
