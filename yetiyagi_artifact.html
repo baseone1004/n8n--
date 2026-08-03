@@ -3388,15 +3388,32 @@ JSON 배열만: [{"name":"..","look":".."}]`;
         up.appendChild(file);
         acts.appendChild(up);
         if (t.imageDataUrl) {
-          const dl = el("button", "btn sm", "이미지 다운로드");
+          const dl = el("button", "btn sm", "원본 다운로드");
           dl.onclick = () => { if (/^https?:/.test(t.imageDataUrl)) window.open(t.imageDataUrl); else { const m = t.imageDataUrl.match(/^data:(image\/\w+);base64,(.*)$/); if (m) download(new Blob([base64ToBytes(m[2])], { type: m[1] }), "thumbnail.png"); } };
           acts.appendChild(dl);
+          const compose = el("button", "btn sm btn-primary", "🅰️ 글자 얹어 완성");
+          compose.onclick = () => composeThumb();
+          acts.appendChild(compose);
         }
         const cp = el("button", "btn sm btn-ghost", "카피 복사");
         cp.onclick = () => { navigator.clipboard.writeText((t.copies[t.chosen].lines || []).join("\n")); toast("카피를 복사했어요"); };
         acts.appendChild(cp);
         box.appendChild(acts);
         body.appendChild(box);
+
+        // 글자 얹은 완성 썸네일
+        if (t.finalDataUrl) {
+          const fin = el("div", "scene"); fin.style.marginTop = "14px";
+          fin.appendChild(el("div", "scene-no", "✅ 완성 썸네일 (글자 포함)"));
+          const fw = el("div", "scene-img"); fw.style.width = "100%"; fw.style.maxWidth = "560px";
+          const fi = el("img"); fi.src = t.finalDataUrl; fw.appendChild(fi); fin.appendChild(fw);
+          const fa = el("div", "scene-actions");
+          const fdl = el("button", "btn sm btn-primary", "완성본 다운로드");
+          fdl.onclick = () => { const m = t.finalDataUrl.match(/^data:(image\/\w+);base64,(.*)$/); if (m) download(new Blob([base64ToBytes(m[2])], { type: m[1] }), "thumbnail_final.png"); };
+          fa.appendChild(fdl);
+          fin.appendChild(fa);
+          body.appendChild(fin);
+        }
       }
     }
 
@@ -3454,6 +3471,68 @@ JSON만:
       if (box) { box.innerHTML = ""; box.textContent = "실패"; }
       toast("썸네일 실패: " + (/NO_(GEMINI|KIE)_KEY/.test(String(e.message)) ? "이미지 API 키 필요" : String(e.message).slice(0, 60)));
     }
+  }
+
+  // 썸네일 이미지 위에 카피 글자를 얹어 '완성 썸네일' 만들기 (캔버스 합성)
+  async function composeThumb() {
+    const t = project.thumb;
+    if (t.chosen < 0 || !t.imageDataUrl) { toast("이미지와 카피를 먼저 준비하세요"); return; }
+    const c = t.copies[t.chosen];
+    const lines = (c.lines || []).filter((x) => x && x.trim());
+    if (!lines.length) { toast("카피 글자가 없어요"); return; }
+    const leftMode = /좌측/.test(c.pos || "") || lines.length >= 3; // 좌측 4줄 / 하단 2줄
+    try {
+      const img = await loadImg(t.imageDataUrl);
+      try { await document.fonts.load("900 100px 'Nanum Myeongjo'"); await document.fonts.ready; } catch (e) {}
+      // 16:9 캔버스(1280x720)에 이미지를 꽉 채워 그림
+      const W = 1280, H = 720;
+      const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+      const ctx = cv.getContext("2d");
+      drawCover(ctx, img, W, H);
+      ctx.textBaseline = "alphabetic";
+      ctx.lineJoin = "round";
+      if (leftMode) {
+        // 좌측 세로 4줄: 큰 글씨, 왼쪽 정렬, 세로 중앙
+        const fs = Math.round(H * 0.135);
+        ctx.font = `900 ${fs}px 'Nanum Myeongjo', 'Malgun Gothic', sans-serif`;
+        ctx.textAlign = "left";
+        const lh = fs * 1.12, x = Math.round(W * 0.05);
+        let y = Math.round((H - lh * lines.length) / 2) + fs;
+        lines.forEach((ln) => { drawTextOutlined(ctx, ln, x, y, fs); y += lh; });
+      } else {
+        // 하단 2줄: 큰 글씨, 가운데 정렬, 아래쪽
+        const fs = Math.round(H * 0.11);
+        ctx.font = `900 ${fs}px 'Nanum Myeongjo', 'Malgun Gothic', sans-serif`;
+        ctx.textAlign = "center";
+        const lh = fs * 1.15;
+        let y = H - Math.round(H * 0.06) - lh * (lines.length - 1);
+        lines.forEach((ln) => { drawTextOutlined(ctx, ln, W / 2, y, fs); y += lh; });
+      }
+      t.finalDataUrl = cv.toDataURL("image/png");
+      saveProject(); render();
+      toast("완성 썸네일 만들었어요 ✅");
+    } catch (e) {
+      // http 이미지(CORS)면 캔버스 오염으로 실패
+      toast(/taint|secur|cross/i.test(String(e.message)) ? "이 이미지는 글자 얹기 불가(외부 URL). '이미지 올리기'로 넣은 파일이면 됩니다." : "글자 얹기 실패: " + String(e.message).slice(0, 50));
+    }
+  }
+  function loadImg(src) {
+    return new Promise((res, rej) => { const im = new Image(); im.crossOrigin = "anonymous"; im.onload = () => res(im); im.onerror = () => rej(new Error("이미지 로드 실패")); im.src = src; });
+  }
+  function drawCover(ctx, img, W, H) {
+    const r = Math.max(W / img.width, H / img.height);
+    const w = img.width * r, h = img.height * r;
+    ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
+  }
+  function drawTextOutlined(ctx, text, x, y, fs) {
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.55)"; ctx.shadowBlur = fs * 0.18; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = fs * 0.06;
+    ctx.lineWidth = Math.max(6, fs * 0.16); ctx.strokeStyle = "#000";
+    ctx.strokeText(text, x, y);
+    ctx.shadowColor = "transparent";
+    ctx.fillStyle = "#fff2b0"; // 노란빛 흰색 — 야담 썸네일 감성
+    ctx.fillText(text, x, y);
+    ctx.restore();
   }
 
   // ---- 6. 음성·자막 ----
@@ -3957,7 +4036,7 @@ JSON만: {"video":"..."}`;
     idbSet("projects", _projCache).catch(() => {});
     // 가벼운 백업(이미지 제외)도 localStorage에 — IDB 못 쓰는 환경 대비
     try {
-      const light = _projCache.map((p) => ({ ...p, scenes: (p.scenes || []).map((s) => ({ ...s, imageDataUrl: "", audioDataUrl: "" })), characters: (p.characters || []).map((c) => ({ ...c, imageDataUrl: "" })), thumb: p.thumb ? { ...p.thumb, imageDataUrl: "" } : p.thumb }));
+      const light = _projCache.map((p) => ({ ...p, scenes: (p.scenes || []).map((s) => ({ ...s, imageDataUrl: "", audioDataUrl: "" })), characters: (p.characters || []).map((c) => ({ ...c, imageDataUrl: "" })), thumb: p.thumb ? { ...p.thumb, imageDataUrl: "", finalDataUrl: "" } : p.thumb }));
       localStorage.setItem(LS.projects, JSON.stringify(light));
     } catch (e) {}
   }
