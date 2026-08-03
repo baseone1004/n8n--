@@ -609,6 +609,43 @@
     }
   }
 
+  function voiceSupportsKorean(v) {
+    const langs = v.promptLanguages || v.languages || [];
+    return v.langCode === "KO_KR" || v.langCode === "AUTO" || langs.some((x) => /^ko(?:-|_|$)/i.test(x));
+  }
+
+  async function loadInworldVoices() {
+    const out = $("#prodCheckInworldVoiceResult");
+    const select = $("#prodInworldVoiceList");
+    const key = ($("#prodInworldKey")?.value || inworldKey()).trim().replace(/^Basic\s+/i, "");
+    if (!key) { if (out) out.textContent = "Inworld API 키를 먼저 넣어주세요."; return; }
+    if (out) out.textContent = "내 목소리를 불러오는 중…";
+    try {
+      const res = await apiFetch("https://api.inworld.ai/voices/v1/voices", {
+        headers: { "authorization": "Basic " + key }
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.message || j.error?.message || `목록 조회 실패 ${res.status}`);
+      const voices = (j.voices || j.data?.voices || []).slice().sort((a, b) => Number(voiceSupportsKorean(b)) - Number(voiceSupportsKorean(a)));
+      select.innerHTML = "";
+      select.appendChild(new Option(voices.length ? `내 목소리 ${voices.length}개 중 선택` : "등록된 목소리가 없습니다", ""));
+      voices.forEach((v) => {
+        const ko = voiceSupportsKorean(v);
+        const gender = ({ female: "여성", male: "남성", neutral: "중성" })[v.gender] || v.gender || "성별 미등록";
+        const age = ({ middle_aged: "중년", elderly: "노년", young: "청년" })[v.ageGroup] || v.ageGroup || "연령 미등록";
+        const option = new Option(`${ko ? "🇰🇷" : "⚠️"} ${v.displayName || v.voiceId} · ${v.langCode || "언어 미등록"} · ${gender} · ${age}`, v.voiceId);
+        option.dataset.korean = ko ? "1" : "0";
+        option.dataset.description = v.description || "";
+        select.appendChild(option);
+      });
+      const saved = $("#prodInworldVoiceKo")?.value || inworldVoice();
+      if ([...select.options].some((o) => o.value === saved)) select.value = saved;
+      if (out) out.textContent = voices.length ? "목소리를 선택하면 한국어 Voice ID에 자동으로 들어갑니다." : "인월드 계정에 등록된 목소리가 없습니다.";
+    } catch (e) {
+      if (out) out.textContent = "목소리 불러오기 실패: " + String(e.message || e).slice(0, 120);
+    }
+  }
+
   // ============ 바이트 헬퍼 ============
   function base64ToBytes(b64) {
     const bin = atob(b64), a = new Uint8Array(bin.length);
@@ -2403,6 +2440,16 @@ JSON만: {"video":"..."}`;
 
     $("#prodSettings").onclick = openKeys;
     if ($("#prodCheckInworldVoice")) $("#prodCheckInworldVoice").onclick = checkInworldVoice;
+    if ($("#prodLoadInworldVoices")) $("#prodLoadInworldVoices").onclick = loadInworldVoices;
+    if ($("#prodInworldVoiceList")) $("#prodInworldVoiceList").onchange = function () {
+      if (!this.value) return;
+      $("#prodInworldVoiceKo").value = this.value;
+      const option = this.selectedOptions[0];
+      const out = $("#prodCheckInworldVoiceResult");
+      if (out) out.textContent = option.dataset.korean === "1"
+        ? "✅ 한국어 지원 목소리입니다. 아래 저장을 누르세요. " + (option.dataset.description || "")
+        : "⚠️ 이 목소리는 한국어로 등록되지 않아 외국인 억양이나 이상한 발음이 날 수 있습니다.";
+    };
     $("#prodProjects").onclick = () => { $("#prodKeyPanel").hidden = true; const p = $("#prodProjPanel"); p.hidden = !p.hidden; if (!p.hidden) renderProjList(); };
     const textSel = $("#prodTextProvider");
     if (textSel) textSel.onchange = () => {
