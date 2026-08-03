@@ -888,7 +888,13 @@ textarea {
               <button type="button" class="btn sm btn-primary" id="prodInworldSample">🔊 한국어 샘플 듣기</button>
               <span id="prodInworldSampleResult" class="settings-note" style="margin:0"></span>
             </div>
-            <p class="settings-note">🎧 <b>샘플 듣기</b>로 이 목소리가 한국어를 제대로 읽는지 5초 만에 확인하세요. 영어로 들리면, 위 <b>한국어 Voice ID</b>를 다른 걸로 바꿔 다시 들어보세요(디자인 음성보다 Inworld 기본 목소리가 한국어를 잘 읽어요).</p>
+            <p class="settings-note">🎧 <b>샘플 듣기</b>로 이 목소리가 한국어를 제대로 읽는지 5초 만에 확인하세요.</p>
+            <div class="key-divider">🎨 한국어 목소리 새로 만들기</div>
+            <p class="settings-note" style="margin-bottom:6px">지금 황태후 음성은 <b>영어로 만들어져</b> 한국어가 깨져요. 아래 버튼으로 <b>한국어(KO_KR)로 튜닝된 조선 황태후 목소리</b>를 새로 만들어 드려요.</p>
+            <div class="yt-row" style="margin:6px 0; flex-wrap:wrap">
+              <button type="button" class="btn sm btn-primary" id="prodDesignVoice">🎨 조선 황태후 한국어 목소리 만들기</button>
+              <span id="prodDesignVoiceResult" class="settings-note" style="margin:0"></span>
+            </div>
 
             <div class="key-divider">대본 모델</div>
             <label class="field">
@@ -2564,6 +2570,58 @@ window.PROMPTS = {"daebon": {"files": [{"title": "v11.3_main_OPUS.md", "b64": "I
     const dataUrl = "data:audio/wav;base64," + b64;
     const dur = (await measureAudio(dataUrl)) || estDur(text);
     return { dataUrl, durationSec: dur };
+  }
+
+  // 한국어(KO_KR)로 조선 황태후 목소리 새로 디자인 → 미리듣기 → 저장(publish)
+  let _designedVoiceId = "";
+  async function designInworldVoice() {
+    const out = $("#prodDesignVoiceResult");
+    const key = ($("#prodInworldKey")?.value || inworldKey()).trim().replace(/^Basic\s+/i, "");
+    if (!key) { if (out) out.textContent = "Inworld 키를 먼저 넣으세요."; return; }
+    if (out) out.textContent = "🎨 한국어 황태후 목소리 만드는 중… (10~20초)";
+    try {
+      const res = await apiFetch("https://api.inworld.ai/voices/v1/voices:design", {
+        method: "POST", headers: { "content-type": "application/json", "authorization": "Basic " + key },
+        body: JSON.stringify({
+          voiceDesignConfig: { numberOfSamples: 1 },
+          langCode: "KO_KR",
+          designPrompt: "A dignified elderly Korean empress dowager, calm and measured, warm low-pitched female voice, refined royal authority, graceful unhurried pacing, clear articulation, gentle folktale narration tone.",
+          previewText: "안녕하세요. 옛날 옛적, 깊은 산골 마을에 지혜로운 며느리가 살고 있었습니다. 그 집에는 오래도록 숨겨진 비밀이 하나 있었지요."
+        })
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) { if (out) out.textContent = "실패: " + String(j.message || JSON.stringify(j)).slice(0, 140); return; }
+      const pv = (j.previewVoices || [])[0];
+      if (!pv || !pv.previewAudio) { if (out) out.textContent = "미리듣기 오디오가 없어요. 다시 시도하세요."; return; }
+      _designedVoiceId = pv.voiceId || pv.preview_id || "";
+      new Audio("data:audio/wav;base64," + pv.previewAudio).play();
+      if (out) {
+        out.innerHTML = "▶ 들어보세요! 한국어로 잘 들리면 → ";
+        const save = el("button", "btn sm btn-primary", "✅ 이 목소리로 저장");
+        save.onclick = () => publishDesignedVoice(key);
+        out.appendChild(save);
+        const again = el("button", "btn sm", "↻ 다시 만들기");
+        again.onclick = designInworldVoice;
+        out.appendChild(again);
+      }
+    } catch (e) { if (out) out.textContent = "오류: " + String(e.message).slice(0, 100); }
+  }
+  async function publishDesignedVoice(key) {
+    const out = $("#prodDesignVoiceResult");
+    if (!_designedVoiceId) { if (out) out.textContent = "먼저 목소리를 만드세요."; return; }
+    if (out) out.textContent = "저장 중…";
+    try {
+      const res = await apiFetch("https://api.inworld.ai/voices/v1/voices/" + encodeURIComponent(_designedVoiceId) + ":publish", {
+        method: "POST", headers: { "content-type": "application/json", "authorization": "Basic " + key },
+        body: JSON.stringify({ voiceId: _designedVoiceId, displayName: "황태후(한국어)", description: "조선 황태후 · 중년 · 차분 · 한국어", tags: ["ko", "folktale"] })
+      });
+      const j = await res.json().catch(() => ({}));
+      const vid = j.voice?.voiceId || _designedVoiceId;
+      if (!res.ok && !j.voice) { if (out) out.textContent = "저장 실패: " + String(j.message || JSON.stringify(j)).slice(0, 140); return; }
+      if ($("#prodInworldVoiceKo")) $("#prodInworldVoiceKo").value = vid;
+      localStorage.setItem(LS.inworldVoiceKo, vid);
+      if (out) out.innerHTML = "✅ 저장됨! <b>한국어 Voice ID</b>에 넣었어요. 맨 아래 <b>저장</b>을 누른 뒤 음성 생성하세요.";
+    } catch (e) { if (out) out.textContent = "오류: " + String(e.message).slice(0, 100); }
   }
 
   // 현재 설정한 목소리로 짧은 한국어 문장을 바로 생성해 들려주기 (저장 전 테스트)
@@ -4449,6 +4507,7 @@ JSON만: {"video":"..."}`;
     if ($("#prodCheckInworldVoice")) $("#prodCheckInworldVoice").onclick = checkInworldVoice;
     if ($("#prodLoadInworldVoices")) $("#prodLoadInworldVoices").onclick = loadInworldVoices;
     if ($("#prodInworldSample")) $("#prodInworldSample").onclick = testInworldSample;
+    if ($("#prodDesignVoice")) $("#prodDesignVoice").onclick = designInworldVoice;
     if ($("#prodInworldVoiceList")) $("#prodInworldVoiceList").onchange = function () {
       if (!this.value) return;
       $("#prodInworldVoiceKo").value = this.value;
