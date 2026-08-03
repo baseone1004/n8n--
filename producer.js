@@ -159,7 +159,10 @@
   const textProvider = () => localStorage.getItem(LS.textProvider) || "gemini";
   const textModel = () => {
     const saved = localStorage.getItem(LS.model) || "";
-    if (textProvider() === "gemini") return !saved || /^claude/i.test(saved) ? "gemini-2.5-flash-lite" : saved;
+    if (textProvider() === "gemini") {
+      if (!saved || /^claude/i.test(saved) || saved === "gemini-2.5-flash-lite") return "gemini-3.1-flash-lite";
+      return saved;
+    }
     return !saved || /^gemini/i.test(saved) ? "claude-sonnet-4-5" : saved;
   };
   const textKeyOk = () => textProvider() === "gemini" ? !!geminiKey() : !!claudeKey();
@@ -1853,7 +1856,7 @@ JSON만: {"image":"...","video":"..."}`;
     const textProvSel = $("#prodTextProvider");
     const syncTextModel = () => {
       const current = $("#prodModel").value.trim();
-      if (textProvSel.value === "gemini" && (!current || /^claude/i.test(current))) $("#prodModel").value = "gemini-2.5-flash-lite";
+      if (textProvSel.value === "gemini" && (!current || /^claude/i.test(current) || current === "gemini-2.5-flash-lite")) $("#prodModel").value = "gemini-3.1-flash-lite";
       if (textProvSel.value === "claude" && (!current || /^gemini/i.test(current))) $("#prodModel").value = "claude-sonnet-4-5";
     };
     if (textProvSel) textProvSel.onchange = syncTextModel;
@@ -1868,7 +1871,7 @@ JSON만: {"image":"...","video":"..."}`;
       localStorage.setItem(LS.claude, $("#prodClaudeKey").value.trim());
       localStorage.setItem(LS.gemini, $("#prodGeminiKey").value.trim());
       localStorage.setItem(LS.textProvider, textProvSel ? textProvSel.value : "gemini");
-      localStorage.setItem(LS.model, $("#prodModel").value.trim() || (textProvSel?.value === "claude" ? "claude-sonnet-4-5" : "gemini-2.5-flash-lite"));
+      localStorage.setItem(LS.model, $("#prodModel").value.trim() || (textProvSel?.value === "claude" ? "claude-sonnet-4-5" : "gemini-3.1-flash-lite"));
       localStorage.setItem(LS.imgModel, $("#prodImgModel").value.trim() || "gemini-2.5-flash-image");
       localStorage.setItem(LS.provider, provSel ? provSel.value : "gemini");
       localStorage.setItem(LS.kie, $("#prodKieKey").value.trim());
