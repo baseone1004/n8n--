@@ -559,21 +559,18 @@
     const key = inworldKey();
     if (!key) throw new Error("NO_INWORLD_KEY");
     if (!inworldVoice()) throw new Error("NO_INWORLD_VOICE");
-    const isKorean = project.lang !== "ja";
     const cleanText = String(text || "").replace(/\s+/g, " ").trim();
-    const spokenText = isKorean && inworldModel() === "inworld-tts-2"
-      ? "[한국어 원어민 여성처럼 자연스럽고 정확한 한국어 발음으로만, 차분한 조선시대 민담 구연 어조로 읽는다] " + cleanText
-      : cleanText;
+    const isKorean = project.lang !== "ja";
     const res = await apiFetch(INWORLD_TTS_URL, {
       method: "POST",
       headers: { "content-type": "application/json", "authorization": "Basic " + key },
       body: JSON.stringify({
-        text: spokenText.slice(0, 2000),
+        text: cleanText.slice(0, 2000),
         voiceId: inworldVoice(),
         modelId: inworldModel(),
         audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: 22050 },
         language: isKorean ? "ko-KR" : "ja-JP",
-        deliveryMode: /[!！?？]|놀라|분노|울부짖|통곡|절규|기뻐|환호/.test(text) ? "CREATIVE" : "BALANCED",
+        deliveryMode: isKorean ? "STABLE" : "BALANCED",
         applyTextNormalization: "ON",
         enhanceGeneration: true
       })
