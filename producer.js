@@ -600,11 +600,11 @@
       method: "POST",
       headers: { "content-type": "application/json", "authorization": "Basic " + key },
       body: JSON.stringify({
-        // 대시보드와 동일한 최소 파라미터 — 여분 필드가 영어 발화를 유발할 수 있어 제거
         text: cleanText.slice(0, 2000),
         voiceId: inworldVoice(),
         modelId: useModel,
         audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: 22050 },
+        language: isKorean ? "ko-KR" : "ja-JP", // 교차언어 유도(영어 음색을 한국어로)
         temperature: 0.8
       })
     });
@@ -688,7 +688,7 @@
           text: "안녕하세요. 옛날 옛적에, 어느 산골 마을에 지혜로운 며느리가 살고 있었습니다.",
           voiceId: voiceId, modelId: useModel,
           audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: 22050 },
-          temperature: 0.8
+          language: "ko-KR", temperature: 0.8
         })
       });
       const j = await res.json().catch(() => ({}));
