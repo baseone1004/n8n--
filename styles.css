@@ -435,6 +435,12 @@ textarea {
   color: var(--ink); padding: 10px 12px; border-radius: 9px; cursor: pointer;
   transition: all .12s;
 }
+.style-preview {
+  width: 100%; aspect-ratio: 1 / 1; margin-bottom: 9px; border-radius: 8px;
+  background-image: url("assets/style-previews-ko.png");
+  background-size: 500% 100%; background-position: var(--style-pos, 0%) center;
+  background-repeat: no-repeat; border: 1px solid var(--line);
+}
 .style-chip:hover { border-color: var(--seal); background: var(--paper); }
 .style-chip.sel { border-color: var(--seal); background: rgba(139,92,246,0.14); box-shadow: 0 0 0 2px rgba(139,92,246,0.35); }
 .style-chip.sel b::before { content: "✓ "; }
