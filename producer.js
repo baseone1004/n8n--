@@ -31,12 +31,14 @@
     inworldVoiceKo: "yeti_inworld_voice_ko",
     inworldVoiceJa: "yeti_inworld_voice_ja",
     inworldModel: "yeti_inworld_model",
+    inworldSpeechRev: "yeti_inworld_speech_rev",
     geminiVoice: "yeti_gemini_voice",          // 구버전
     geminiVoiceKo: "yeti_gemini_voice_ko",
     geminiVoiceJa: "yeti_gemini_voice_ja",
     projects: "yeti_projects"
   };
   const INWORLD_TTS_URL = "https://api.inworld.ai/tts/v1/voice";
+  const INWORLD_SPEECH_REV = "pure-ko-v2";
   const KIE_VEO_GENERATE = "https://api.kie.ai/api/v1/veo/generate";
   const KIE_VEO_STATUS = "https://api.kie.ai/api/v1/veo/record-info";
   const GEMINI_VOICES = [
@@ -561,14 +563,11 @@
     if (!inworldVoice()) throw new Error("NO_INWORLD_VOICE");
     const cleanText = String(text || "").replace(/\s+/g, " ").trim();
     const isKorean = project.lang !== "ja";
-    const controlledText = isKorean && inworldModel() === "inworld-tts-2"
-      ? "[Speak only the Korean script in a calm, dignified, mature Korean female voice, like a wise Joseon-era Queen Dowager. Use slow measured pacing, clear native Korean pronunciation, a slightly low pitch, and restrained emotion. Do not read these instructions aloud.] " + cleanText
-      : cleanText;
     const res = await apiFetch(INWORLD_TTS_URL, {
       method: "POST",
       headers: { "content-type": "application/json", "authorization": "Basic " + key },
       body: JSON.stringify({
-        text: controlledText.slice(0, 2000),
+        text: cleanText.slice(0, 2000),
         voiceId: inworldVoice(),
         modelId: inworldModel(),
         audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: 22050 },
@@ -2488,17 +2487,22 @@ JSON만: {"video":"..."}`;
       if ($("#prodKieVideoModel")) localStorage.setItem(LS.kieVideoModel, $("#prodKieVideoModel").value.trim() || "veo3_fast");
       const oldInworldVoiceKo = localStorage.getItem(LS.inworldVoiceKo) || "";
       const newInworldVoiceKo = $("#prodInworldVoiceKo") ? $("#prodInworldVoiceKo").value.trim() : oldInworldVoiceKo;
+      const oldInworldModel = localStorage.getItem(LS.inworldModel) || "inworld-tts-2";
+      const newInworldModel = $("#prodInworldModel") ? $("#prodInworldModel").value : oldInworldModel;
+      const oldSpeechRev = localStorage.getItem(LS.inworldSpeechRev) || "";
       if ($("#prodInworldKey")) localStorage.setItem(LS.inworld, $("#prodInworldKey").value.trim().replace(/^Basic\s+/i, ""));
       if ($("#prodInworldVoiceKo")) localStorage.setItem(LS.inworldVoiceKo, newInworldVoiceKo);
       if ($("#prodInworldVoiceJa")) localStorage.setItem(LS.inworldVoiceJa, $("#prodInworldVoiceJa").value.trim());
-      if ($("#prodInworldModel")) localStorage.setItem(LS.inworldModel, $("#prodInworldModel").value);
-      if (oldInworldVoiceKo !== newInworldVoiceKo && project.lang === "ko") {
+      if ($("#prodInworldModel")) localStorage.setItem(LS.inworldModel, newInworldModel);
+      localStorage.setItem(LS.inworldSpeechRev, INWORLD_SPEECH_REV);
+      const resetInworldAudio = project.lang === "ko" && (oldInworldVoiceKo !== newInworldVoiceKo || oldInworldModel !== newInworldModel || oldSpeechRev !== INWORLD_SPEECH_REV);
+      if (resetInworldAudio) {
         project.scenes.forEach((s) => { s.audioDataUrl = ""; s.durationSec = 0; });
         saveProject();
       }
       $("#prodKeyPanel").hidden = true;
       render();
-      toast("키를 저장했어요");
+      toast(resetInworldAudio ? "저장 완료 · 기존 음성을 지웠어요. 인월드 음성을 새로 생성하세요" : "키를 저장했어요");
     };
 
     // 언어 전환 (한국어 / 日本語)
