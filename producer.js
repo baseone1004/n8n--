@@ -805,11 +805,55 @@ ${b === 0 ? `\n첫 장면(인트로)은 6문장 포맷: 파격 대사→압축 �
 ${end === n ? `\n마지막 장면은 이 이야기에 맞는 주제 한 문장 + 고정 마무리 멘트: "${ja ? OUTRO_KO + " (일본어로)" : OUTRO_KO}"` : ""}
 ${langDirective()}
 JSON 배열만, 정확히 ${end - b}개: ["장면 대본", ...]`;
-        try {
-          const arr = await aiJSON(sysN, usrN, 12000);
-          (arr || []).forEach((t, k) => { if (project.scenes[b + k]) project.scenes[b + k].text = String(t); });
-        } catch (e) {
-          for (let i = b; i < end; i++) if (!project.scenes[i].text) project.scenes[i].text = "(이 장면 생성 실패 — 편집에서 직접 쓰거나 다시 시도)";
+        let batchError = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const arr = await aiJSON(sysN, usrN, 12000);
+            if (!Array.isArray(arr) || arr.length !== end - b) throw new Error(`장면 수 불일치: ${arr?.length || 0}/${end - b}`);
+            arr.forEach((t, k) => {
+              const text = String(t || "").trim();
+              if (text.length < 80) throw new Error(`${b + k + 1}번 장면 내용이 너무 짧습니다.`);
+              project.scenes[b + k].text = text;
+            });
+            batchError = null;
+            break;
+          } catch (e) {
+            batchError = e;
+            if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 700 * (attempt + 1)));
+          }
+        }
+
+        // 묶음 생성이 계속 실패하면 해당 묶음을 장면별로 다시 요청한다.
+        if (batchError) {
+          for (let i = b; i < end; i++) {
+            let sceneError = null;
+            for (let attempt = 0; attempt < 3; attempt++) {
+              try {
+                const one = await aiJSON(sysN,
+`제목: ${project.title}
+전체 장면 개요:
+${outline}
+
+${i > 0 && project.scenes[i - 1].text ? "직전 장면 마지막 부분:\n" + project.scenes[i - 1].text.slice(-300) + "\n\n" : ""}${i + 1}번 장면만 완성된 낭독 대본으로 작성하라.
+장면 개요: ${project.scenes[i].beat}
+- 약 900~1400자, 자연스러운 서술과 대화 포함
+- 앞뒤 장면과 자연스럽게 연결하고 결말을 미리 노출하지 말 것
+${project.scenes[i].isIntro ? `- 인트로 6문장 포맷과 마지막 구독 유도 문구 "${ja ? "일본어 구독 유도 문구" : CTA_KO}" 포함` : ""}
+${i === n - 1 ? `- 이야기의 주제 한 문장과 고정 마무리 멘트 "${ja ? OUTRO_KO + " (일본어로)" : OUTRO_KO}" 포함` : ""}
+${langDirective()}
+JSON 배열에 완성 대본 문자열 하나만 출력: ["완성 대본"]`, 5000);
+                const text = String(Array.isArray(one) ? one[0] : "").trim();
+                if (text.length < 80) throw new Error(`${i + 1}번 장면 내용이 너무 짧습니다.`);
+                project.scenes[i].text = text;
+                sceneError = null;
+                break;
+              } catch (e) {
+                sceneError = e;
+                if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 700 * (attempt + 1)));
+              }
+            }
+            if (sceneError) throw new Error(`${i + 1}번 장면을 자동 재시도했지만 작성하지 못했습니다: ${sceneError.message}`);
+          }
         }
         saveProject();
       }
