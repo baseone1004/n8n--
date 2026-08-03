@@ -55,7 +55,7 @@
     { key: "export", name: "캡컷 내보내기" }
   ];
   const stepOf = (k) => STEPS.findIndex((s) => s.key === k);
-  function goStep(k) { stepIdx = stepOf(k); render(); }
+  function goStep(k) { stepIdx = stepOf(k); project.lastStep = k; saveProject(); render(); }
 
   // 언어별 설정 (한국 야담 / 일본 괴담·옛이야기)
   const LANG = {
@@ -138,6 +138,8 @@
     return {
       id: "p" + Date.now(),
       createdAt: Date.now(),
+      updatedAt: Date.now(),
+      lastStep: "category",
       lang: lang,
       category: "",
       topics: [],
@@ -659,7 +661,7 @@
       // 단계 번호를 눌러서 바로 이동
       st.title = "이 단계로 이동";
       st.style.cursor = busy ? "default" : "pointer";
-      if (!busy) st.onclick = () => { if (i !== stepIdx) { stepIdx = i; render(); } };
+      if (!busy) st.onclick = () => { if (i !== stepIdx) { stepIdx = i; project.lastStep = STEPS[i].key; saveProject(); render(); } };
       w.appendChild(st);
     });
   }
@@ -668,7 +670,7 @@
     const nav = $("#prodNav"); nav.innerHTML = "";
     const back = el("button", "btn sm", "← 뒤로");
     back.disabled = stepIdx === 0 || busy;
-    back.onclick = () => { if (stepIdx > 0) { stepIdx--; render(); } };
+    back.onclick = () => { if (stepIdx > 0) { stepIdx--; project.lastStep = STEPS[stepIdx].key; saveProject(); render(); } };
     nav.appendChild(back);
     // 오른쪽 버튼은 각 단계 렌더가 필요 시 추가
     const right = el("div", "editor-buttons");
@@ -1132,8 +1134,13 @@ ${scenes.join("\n")}`;
     body.appendChild(el("div", "field-label", "그림체 고르기"));
     const grid = el("div", "style-list");
     stylePresetsFor(project.lang).forEach((preset) => {
+      const previewIndex = stylePresetsFor(project.lang).indexOf(preset);
       const chip = el("button", "style-chip" + (project.style === preset.tail ? " sel" : ""));
-      chip.innerHTML = `<b>${esc(preset.name)}</b><span>${esc(preset.desc)}</span>`;
+      if (project.lang === "ko") {
+        const preview = el("div", "style-preview"); preview.style.setProperty("--style-pos", `${previewIndex * 25}%`);
+        chip.appendChild(preview);
+      }
+      chip.insertAdjacentHTML("beforeend", `<b>${esc(preset.name)}</b><span>${esc(preset.desc)}</span>`);
       chip.onclick = () => { project.style = preset.tail; saveDebounced(); render(); };
       grid.appendChild(chip);
     });
@@ -2172,11 +2179,13 @@ JSON만: {"video":"..."}`;
     idbSet("projects", _projCache).catch(() => {});
     // 가벼운 백업(이미지 제외)도 localStorage에 — IDB 못 쓰는 환경 대비
     try {
-      const light = _projCache.map((p) => ({ ...p, scenes: (p.scenes || []).map((s) => ({ ...s, imageDataUrl: "", audioDataUrl: "" })), characters: (p.characters || []).map((c) => ({ ...c, imageDataUrl: "" })), thumb: p.thumb ? { ...p.thumb, imageDataUrl: "", finalDataUrl: "" } : p.thumb }));
+      const light = _projCache.map((p) => ({ ...p, scenes: (p.scenes || []).map((s) => ({ ...s, imageDataUrl: "", audioDataUrl: "" })), characters: (p.characters || []).map((c) => ({ ...c, imageDataUrl: "" })), thumb: p.thumb ? { ...p.thumb, imageDataUrl: "", finalDataUrl: "", copies: (p.thumb.copies || []).map((c) => ({ ...c, imageDataUrl: "", finalDataUrl: "" })) } : p.thumb }));
       localStorage.setItem(LS.projects, JSON.stringify(light));
     } catch (e) {}
   }
   function saveProject() {
+    project.lastStep = STEPS[stepIdx]?.key || project.lastStep || "category";
+    project.updatedAt = Date.now();
     const all = loadProjects();
     const idx = all.findIndex((p) => p.id === project.id);
     const meta = { ...project };
@@ -2207,9 +2216,15 @@ JSON만: {"video":"..."}`;
     all.forEach((p) => {
       const it = el("div", "proj-item");
       const t = el("div", "pi-title", esc(p.title || p.topics?.[p.topicIdx]?.title || p.category || "제목 미정"));
-      t.onclick = () => { project = p; if (!project.characters) project.characters = []; stepIdx = p.scenes?.length ? 2 : 1; $("#prodProjPanel").hidden = true; render(); };
+      t.onclick = () => {
+        project = migrateOldKoreanStyle(p); if (!project.characters) project.characters = [];
+        const savedStep = stepOf(project.lastStep || "");
+        stepIdx = savedStep >= 0 ? savedStep : (p.scenes?.length ? stepOf("script") : p.topics?.length ? stepOf("topic") : 0);
+        $("#prodProjPanel").hidden = true; saveProject(); render(); toast(`${STEPS[stepIdx].name} 단계부터 이어서 작업합니다`);
+      };
       it.appendChild(t);
-      it.appendChild(el("div", "pi-meta", new Date(p.createdAt).toLocaleDateString("ko")));
+      const savedStep = stepOf(p.lastStep || "");
+      it.appendChild(el("div", "pi-meta", `이어하기 · ${savedStep >= 0 ? STEPS[savedStep].name : "대본·정보"} · ${new Date(p.updatedAt || p.createdAt).toLocaleString("ko")}`));
       const del = el("button", null, "삭제");
       del.onclick = () => { _projCache = loadProjects().filter((x) => x.id !== p.id); persistProjects(); renderProjList(); };
       it.appendChild(del);
