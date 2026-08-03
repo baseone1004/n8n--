@@ -977,14 +977,22 @@ JSON 배열에 완성 대본 문자열 하나만 출력: ["완성 대본"]`, 500
 언어/시대 기준: ${LANG[project.lang].setting}
 선택된 그림체: ${project.style}
 
+나이 판정 규칙:
+- 대본에 나이·연령대 단서가 있으면 반드시 그것을 우선한다.
+- '과부'는 혼인 상태이지 노인이라는 뜻이 아니다. 별도 단서가 없으면 30~45세의 성인 여성으로 설정하고, 백발·깊은 주름·노파 외모를 금지한다.
+- '대감·고관대작·정승·판서'는 별도 단서가 없으면 50~65세의 중후하고 권위 있는 남성으로 설정한다. 청년·소년 같은 얼굴을 금지한다.
+- '노파·노인·할머니·할아버지'가 명시된 경우에만 65세 이상으로 설정한다.
+- 최종 나이를 숫자 하나로 확정하고 profile과 referencePrompt에도 같은 나이를 명시한다.
+
 JSON 형식:
-{"profile":"이름, 성별, 나이, 얼굴형, 눈, 눈썹, 코, 피부, 머리 모양, 머리색, 체형, 상의, 하의, 외투, 신발, 장신구를 빠짐없이 적은 영어 고정 묘사", "referencePrompt":"정면/측면/전신이 한 화면에 보이는 캐릭터 시트 영어 프롬프트", "visualBible":"전체 영상의 고정 색상 팔레트, 조명, 선화, 질감, 시대 배경 건축과 소품 규칙을 영어로 명시"}
+{"age":38, "profile":"이름, 성별, 정확한 숫자 나이, 얼굴형, 눈, 눈썹, 코, 피부, 머리 모양, 머리색, 체형, 상의, 하의, 외투, 신발, 장신구를 빠짐없이 적은 영어 고정 묘사", "referencePrompt":"정확한 숫자 나이를 포함한 정면/측면/전신 캐릭터 시트 영어 프롬프트", "visualBible":"전체 영상의 고정 색상 팔레트, 조명, 선화, 질감, 시대 배경 건축과 소품 규칙을 영어로 명시"}
 
 이야기:
 ${story}`, 5000);
       project.character = project.character || {};
+      project.character.age = Math.max(1, Math.min(100, parseInt(r.age, 10) || 40));
       project.character.profile = r.profile || "";
-      project.character.imagePrompt = `${r.referencePrompt || r.profile}. Character reference sheet, front view, side view and full body, neutral pose, plain warm background. ${project.style}. no text, no labels, no modern objects.`;
+      project.character.imagePrompt = `${r.referencePrompt || r.profile}. AGE LOCK: exactly ${project.character.age} years old, never younger or older. Character reference sheet, front view, side view and full body, neutral pose, plain warm background. ${project.style}. no text, no labels, no modern objects.`;
       project.visualBible = r.visualBible || project.style;
       saveProject(); busy = false; goStep("character");
     } catch (e) { busy = false; render(); showErr($("#prodBody"), keyMissingMsg(e)); }
@@ -999,10 +1007,11 @@ ${story}`, 5000);
     stylePresetsFor(project.lang).forEach((preset) => {
       const chip = el("button", "style-chip" + (project.style === preset.tail ? " sel" : "")); chip.disabled = !!ch.imageDataUrl;
       chip.innerHTML = `<b>${esc(preset.name)}</b><span>${esc(preset.desc)}</span>`;
-      chip.onclick = () => { project.style = preset.tail; ch.imagePrompt = `${ch.profile}. Character reference sheet, front view, side view and full body, neutral pose, plain warm background. ${project.style}. no text, no labels, no modern objects.`; saveProject(); render(); };
+      chip.onclick = () => { project.style = preset.tail; ch.imagePrompt = `${ch.profile}. AGE LOCK: exactly ${parseInt(ch.age, 10) || 40} years old, never younger or older. Character reference sheet, front view, side view and full body, neutral pose, plain warm background. ${project.style}. no text, no labels, no modern objects.`; saveProject(); render(); };
       styles.appendChild(chip);
     });
     body.appendChild(styles);
+    body.appendChild(field("주인공 나이 (숫자로 직접 수정)", () => String(ch.age || 40), false, (v) => { ch.age = Math.max(1, Math.min(100, parseInt(v, 10) || 40)); saveDebounced(); }));
     body.appendChild(field("주인공 고정 외형", () => ch.profile || "", true, (v) => { ch.profile = v; saveDebounced(); }));
     body.appendChild(field("고정 미술·배경 기준", () => project.visualBible || "", true, (v) => { project.visualBible = v; saveDebounced(); }));
     const card = el("div", "scene"); card.appendChild(el("div", "scene-no", "주인공 기준 이미지 · KIE 4K"));
@@ -1021,7 +1030,9 @@ ${story}`, 5000);
     if (ch.imageDataUrl && !confirm("주인공 기준 이미지를 다시 생성할까요? KIE 4K 이미지 비용이 다시 발생하며, 이후 장면도 새 기준에 맞춰 다시 생성하는 것이 좋습니다.")) return;
     const box = $("#characterImage"); if (box) { box.innerHTML = ""; box.appendChild(el("div", "spinner")); }
     try {
-      ch.imageDataUrl = await genImage(ch.imagePrompt || ch.profile);
+      const age = Math.max(1, Math.min(100, parseInt(ch.age, 10) || 40));
+      const prompt = `${ch.imagePrompt || ch.profile}\nCRITICAL AGE OVERRIDE: this person is exactly ${age} years old. The face, skin, hair and body must visibly match age ${age}; never depict younger or older.`;
+      ch.imageDataUrl = await genImage(prompt);
       ch.remoteUrl = imgProvider() === "kie" ? lastKieAssetUrl : "";
       saveProject(); render(); toast("주인공 기준 이미지를 고정했어요");
     } catch (e) { toast("주인공 이미지 실패: " + String(e.message).slice(0, 80)); render(); }
@@ -1083,12 +1094,16 @@ ${text}`, 16000);
 `화풍(STYLE_TAIL): ${project.style}
 인물 기본: ${LANG[project.lang].setting}
 주인공 고정 외형(한 단어도 임의 변경 금지): ${project.character?.profile || ""}
+주인공 나이 고정: 정확히 ${parseInt(project.character?.age, 10) || 40}세
 고정 미술·배경 기준: ${project.visualBible || project.style}
 
 아래 장면들을 각각 위 화풍으로 그릴 영어 이미지 프롬프트로 만들어줘. 규칙:
 - 각 프롬프트는 완결된 영어 문장 2~4개. 콤마 키워드 나열 금지.
 - 인물은 ${LANG[project.lang].setting} 를 명시하고, 같은 인물은 장면마다 같은 복식·머리로 일관되게 묘사(외투/상의/하의 분리).
 - 주인공이 등장하는 모든 프롬프트에는 위 '주인공 고정 외형'을 그대로 반복하고 기준 이미지와 동일 인물임을 명시한다. 나이·얼굴·머리·복식·색상을 바꾸지 않는다.
+- '과부'는 혼인 상태일 뿐 노인을 뜻하지 않는다. 대본에 노인 단서가 없으면 30~45세 성인 여성으로 그리고 백발·깊은 주름·노파 외모를 금지한다.
+- '대감·고관대작·정승·판서'는 젊다는 단서가 없으면 50~65세의 중후하고 권위 있는 남성으로 그리고 청년·소년 얼굴을 금지한다.
+- 모든 인물의 숫자 나이와 얼굴 연령이 일치해야 하며, 신분·호칭만으로 임의로 젊거나 늙게 바꾸지 않는다.
 - 모든 장면은 위 '고정 미술·배경 기준'의 팔레트·조명·선화·질감·시대 건축을 유지한다. 장면 도중 화풍이나 시대 배경 변경 금지.
 - 장면마다 샷을 다르게(클로즈업/미디엄/롱/투샷/오버숄더/로우앵글/측면 등 이웃 장면과 다르게).
 - 인물 자세를 장면마다 다르게(걷다 멈춤/뒤돌아봄/손 뻗기/기대기/먼 곳 응시/웅크려 살핌 등). '정면에서 두 손 모은' 반복 금지.
@@ -1222,7 +1237,7 @@ ${scenes}`;
     if (box) { box.innerHTML = ""; box.appendChild(el("div", "spinner")); }
     try {
       const refs = project.character?.remoteUrl ? [project.character.remoteUrl] : [];
-      s.imageDataUrl = await genImage(`${s.imagePrompt || s.text}\nCONSISTENCY LOCK: ${project.character?.profile || ""}. VISUAL BIBLE: ${project.visualBible || project.style}`, { referenceUrls: refs });
+      s.imageDataUrl = await genImage(`${s.imagePrompt || s.text}\nCONSISTENCY LOCK: ${project.character?.profile || ""}. PROTAGONIST AGE LOCK: exactly ${parseInt(project.character?.age, 10) || 40} years old, never younger or older. VISUAL BIBLE: ${project.visualBible || project.style}`, { referenceUrls: refs });
       s.imageRemoteUrl = imgProvider() === "kie" ? lastKieAssetUrl : "";
       saveProject();
       if (box) { box.innerHTML = ""; const im = el("img"); im.src = s.imageDataUrl; box.appendChild(im); }
