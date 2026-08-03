@@ -81,7 +81,12 @@
   // 언어별 그림체 프리셋 — 한국: 참고 이미지형 2D 민담 애니 / 일본: 부드러운 애니 셀화풍
   const STYLE_PRESETS = {
     ko: [
-      { name: "강렬한 웹툰 (기본)", desc: "각진 표정·역동적 구도·선명한 선화·강한 명암", preview: "assets/style-ko-webtoon.png", tail: "bold modern Korean historical webtoon illustration, angular expressive faces, dynamic cinematic perspective, crisp variable ink lines, strong cel shadows, high-contrast teal and orange palette, graphic detailed palace and Joseon village backgrounds" }
+      { name: "부드러운 시대극 웹툰", desc: "단정한 얼굴·부드러운 셀 명암·따뜻한 자연색", preview: "assets/style-ko-soft-webtoon.png", tail: "soft premium Korean historical webtoon illustration, elegant realistic-but-drawn faces, smooth clean ink lines, gentle cel shading, warm natural earth palette, polished detailed Joseon village backgrounds, emotional and approachable" },
+      { name: "영화풍 만화", desc: "성숙한 인물·붓질 질감·극적인 따뜻한 조명", preview: "assets/style-ko-cinematic-manhwa.png", tail: "cinematic painterly Korean historical manhwa, mature proportional faces, refined brush rendering over crisp line art, dramatic warm rim light, deep burgundy and navy palette, richly textured historical interiors" },
+      { name: "강렬한 웹툰 (추천)", desc: "마음에 든 기존 3번째 이미지·역동적 구도·강한 명암", preview: "assets/style-ko-webtoon.png", tail: "bold modern Korean historical webtoon illustration, angular expressive faces, dynamic cinematic perspective, crisp variable ink lines, strong cel shadows, high-contrast teal and orange palette, graphic detailed palace and Joseon village backgrounds" },
+      { name: "2D 애니 스타일", desc: "자연스러운 성인 비율·정교한 선·선명한 셀 채색", preview: "assets/style-ko-clean-cel.png", tail: "clean contemporary Korean historical 2D cel-animation, adult natural proportions, precise thin-to-medium outlines, bright controlled cel colors, crisp facial acting, detailed but simplified Joseon architecture, balanced cinematic composition, no chibi" },
+      { name: "파스텔 2D 애니", desc: "복숭아·하늘·크림색의 낮은 대비와 부드러운 분위기", preview: "assets/style-ko-pastel-anime.png", tail: "pastel Korean historical 2D animation, natural adult proportions, delicate clean outlines, soft peach sky-blue cream and sage palette, low contrast, gentle cel shading, subtle paper texture, warm dreamy sunlight, beautiful simplified Joseon village backgrounds, no chibi" },
+      { name: "어두운 미스터리 웹툰", desc: "각진 중년 얼굴·날카로운 눈빛·달빛과 붉은 포인트", preview: "assets/style-ko-mystery-webtoon.png", tail: "dark mystery Korean historical webtoon, angular mature faces, sharp expressive eyes, dynamic low-angle framing, crisp black ink, dramatic hard cel shadows, moonlit blue palette with restrained red accents, detailed government courtyards" }
     ],
     ja: [
       { name: "애니 셀화 (기본)", desc: "깔끔한 셀 채색, 정겨운 옛이야기 느낌", tail: "traditional Japanese folktale anime illustration, clean cel shading, flat soft colors, gentle rounded faces, hand-painted rural scenery, warm nostalgic wholesome mood" },
@@ -92,8 +97,9 @@
     ]
   };
   const stylePresetsFor = (lang) => STYLE_PRESETS[lang] || STYLE_PRESETS.ko;
+  const defaultStyleFor = (lang) => lang === "ko" ? STYLE_PRESETS.ko[2].tail : stylePresetsFor(lang)[0].tail;
   function migrateOldKoreanStyle(p) {
-    if (p?.lang === "ko" && (!p.style || /semi-realistic|realistic faces|Korean manhwa|Korean folktale|retro Korean TV|picture-book watercolor|dark Korean folklore ink|traditional Korean minhwa/i.test(p.style))) p.style = STYLE_PRESETS.ko[0].tail;
+    if (p?.lang === "ko" && (!p.style || /semi-realistic|realistic faces|Korean manhwa|Korean folktale|retro Korean TV|picture-book watercolor|dark Korean folklore ink|traditional Korean minhwa/i.test(p.style))) p.style = defaultStyleFor("ko");
     return p;
   }
 
@@ -142,7 +148,7 @@
       titleTag: "",
       description: "",
       tags: [],
-      style: STYLE_PRESETS[lang][0].tail,
+      style: defaultStyleFor(lang),
       scenes: [],       // {text, imagePrompt, imageDataUrl, audioDataUrl, durationSec, isIntro, zoom}
       characters: [],   // {name, look, imageDataUrl, imageUrl} — 모든 장면에 고정되는 주인공
       watermark: LANG[lang].watermark,
@@ -373,7 +379,7 @@
   // 화풍 고정 + 실사화 방지 (nano-banana가 실사로 튀는 것 차단)
   function styleLockText() {
     return " . Art style (keep EXACTLY the same across all images): " + (project.style || "flat 2D Korean webtoon manhwa illustration") +
-      ". Bold 2D historical webtoon with angular expressive faces, dynamic cinematic staging, crisp variable ink lines and strong cel shadows. CRITICAL: NOT photorealistic, NOT a real photograph, NOT 3D render, NOT soft watercolor picture-book, NOT chibi — it must look like a dramatic hand-drawn Korean historical webtoon. no text, no letters, no watermark.";
+      ". Follow the selected style literally: keep its character proportions, face design, line weight, shading method, palette and background rendering identical across every scene. CRITICAL: hand-drawn 2D only, NOT photorealistic, NOT a real photograph, NOT 3D render, and do not mix in another illustration style. no text, no letters, no watermark.";
   }
   // 캐릭터 참조 이미지(공개 URL만) — nano-banana 이미지 조건부 생성용
   function charRefUrls() {
@@ -1123,7 +1129,7 @@ ${scenes.join("\n")}`;
 
   function renderPrompt(body) {
     body.appendChild(el("h2", "prod-h", "이미지 프롬프트"));
-    body.appendChild(el("p", "prod-sub", project.lang === "ja" ? "일본 민담용 애니 셀화풍을 선택하세요." : "한국 이미지는 강렬한 시대극 웹툰 화풍으로 고정됩니다."));
+    body.appendChild(el("p", "prod-sub", project.lang === "ja" ? "일본 민담용 애니 셀화풍을 선택하세요." : "미리보기 이미지를 보고 한국 시대극 그림체를 선택하세요. 추천 기본값은 강렬한 웹툰입니다."));
 
     body.appendChild(el("div", "field-label", "그림체 고르기"));
     const grid = el("div", "style-list");
@@ -1527,7 +1533,7 @@ JSON 배열만: [{"name":"..","age":38,"look":".."}]`;
 - 결말·정체·범인을 알 수 없게. 단서는 1~2개만. 뻔한 완료형 '~했다' 금지.
 - 4개의 사건 골격이 서로 달라야 함.
 - imageKo: 감정이 터지는 순간 한 컷(설명적 전신 금지, 얼굴/시선/동작 정점). 밤이어도 얼굴 보이게.
-- imageEn: 위 장면의 영어 이미지 프롬프트(완결 문장 2~3개). ${LANG[project.lang].setting}. 각지고 감정이 강한 얼굴, 역동적인 원근 구도, 선명한 가변 굵기 먹선, 강한 셀 명암, 청록·주황 고대비의 2D 시대극 웹툰. 카피 자리(좌측4줄→왼쪽, 하단2줄→아래)를 비운다. 얼굴 잘 보이게, 어둠으로 덮지 않기. 글자/자막/말풍선 절대 없음.
+- imageEn: 위 장면의 영어 이미지 프롬프트(완결 문장 2~3개). ${LANG[project.lang].setting}. 현재 선택한 화풍을 정확히 적용한다: ${project.style}. 카피 자리(좌측4줄→왼쪽, 하단2줄→아래)를 비운다. 얼굴 잘 보이게, 어둠으로 덮지 않기. 글자/자막/말풍선 절대 없음.
 JSON만:
 {"copies":[
  {"pos":"좌측 4줄","lines":["..","..","..",".."],"imageKo":"..","imageEn":".."},
@@ -1595,7 +1601,7 @@ JSON만:
       for (let i = 0; i < Math.min(4, t.copies.length); i++) {
         const c = t.copies[i]; btn.textContent = `썸네일 만드는 중… (${i + 1}/4)`;
         const prompt = (c.imageEn || c.imageKo || project.title) +
-          " . Dramatic Korean historical webtoon thumbnail, angular expressive face, dynamic cinematic perspective, crisp variable ink lines, strong cel shadows, high-contrast teal and orange palette, graphic detailed Joseon background. Keep the requested text area visually uncluttered. no text, no letters, no captions, no speech bubbles. " + project.style;
+          " . Use the exact currently selected illustration style for character design, linework, shading, palette and background: " + project.style + ". Strong emotional thumbnail composition with a clearly readable face. Keep the requested text area visually uncluttered. no text, no letters, no captions, no speech bubbles.";
         c.imageDataUrl = await genImage(prompt);
         c.finalDataUrl = await composeThumbCandidate(c, c.imageDataUrl);
         made++; saveProject();
@@ -2319,7 +2325,7 @@ JSON만: {"video":"..."}`;
         if (started && b.dataset.lang !== project.lang &&
             !confirm("언어를 바꾸면 새 프로젝트로 시작합니다. 계속할까요?")) return;
         if (started && b.dataset.lang !== project.lang) { project = newProject(b.dataset.lang); stepIdx = 0; }
-        else { project.lang = b.dataset.lang; if (!project.scenes.length) { project.style = STYLE_PRESETS[project.lang][0].tail; project.watermark = LANG[project.lang].watermark; } }
+        else { project.lang = b.dataset.lang; if (!project.scenes.length) { project.style = defaultStyleFor(project.lang); project.watermark = LANG[project.lang].watermark; } }
         syncLang(); render();
       });
       syncLang();
