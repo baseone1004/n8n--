@@ -406,12 +406,35 @@
   const kieRes = () => localStorage.getItem(LS.kieRes) || "2K"; // 해상도(1K/2K/4K) — 기본 2K로 비용 절약(4K 기본은 비쌈)
 
   // ---- KIE 이미지 생성 (주인공·화풍 고정 포함) ----
+  function safeImagePrompt(prompt, strict) {
+    let p = String(prompt || "")
+      .replace(/\b(corpse|dead body|lifeless body|cadaver)\b/gi, "an unconscious person receiving help")
+      .replace(/\b(dead|dying|killed|murdered|slain)\b/gi, "in grave danger")
+      .replace(/\b(kill|murder|execute|suicide|self-harm)\b/gi, "prevent a tragedy")
+      .replace(/\b(blood|bloody|gore|gory|wound|wounded|injury|injured)\b/gi, "visible distress")
+      .replace(/\b(strangle|choke|stab|slash|behead|dismember|torture)\w*\b/gi, "threaten")
+      .replace(/\b(nude|naked|sexual|erotic)\b/gi, "fully clothed")
+      .replace(/\b(weapon|knife|sword|blade|gun)\b/gi, "non-threatening traditional object");
+    if (strict) {
+      p = p.replace(/\b(violence|violent|attack|assault|abuse|revenge|threat|horror|terrifying)\w*\b/gi, "dramatic emotional conflict");
+    }
+    return p + " Family-friendly Korean folktale illustration. Gentle non-graphic emotional storytelling; everyone is fully clothed and visibly safe; calm symbolic staging suitable for all ages.";
+  }
+  const isSensitiveKieError = (e) => /sensitive|flagged|moderation|safety|unsafe content/i.test(String(e?.message || e));
   async function genImage(prompt) {
     const full = charLockText() + prompt + styleLockText() + " 16:9 widescreen cinematic composition.";
     const input = { prompt: full, image_input: [], aspect_ratio: "16:9", resolution: kieRes(), output_format: "png" };
     const refs = charRefUrls();
     if (refs.length) input.image_input = refs.slice(0, 3); // 주인공 참조로 일관성 강화(nano-banana-2 필드: image_input)
-    const url = await kieTask(kieModel(), input, 90);
+    input.prompt = safeImagePrompt(full, false);
+    let url;
+    try {
+      url = await kieTask(kieModel(), input, 90);
+    } catch (e) {
+      if (!isSensitiveKieError(e)) throw e;
+      input.prompt = safeImagePrompt(full, true);
+      url = await kieTask(kieModel(), input, 90);
+    }
     try { const r = await apiFetch(url); return await blobToDataURL(await r.blob()); }
     catch (e) { return url; } // CORS로 바이트 못 가져오면 URL 그대로(미리보기는 됨, ZIP 제외)
   }
@@ -1387,6 +1410,7 @@ JSON 배열만: [{"name":"..","age":38,"look":".."}]`;
   function kieErrMsg(e) {
     const m = String(e.message);
     if (m.includes("KIE_NO_CREDIT")) return "KIE 433: 이 API 키로 '포인트 부족' 응답. 크레딧이 있어도 뜨면 → ① kie.ai/logs 에서 실제 사유 확인 ② API 키에 사용한도 걸렸는지 확인 ③ 해상도 1K로 낮춰보기";
+    if (/sensitive|flagged|moderation|safety/i.test(m)) return "안전 필터 재시도 후에도 거절됨 — 프롬프트의 죽음·폭력 표현을 더 부드럽게 바꿔주세요";
     if (/NO_(GEMINI|KIE)_KEY/.test(m)) return "이미지 API 키 필요";
     if (/Failed to fetch/.test(m)) return "CORS/네트워크 — 웹주소에선 KIE가 막힐 수 있어요(로컬 .bat 실행)";
     return m.slice(0, 70);
