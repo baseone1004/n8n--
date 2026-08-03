@@ -78,14 +78,16 @@
     ? "\n\n중요: 결과의 모든 텍스트(제목·설명·태그·대본 등)는 반드시 자연스러운 '일본어'로 작성한다."
     : "";
 
-  // 언어별 그림체 프리셋 — 한국: 반실사 웹툰(만화)풍 / 일본: 부드러운 애니 셀화풍
+  const KO_FOLK_2D_STYLE = "Korean folktale 2D animation illustration, expressive rounded cartoon faces with large readable emotions, clean dark outlines, simple cel shading, hand-painted watercolor and gouache Joseon countryside backgrounds, warm muted earthy colors, soft paper texture, nostalgic YouTube folktale storytelling look";
+
+  // 언어별 그림체 프리셋 — 한국: 참고 이미지형 2D 민담 애니 / 일본: 부드러운 애니 셀화풍
   const STYLE_PRESETS = {
     ko: [
-      { name: "반실사 웹툰 (기본)", desc: "정제된 실사 얼굴 + 웹툰 채색, 차분한 색감", tail: "semi-realistic Korean webtoon manhwa illustration, detailed painterly rendering, refined realistic faces, muted earthy color palette, soft cinematic lighting, mature historical drama mood" },
-      { name: "반실사 웹툰 · 진한 명암", desc: "강한 그림자·대비, 묵직한 분위기", tail: "semi-realistic Korean webtoon manhwa illustration, detailed rendering, refined realistic faces, strong dramatic chiaroscuro shadows, high contrast, deep moody color grading, cinematic" },
-      { name: "반실사 웹툰 · 부드러운 톤", desc: "은은한 파스텔, 따뜻하고 잔잔", tail: "semi-realistic Korean webtoon manhwa illustration, soft gentle rendering, refined realistic faces, muted soft pastel palette, warm diffused lighting, calm nostalgic mood" },
-      { name: "반실사 웹툰 · 디테일 강화", desc: "정교한 선·질감, 섬세한 묘사", tail: "highly detailed semi-realistic Korean manhwa illustration, intricate linework and textures, refined realistic faces, rich painterly detail, natural muted colors, cinematic depth" },
-      { name: "반실사 웹툰 · 수채 느낌", desc: "수채화로 물든 부드러운 채색", tail: "semi-realistic Korean manhwa illustration with watercolor-washed coloring, refined realistic faces, soft blended tones, delicate linework, gentle painterly mood" }
+      { name: "2D 민담 애니 (기본)", desc: "참고 이미지처럼 둥근 표정·굵은 선·수채 배경", tail: KO_FOLK_2D_STYLE },
+      { name: "2D 민담 애니 · 밝고 따뜻", desc: "따뜻한 햇살과 정겨운 농촌 색감", tail: KO_FOLK_2D_STYLE + ", bright warm daylight, cheerful rural palette, friendly wholesome mood" },
+      { name: "2D 민담 애니 · 감정 강조", desc: "눈물·놀람·분노가 크게 읽히는 표정", tail: KO_FOLK_2D_STYLE + ", highly expressive emotional faces, clear dramatic gestures, strong storybook emotion" },
+      { name: "2D 민담 애니 · 어두운 야담", desc: "밤·괴담에도 얼굴은 밝고 선명하게", tail: KO_FOLK_2D_STYLE + ", moody blue night atmosphere, readable illuminated faces, dramatic folklore mystery" },
+      { name: "2D 민담 애니 · 담채화", desc: "종이 질감과 옅은 전통 수채 채색", tail: KO_FOLK_2D_STYLE + ", delicate Korean ink-and-watercolor wash, visible paper grain, soft desaturated pigments" }
     ],
     ja: [
       { name: "애니 셀화 (기본)", desc: "깔끔한 셀 채색, 정겨운 옛이야기 느낌", tail: "traditional Japanese folktale anime illustration, clean cel shading, flat soft colors, gentle rounded faces, hand-painted rural scenery, warm nostalgic wholesome mood" },
@@ -96,6 +98,10 @@
     ]
   };
   const stylePresetsFor = (lang) => STYLE_PRESETS[lang] || STYLE_PRESETS.ko;
+  function migrateOldKoreanStyle(p) {
+    if (p?.lang === "ko" && (!p.style || /semi-realistic|realistic faces|Korean manhwa/i.test(p.style))) p.style = KO_FOLK_2D_STYLE;
+    return p;
+  }
 
   // 대본 규칙(정제본 v11.3) — 제목 패턴 / 인트로 / 고정 멘트
   const TITLE_PATTERNS =
@@ -371,7 +377,7 @@
   // 화풍 고정 + 실사화 방지 (nano-banana가 실사로 튀는 것 차단)
   function styleLockText() {
     return " . Art style (keep EXACTLY the same across all images): " + (project.style || "flat 2D Korean webtoon manhwa illustration") +
-      ". Flat 2D drawn cel-shaded webtoon/manhwa illustration. CRITICAL: NOT photorealistic, NOT a real photograph, NOT 3D render, NOT realistic skin/lighting — it must look hand-drawn like the reference style. no text, no letters, no watermark.";
+      ". Flat 2D cel animation characters with clean dark outlines and clearly readable expressions. Hand-painted watercolor/gouache historical village background with soft paper texture. CRITICAL: NOT photorealistic, NOT a real photograph, NOT 3D render, NOT realistic skin/lighting — it must look hand-drawn like a Korean folktale animation. no text, no letters, no watermark.";
   }
   // 캐릭터 참조 이미지(공개 URL만) — nano-banana 이미지 조건부 생성용
   function charRefUrls() {
@@ -616,6 +622,7 @@
 
   // ============ 렌더 ============
   function render() {
+    migrateOldKoreanStyle(project);
     renderStepper();
     const body = $("#prodBody");
     body.innerHTML = "";
@@ -1120,7 +1127,7 @@ ${scenes.join("\n")}`;
 
   function renderPrompt(body) {
     body.appendChild(el("h2", "prod-h", "이미지 프롬프트"));
-    body.appendChild(el("p", "prod-sub", `그림체를 고르면 모든 장면에 적용돼요. ${project.lang === "ja" ? "일본 민담용 애니 셀화풍" : "한국 야담용 반실사 웹툰풍"} 중에서 선택하세요.`));
+    body.appendChild(el("p", "prod-sub", `그림체를 고르면 모든 장면에 적용돼요. ${project.lang === "ja" ? "일본 민담용 애니 셀화풍" : "한국 민담용 2D 애니·수채 배경"} 중에서 선택하세요.`));
 
     body.appendChild(el("div", "field-label", "그림체 고르기"));
     const grid = el("div", "style-list");
@@ -1410,7 +1417,7 @@ JSON 배열만: [{"name":"..","age":38,"look":".."}]`;
   // ---- 5.5 썸네일 ----
   function renderThumb(body) {
     body.appendChild(el("h2", "prod-h", "썸네일"));
-    body.appendChild(el("p", "prod-sub", "클릭을 부르는 <b>썸네일 카피 4종</b>을 만들고, 고른 카피에 맞춰 <b>썸네일 이미지</b>(글자 들어갈 자리 비움)를 생성합니다. 글자는 캡컷/편집기에서 얹으세요."));
+    body.appendChild(el("p", "prod-sub", "참고 이미지처럼 <b>2D 민담 이미지 + 큰 다색 글자</b>가 합쳐진 완성 썸네일 4종을 만들고, 마음에 드는 하나를 클릭해 선택합니다."));
 
     const t = project.thumb || (project.thumb = { copies: [], chosen: -1, imagePrompt: "", imageDataUrl: "" });
 
@@ -1423,16 +1430,25 @@ JSON 배열만: [{"name":"..","age":38,"look":".."}]`;
       const list = el("div", "topic-list");
       t.copies.forEach((c, i) => {
         const card = el("div", "topic-card" + (t.chosen === i ? " sel" : ""));
+        if (c.finalDataUrl) {
+          const preview = el("img"); preview.src = c.finalDataUrl; preview.alt = `썸네일 후보 ${i + 1}`;
+          preview.style.width = "100%"; preview.style.maxWidth = "520px"; preview.style.borderRadius = "10px"; preview.style.marginBottom = "10px";
+          card.appendChild(preview);
+        }
         card.appendChild(el("div", "topic-rank", c.pos || (i < 2 ? "좌측 4줄" : "하단 2줄")));
         const lines = el("div", "topic-title");
         lines.style.whiteSpace = "pre-line"; lines.style.fontSize = "18px";
         lines.textContent = (c.lines || []).join("\n");
         card.appendChild(lines);
         if (c.imageKo) card.appendChild(el("div", "topic-hook", "🖼 " + esc(c.imageKo)));
-        card.onclick = () => { t.chosen = i; saveDebounced(); render(); };
+        card.onclick = () => { t.chosen = i; t.imageDataUrl = c.imageDataUrl || ""; t.finalDataUrl = c.finalDataUrl || ""; saveDebounced(); render(); };
         list.appendChild(card);
       });
       body.appendChild(list);
+
+      const makeFour = el("button", "btn btn-primary", t.copies.every((c) => c.finalDataUrl) ? "↻ 이미지+글자 4개 다시 생성" : `✨ 이미지+글자 4개 생성 (약 ${(imgCostWon() * 4).toLocaleString("ko")}원)`);
+      makeFour.onclick = () => genFourThumbCandidates(makeFour);
+      body.appendChild(makeFour);
 
       if (t.chosen >= 0) {
         const box = el("div", "scene");
@@ -1511,7 +1527,7 @@ JSON 배열만: [{"name":"..","age":38,"look":".."}]`;
 - 결말·정체·범인을 알 수 없게. 단서는 1~2개만. 뻔한 완료형 '~했다' 금지.
 - 4개의 사건 골격이 서로 달라야 함.
 - imageKo: 감정이 터지는 순간 한 컷(설명적 전신 금지, 얼굴/시선/동작 정점). 밤이어도 얼굴 보이게.
-- imageEn: 위 장면의 영어 이미지 프롬프트(완결 문장 2~3개). ${LANG[project.lang].setting}. 카피 자리(좌측4줄→왼쪽, 하단2줄→아래)를 비운다. 얼굴 잘 보이게, 어둠으로 덮지 않기. 글자/자막/말풍선 절대 없음.
+- imageEn: 위 장면의 영어 이미지 프롬프트(완결 문장 2~3개). ${LANG[project.lang].setting}. 참고 이미지처럼 둥글고 표정이 큰 2D 애니 인물, 굵고 깨끗한 외곽선, 수채·담채 느낌 조선 마을 배경, 따뜻하고 바랜 색감. 카피 자리(좌측4줄→왼쪽, 하단2줄→아래)를 비운다. 얼굴 잘 보이게, 어둠으로 덮지 않기. 글자/자막/말풍선 절대 없음.
 JSON만:
 {"copies":[
  {"pos":"좌측 4줄","lines":["..","..","..",".."],"imageKo":"..","imageEn":".."},
@@ -1540,10 +1556,54 @@ JSON만:
         " . emotional climax moment, face clearly visible, warm readable lighting, leave empty space for title text. no text, no letters, no captions, no speech bubbles. " + project.style;
       t.imagePrompt = prompt;
       t.imageDataUrl = await genImage(prompt);
+      c.imageDataUrl = t.imageDataUrl;
       saveProject(); render();
     } catch (e) {
       if (box) { box.innerHTML = ""; box.textContent = "실패"; }
       toast("썸네일 실패: " + (/NO_(GEMINI|KIE)_KEY/.test(String(e.message)) ? "이미지 API 키 필요" : String(e.message).slice(0, 60)));
+    }
+  }
+
+  async function composeThumbCandidate(c, imageDataUrl) {
+    const lines = (c.lines || []).filter((x) => x && x.trim());
+    const leftMode = /좌측/.test(c.pos || "") || lines.length >= 3;
+    const img = await loadImg(imageDataUrl);
+    try { await document.fonts.load("900 100px 'Nanum Myeongjo'"); await document.fonts.ready; } catch (e) {}
+    const W = 1280, H = 720;
+    const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    const ctx = cv.getContext("2d"); drawCover(ctx, img, W, H);
+    ctx.textBaseline = "alphabetic"; ctx.lineJoin = "round";
+    if (leftMode) {
+      const fs = Math.round(H * 0.135); ctx.font = `900 ${fs}px 'Nanum Myeongjo', 'Malgun Gothic', sans-serif`; ctx.textAlign = "left";
+      const lh = fs * 1.12, x = Math.round(W * 0.04); let y = Math.round((H - lh * lines.length) / 2) + fs;
+      lines.forEach((line) => { drawTextOutlined(ctx, line, x, y, fs); y += lh; });
+    } else {
+      const fs = Math.round(H * 0.11); ctx.font = `900 ${fs}px 'Nanum Myeongjo', 'Malgun Gothic', sans-serif`; ctx.textAlign = "center";
+      const lh = fs * 1.15; let y = H - Math.round(H * 0.06) - lh * (lines.length - 1);
+      lines.forEach((line) => { drawTextOutlined(ctx, line, W / 2, y, fs); y += lh; });
+    }
+    return cv.toDataURL("image/png");
+  }
+
+  async function genFourThumbCandidates(btn) {
+    const t = project.thumb;
+    if (!imgKeyOk()) { toast("⚙ 이미지 생성 API 키를 먼저 넣어주세요"); openKeys(); return; }
+    if (!confirm(`썸네일 후보 이미지 4장을 만들고 글자를 합성합니다. 약 ${(imgCostWon() * 4).toLocaleString("ko")}원입니다. 진행할까요?`)) return;
+    btn.disabled = true;
+    let made = 0;
+    try {
+      for (let i = 0; i < Math.min(4, t.copies.length); i++) {
+        const c = t.copies[i]; btn.textContent = `썸네일 만드는 중… (${i + 1}/4)`;
+        const prompt = (c.imageEn || c.imageKo || project.title) +
+          " . Korean folktale 2D animation thumbnail, expressive rounded face, clean bold outlines, simple cel shading, hand-painted watercolor Joseon village background, warm faded colors, strong emotional storytelling composition. Keep the requested text area visually uncluttered. no text, no letters, no captions, no speech bubbles. " + project.style;
+        c.imageDataUrl = await genImage(prompt);
+        c.finalDataUrl = await composeThumbCandidate(c, c.imageDataUrl);
+        made++; saveProject();
+      }
+      t.chosen = 0; t.imageDataUrl = t.copies[0]?.imageDataUrl || ""; t.finalDataUrl = t.copies[0]?.finalDataUrl || "";
+      saveProject(); render(); toast("완성 썸네일 4개를 만들었습니다");
+    } catch (e) {
+      saveProject(); render(); toast(`썸네일 ${made}개 생성 후 중단: ${kieErrMsg(e)}`);
     }
   }
 
@@ -1604,7 +1664,9 @@ JSON만:
     ctx.lineWidth = Math.max(6, fs * 0.16); ctx.strokeStyle = "#000";
     ctx.strokeText(text, x, y);
     ctx.shadowColor = "transparent";
-    ctx.fillStyle = "#fff2b0"; // 노란빛 흰색 — 야담 썸네일 감성
+    const colors = ["#b9ff48", "#ff674d", "#55e5ff", "#ffd84d"];
+    let colorIndex = 0; for (let i = 0; i < text.length; i++) colorIndex = (colorIndex + text.charCodeAt(i)) % colors.length;
+    ctx.fillStyle = colors[colorIndex]; // 참고 썸네일처럼 줄마다 초록·빨강·하늘·노랑
     ctx.fillText(text, x, y);
     ctx.restore();
   }
