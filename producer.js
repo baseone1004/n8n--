@@ -882,6 +882,60 @@ JSON 배열에 완성 대본 문자열 하나만 출력: ["완성 대본"]`, 500
     return f;
   }
 
+  const failedScene = (scene) => {
+    const text = String(scene?.text || "").trim();
+    return text.length < 80 || text.includes("이 장면 생성 실패") || text.includes("장면 생성 실패");
+  };
+
+  async function repairFailedScenes(btn) {
+    const targets = project.scenes.map((scene, index) => ({ scene, index })).filter(({ scene }) => failedScene(scene));
+    if (!targets.length) { toast("복구할 장면이 없습니다"); return; }
+    const outline = project.scenes.map((scene, index) => `${index + 1}. ${scene.beat || "장면 개요 없음"}`).join("\n");
+    btn.disabled = true;
+    try {
+      for (let pos = 0; pos < targets.length; pos++) {
+        const { scene, index } = targets[pos];
+        btn.textContent = `실패 장면 복구 중… (${pos + 1}/${targets.length})`;
+        let lastError = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const previous = index > 0 ? String(project.scenes[index - 1].text || "").slice(-400) : "";
+            const result = await aiJSON(`너는 ${LANG[project.lang].audience} 낭독 대본 전문 작가다. 반드시 JSON 문자열 배열만 출력한다.`,
+`제목: ${project.title}
+전체 장면 개요:
+${outline}
+
+${previous ? `직전 장면 마지막 부분:\n${previous}\n\n` : ""}${index + 1}번 장면의 완성된 낭독 대본 하나만 다시 작성하라.
+장면 개요: ${scene.beat || "앞뒤 흐름에 맞는 장면"}
+- 약 900~1400자, 자연스러운 서술과 대화 포함
+- 앞뒤 장면과 자연스럽게 연결하고 결말을 미리 노출하지 말 것
+${scene.isIntro ? `- 인트로 6문장 포맷과 마지막 구독 유도 문구 "${project.lang === "ja" ? "일본어 구독 유도 문구" : CTA_KO}" 포함` : ""}
+${index === project.scenes.length - 1 ? `- 이야기의 주제 한 문장과 고정 마무리 멘트 "${project.lang === "ja" ? OUTRO_KO + " (일본어로)" : OUTRO_KO}" 포함` : ""}
+${langDirective()}
+JSON 배열에 완성 대본 문자열 하나만 출력: ["완성 대본"]`, 5000);
+            const text = String(Array.isArray(result) ? result[0] : "").trim();
+            if (text.length < 80) throw new Error("생성된 대본이 너무 짧습니다.");
+            scene.text = text;
+            lastError = null;
+            saveProject();
+            break;
+          } catch (e) {
+            lastError = e;
+            if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 700 * (attempt + 1)));
+          }
+        }
+        if (lastError) throw new Error(`${index + 1}번 장면 복구 실패: ${lastError.message}`);
+      }
+      render();
+      toast(`${targets.length}개 장면을 모두 복구했습니다`);
+    } catch (e) {
+      render();
+      showErr($("#prodBody"), keyMissingMsg(e));
+    } finally {
+      busy = false;
+    }
+  }
+
   function renderScript(body) {
     body.appendChild(el("h2", "prod-h", "대본과 유튜브 정보"));
     body.appendChild(el("p", "prod-sub", "자유롭게 <b>고쳐 쓸 수</b> 있어요. 다 됐으면 다음 단계로 넘어가세요."));
@@ -900,6 +954,12 @@ JSON 배열에 완성 대본 문자열 하나만 출력: ["완성 대본"]`, 500
 
     const sceneHead = el("div", "pkg-field");
     sceneHead.appendChild(el("div", "pkg-label", `<span>장면 대본 (${project.scenes.length}개)</span>`));
+    const failedCount = project.scenes.filter(failedScene).length;
+    if (failedCount) {
+      const repair = el("button", "btn sm btn-primary", `실패 장면 ${failedCount}개 다시 작성`);
+      repair.onclick = () => repairFailedScenes(repair);
+      sceneHead.appendChild(repair);
+    }
     pkg.appendChild(sceneHead);
     project.scenes.forEach((s, i) => pkg.appendChild(sceneTextCard(s, i)));
     body.appendChild(pkg);
