@@ -176,7 +176,7 @@
   const claudeKey = () => localStorage.getItem(LS.claude) || "";
   const geminiKey = () => localStorage.getItem(LS.gemini) || "";
   const claudeModel = () => localStorage.getItem(LS.model) || "claude-opus-5";
-  const textProvider = () => localStorage.getItem(LS.textProvider) || "claude";
+  const textProvider = () => localStorage.getItem(LS.textProvider) || "gemini";
   const geminiTextModel = () => {
     const m = localStorage.getItem(LS.geminiTextModel);
     // 신규 사용자에게 막힌 옛 모델명은 최신 별칭으로 자동 교정
@@ -214,7 +214,13 @@
   async function claudeJSON(system, user, maxTokens) {
     if (textProvider() === "gemini") return geminiJSON(system, user, maxTokens);
     const key = claudeKey();
-    if (!key) throw new Error("NO_CLAUDE_KEY");
+    if (!key) {
+      if (geminiKey()) {
+        localStorage.setItem(LS.textProvider, "gemini");
+        return geminiJSON(system, user, maxTokens);
+      }
+      throw new Error("NO_CLAUDE_KEY");
+    }
     const res = await fetch(CLAUDE_URL, {
       method: "POST",
       headers: {
@@ -232,6 +238,10 @@
     });
     if (!res.ok) {
       let d = ""; try { d = (await res.json()).error?.message; } catch (e) { d = await res.text(); }
+      if (geminiKey() && /credit balance is too low|purchase credits|plans\s*&\s*billing|insufficient.*credit/i.test(d || "")) {
+        localStorage.setItem(LS.textProvider, "gemini");
+        return geminiJSON(system, user, maxTokens);
+      }
       throw new Error(`Claude ${res.status}: ${d}`);
     }
     const j = await res.json();
