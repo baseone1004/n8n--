@@ -81,11 +81,7 @@
   // 언어별 그림체 프리셋 — 한국: 참고 이미지형 2D 민담 애니 / 일본: 부드러운 애니 셀화풍
   const STYLE_PRESETS = {
     ko: [
-      { name: "복고풍 셀 애니", desc: "둥근 얼굴·굵은 선·선명한 평면 채색", preview: "assets/style-ko-cel.png", tail: "retro Korean TV folktale 2D cel animation, chibi-influenced rounded expressive faces, very clean thick black outlines, flat saturated cel colors, minimal shading, simple hand-painted village background" },
-      { name: "수채 동화책", desc: "연필선·투명 수채·따뜻한 종이 질감", preview: "assets/style-ko-watercolor.png", tail: "gentle Korean children's picture-book watercolor illustration, soft pencil contours, loose transparent watercolor washes, visible cream paper grain, simplified warm faces, airy pastoral Joseon countryside" },
-      { name: "강렬한 웹툰", desc: "각진 표정·역동적 구도·강한 명암", preview: "assets/style-ko-webtoon.png", tail: "bold modern Korean historical webtoon illustration, angular expressive faces, dynamic cinematic perspective, crisp variable ink lines, strong cel shadows, high-contrast teal and orange palette, graphic detailed palace background" },
-      { name: "먹선 괴담", desc: "거친 붓선·남색 먹물·으스스한 밤", preview: "assets/style-ko-horror-ink.png", tail: "dark Korean folklore ink animation, scratchy expressive brush lines, elongated stylized figures, indigo black-and-white palette with one red accent, misty ink-wash moonlit background, eerie hand-drawn texture" },
-      { name: "전통 민화", desc: "해학적 비율·광물 안료·장식적 산수", preview: "assets/style-ko-minhwa.png", tail: "traditional Korean minhwa folk painting adapted for animation, flat frontal figures, intentionally naive humorous proportions, decorative patterns, mineral pigment colors, bold contour lines, parchment texture, symbolic mountains clouds flowers and animals" }
+      { name: "강렬한 웹툰 (기본)", desc: "각진 표정·역동적 구도·선명한 선화·강한 명암", preview: "assets/style-ko-webtoon.png", tail: "bold modern Korean historical webtoon illustration, angular expressive faces, dynamic cinematic perspective, crisp variable ink lines, strong cel shadows, high-contrast teal and orange palette, graphic detailed palace and Joseon village backgrounds" }
     ],
     ja: [
       { name: "애니 셀화 (기본)", desc: "깔끔한 셀 채색, 정겨운 옛이야기 느낌", tail: "traditional Japanese folktale anime illustration, clean cel shading, flat soft colors, gentle rounded faces, hand-painted rural scenery, warm nostalgic wholesome mood" },
@@ -97,7 +93,7 @@
   };
   const stylePresetsFor = (lang) => STYLE_PRESETS[lang] || STYLE_PRESETS.ko;
   function migrateOldKoreanStyle(p) {
-    if (p?.lang === "ko" && (!p.style || /semi-realistic|realistic faces|Korean manhwa|Korean folktale 2D animation illustration/i.test(p.style))) p.style = STYLE_PRESETS.ko[0].tail;
+    if (p?.lang === "ko" && (!p.style || /semi-realistic|realistic faces|Korean manhwa|Korean folktale|retro Korean TV|picture-book watercolor|dark Korean folklore ink|traditional Korean minhwa/i.test(p.style))) p.style = STYLE_PRESETS.ko[0].tail;
     return p;
   }
 
@@ -377,7 +373,7 @@
   // 화풍 고정 + 실사화 방지 (nano-banana가 실사로 튀는 것 차단)
   function styleLockText() {
     return " . Art style (keep EXACTLY the same across all images): " + (project.style || "flat 2D Korean webtoon manhwa illustration") +
-      ". Flat 2D cel animation characters with clean dark outlines and clearly readable expressions. Hand-painted watercolor/gouache historical village background with soft paper texture. CRITICAL: NOT photorealistic, NOT a real photograph, NOT 3D render, NOT realistic skin/lighting — it must look hand-drawn like a Korean folktale animation. no text, no letters, no watermark.";
+      ". Bold 2D historical webtoon with angular expressive faces, dynamic cinematic staging, crisp variable ink lines and strong cel shadows. CRITICAL: NOT photorealistic, NOT a real photograph, NOT 3D render, NOT soft watercolor picture-book, NOT chibi — it must look like a dramatic hand-drawn Korean historical webtoon. no text, no letters, no watermark.";
   }
   // 캐릭터 참조 이미지(공개 URL만) — nano-banana 이미지 조건부 생성용
   function charRefUrls() {
@@ -1127,7 +1123,7 @@ ${scenes.join("\n")}`;
 
   function renderPrompt(body) {
     body.appendChild(el("h2", "prod-h", "이미지 프롬프트"));
-    body.appendChild(el("p", "prod-sub", `그림체를 고르면 모든 장면에 적용돼요. ${project.lang === "ja" ? "일본 민담용 애니 셀화풍" : "한국 민담용 2D 애니·수채 배경"} 중에서 선택하세요.`));
+    body.appendChild(el("p", "prod-sub", project.lang === "ja" ? "일본 민담용 애니 셀화풍을 선택하세요." : "한국 이미지는 강렬한 시대극 웹툰 화풍으로 고정됩니다."));
 
     body.appendChild(el("div", "field-label", "그림체 고르기"));
     const grid = el("div", "style-list");
@@ -1531,7 +1527,7 @@ JSON 배열만: [{"name":"..","age":38,"look":".."}]`;
 - 결말·정체·범인을 알 수 없게. 단서는 1~2개만. 뻔한 완료형 '~했다' 금지.
 - 4개의 사건 골격이 서로 달라야 함.
 - imageKo: 감정이 터지는 순간 한 컷(설명적 전신 금지, 얼굴/시선/동작 정점). 밤이어도 얼굴 보이게.
-- imageEn: 위 장면의 영어 이미지 프롬프트(완결 문장 2~3개). ${LANG[project.lang].setting}. 참고 이미지처럼 둥글고 표정이 큰 2D 애니 인물, 굵고 깨끗한 외곽선, 수채·담채 느낌 조선 마을 배경, 따뜻하고 바랜 색감. 카피 자리(좌측4줄→왼쪽, 하단2줄→아래)를 비운다. 얼굴 잘 보이게, 어둠으로 덮지 않기. 글자/자막/말풍선 절대 없음.
+- imageEn: 위 장면의 영어 이미지 프롬프트(완결 문장 2~3개). ${LANG[project.lang].setting}. 각지고 감정이 강한 얼굴, 역동적인 원근 구도, 선명한 가변 굵기 먹선, 강한 셀 명암, 청록·주황 고대비의 2D 시대극 웹툰. 카피 자리(좌측4줄→왼쪽, 하단2줄→아래)를 비운다. 얼굴 잘 보이게, 어둠으로 덮지 않기. 글자/자막/말풍선 절대 없음.
 JSON만:
 {"copies":[
  {"pos":"좌측 4줄","lines":["..","..","..",".."],"imageKo":"..","imageEn":".."},
@@ -1599,7 +1595,7 @@ JSON만:
       for (let i = 0; i < Math.min(4, t.copies.length); i++) {
         const c = t.copies[i]; btn.textContent = `썸네일 만드는 중… (${i + 1}/4)`;
         const prompt = (c.imageEn || c.imageKo || project.title) +
-          " . Korean folktale 2D animation thumbnail, expressive rounded face, clean bold outlines, simple cel shading, hand-painted watercolor Joseon village background, warm faded colors, strong emotional storytelling composition. Keep the requested text area visually uncluttered. no text, no letters, no captions, no speech bubbles. " + project.style;
+          " . Dramatic Korean historical webtoon thumbnail, angular expressive face, dynamic cinematic perspective, crisp variable ink lines, strong cel shadows, high-contrast teal and orange palette, graphic detailed Joseon background. Keep the requested text area visually uncluttered. no text, no letters, no captions, no speech bubbles. " + project.style;
         c.imageDataUrl = await genImage(prompt);
         c.finalDataUrl = await composeThumbCandidate(c, c.imageDataUrl);
         made++; saveProject();
