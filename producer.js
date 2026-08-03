@@ -175,6 +175,7 @@
   // ============ 키/설정 ============
   const claudeKey = () => localStorage.getItem(LS.claude) || "";
   const geminiKey = () => localStorage.getItem(LS.gemini) || "";
+  const isGeminiApiKey = (key) => /^(?:AIza|AQ[._-]?)[0-9A-Za-z._-]{15,}$/.test((key || "").trim());
   const claudeModel = () => localStorage.getItem(LS.model) || "claude-opus-5";
   const textProvider = () => localStorage.getItem(LS.textProvider) || "gemini";
   const geminiTextModel = () => {
@@ -252,14 +253,15 @@
   async function geminiJSON(system, user, maxTokens) {
     const key = geminiKey();
     if (!key) throw new Error("NO_GEMINI_KEY");
+    if (!isGeminiApiKey(key)) throw new Error("INVALID_GEMINI_KEY_TYPE");
     // 최신 Gemini는 thinking 토큰이 출력 한도를 잡아먹으므로 넉넉히(최소 16000) 확보
     const cap = Math.min(Math.max(maxTokens || 8000, 16000), 60000);
     const call = (noThink) => {
       const gen = { temperature: 0.95, maxOutputTokens: cap, responseMimeType: "application/json" };
       // thinking(생각) 토큰이 출력 한도를 잡아먹어 JSON이 잘리는 것 방지 → 끔
       if (noThink) gen.thinkingConfig = { thinkingBudget: 0 };
-      return fetch(GEMINI_BASE + geminiTextModel() + ":generateContent?key=" + encodeURIComponent(key), {
-        method: "POST", headers: { "content-type": "application/json" },
+      return fetch(GEMINI_BASE + geminiTextModel() + ":generateContent", {
+        method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key },
         body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ parts: [{ text: user }] }], generationConfig: gen })
       });
     };
@@ -445,8 +447,8 @@
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: geminiVoice() } } }
       }
     };
-    const res = await fetch(GEMINI_BASE + TTS_MODEL + ":generateContent?key=" + encodeURIComponent(key), {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body)
+    const res = await fetch(GEMINI_BASE + TTS_MODEL + ":generateContent", {
+      method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body)
     });
     if (!res.ok) {
       let d = ""; try { d = (await res.json()).error?.message; } catch (e) { d = await res.text(); }
@@ -714,6 +716,7 @@
     const m = String(e.message);
     if (m.includes("NO_CLAUDE_KEY")) return "⚙ 키 설정에서 <b>Anthropic API 키</b>를 먼저 넣어주세요.";
     if (m.includes("NO_GEMINI_KEY")) return "⚙ 키 설정에서 <b>✍️ 글작성(대본) API</b> 칸에 <b>Google AI 키(AIza…)</b>를 먼저 넣어주세요.";
+    if (m.includes("INVALID_GEMINI_KEY_TYPE")) return "🔑 <b>Google AI API 키 형식이 아닙니다.</b><br><b>AQ… 또는 AIza…</b>로 시작하는 키를 넣어주세요. OAuth 클라이언트 ID와 Google 로그인은 사용하지 않습니다.";
     if (m.includes("NO_KIE_KEY")) return "⚙ 키 설정에서 <b>KIE.ai 키</b>를 먼저 넣어주세요.";
     // Gemini 모델 사용 불가(404/deprecated)
     if (/Gemini\(대본\)\s*404/.test(m) || /no longer available|is not found|not supported|update your code to use a newer model/.test(m)) {
@@ -736,22 +739,22 @@
     const out = $("#prodTestGeminiResult");
     const key = ($("#prodGeminiKey").value || "").trim();
     const set = (msg, ok) => { if (out) { out.innerHTML = msg; out.style.color = ok ? "var(--good)" : "var(--danger)"; } };
-    if (!key) { set("❌ 키가 비었어요. AIza…로 시작하는 키를 넣으세요.", false); return; }
+    if (!key) { set("❌ 키가 비었어요. AQ… 또는 AIza…로 시작하는 키를 넣으세요.", false); return; }
     if (/apps\.googleusercontent\.com/.test(key) || key.includes(".apps.")) {
-      set("❌ 이건 <b>OAuth 클라이언트 ID</b>예요. 대본용은 <b>AIza…</b> API 키가 필요합니다.", false); return;
+      set("❌ 이건 <b>OAuth 클라이언트 ID</b>예요. 대본용은 <b>AQ… 또는 AIza…</b> API 키가 필요합니다.", false); return;
     }
-    if (!/^AIza/.test(key)) { set("⚠ 보통 <b>AIza</b>로 시작해요. 그래도 테스트해볼게요…", false); }
-    else set("⏳ 테스트 중…", true);
+    if (!isGeminiApiKey(key)) { set("❌ Google AI API 키 형식이 아니에요. AQ… 또는 AIza… 키를 확인하세요.", false); return; }
+    set("⏳ 테스트 중…", true);
     try {
-      const res = await fetch(GEMINI_BASE + geminiTextModel() + ":generateContent?key=" + encodeURIComponent(key), {
-        method: "POST", headers: { "content-type": "application/json" },
+      const res = await fetch(GEMINI_BASE + geminiTextModel() + ":generateContent", {
+        method: "POST", headers: { "content-type": "application/json", "x-goog-api-key": key },
         body: JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }], generationConfig: { maxOutputTokens: 5 } })
       });
       if (res.ok) { set("✅ 키 정상! <b>저장</b>을 누른 뒤 대본을 만들 수 있어요.", true); return; }
       let d = ""; try { d = (await res.json()).error?.message || ""; } catch (e) { d = await res.text(); }
       if (res.status === 400 && /API key not valid|API_KEY_INVALID/.test(d)) set("❌ 잘못된 키예요. <a href='https://aistudio.google.com/apikey' target='_blank' rel='noopener'>aistudio.google.com/apikey</a>에서 새로 발급하세요.", false);
       else if (/SERVICE_DISABLED|has not been used|is disabled/.test(d)) set("❌ 이 키 프로젝트에서 <b>Generative Language API</b>가 꺼져 있어요. 콘솔에서 사용 설정 후 다시 시도.", false);
-      else if (res.status === 401 || /OAuth|invalid authentication/.test(d)) set("❌ 키가 인식되지 않아요(OAuth 오류). <b>AIza…</b> API 키가 맞는지 확인하세요(로그인 ID 아님).", false);
+      else if (res.status === 401 || /OAuth|invalid authentication/.test(d)) set("❌ 키가 인식되지 않아요. <b>AQ… 또는 AIza…</b> Google AI API 키인지 확인하세요(로그인 ID 아님).", false);
       else set("❌ 오류 " + res.status + ": " + esc(d.slice(0, 90)), false);
     } catch (e) { set("❌ 네트워크 오류: " + esc(String(e.message).slice(0, 60)), false); }
   }
@@ -764,7 +767,9 @@
     if (!key) { set("❌ 먼저 Google AI 키를 넣으세요.", false); return; }
     set("⏳ 불러오는 중…", true);
     try {
-      const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=" + encodeURIComponent(key));
+      const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", {
+        headers: { "x-goog-api-key": key }
+      });
       if (!res.ok) {
         let d = ""; try { d = (await res.json()).error?.message || ""; } catch (e) { d = await res.text(); }
         set("❌ 목록 실패: " + esc(d.slice(0, 90)), false); return;
@@ -863,7 +868,7 @@ ${trend && trend.length ? "★ 최근 30일 실제로 조회수가 높았던 영
       project.topicIdx = -1;
       busy = false; goStep("topic");
     } catch (e) {
-      busy = false; renderCategory(body); showErr(body, keyMissingMsg(e));
+      busy = false; render(); showErr($("#prodBody"), keyMissingMsg(e));
     } finally { busy = false; }
   }
 
@@ -2300,6 +2305,16 @@ JSON만: {"video":"..."}`;
     if ($("#prodLoadGeminiModels")) $("#prodLoadGeminiModels").onclick = loadGeminiModels;
 
     $("#prodSaveKeys").onclick = () => {
+      const enteredGeminiKey = $("#prodGeminiKey") ? $("#prodGeminiKey").value.trim() : "";
+      if ((textSel ? textSel.value : textProvider()) === "gemini" && !isGeminiApiKey(enteredGeminiKey)) {
+        const out = $("#prodTestGeminiResult");
+        if (out) {
+          out.innerHTML = "❌ <b>AQ… 또는 AIza…</b>로 시작하는 Google AI API 키를 넣어주세요.";
+          out.style.color = "var(--danger)";
+        }
+        toast("Google AI API 키 형식을 확인하세요");
+        return;
+      }
       if ($("#prodChannelName")) localStorage.setItem(LS.channelName, $("#prodChannelName").value.trim() || "설루온");
       if (textSel) localStorage.setItem(LS.textProvider, textSel.value);
       localStorage.setItem(LS.claude, $("#prodClaudeKey").value.trim());
