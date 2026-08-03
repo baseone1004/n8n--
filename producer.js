@@ -4,7 +4,6 @@
   // ============ 상수 ============
   const CLAUDE_URL = "https://api.anthropic.com/v1/messages";
   const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models/";
-  const TTS_MODEL = "gemini-2.5-flash-preview-tts";
   const KIE_CREATE = "https://api.kie.ai/api/v1/jobs/createTask";
   const KIE_RECORD = "https://api.kie.ai/api/v1/jobs/recordInfo?taskId=";
   const LS = {
@@ -18,7 +17,6 @@
     inworld: "yeti_inworld_key",
     inworldVoice: "yeti_inworld_voice",
     inworldModel: "yeti_inworld_model",
-    geminiVoice: "yeti_gemini_voice",
     googleClientId: "yeti_yt_client_id",
     projects: "yeti_projects"
   };
@@ -165,7 +163,6 @@
   const inworldKey = () => localStorage.getItem(LS.inworld) || "";
   const inworldVoice = () => localStorage.getItem(LS.inworldVoice) || DEFAULT_INWORLD_VOICE;
   const inworldModel = () => localStorage.getItem(LS.inworldModel) || "inworld-tts-2";
-  const geminiVoice = () => localStorage.getItem(LS.geminiVoice) || "Kore";
   const imgKeyOk = () => imgProvider() === "kie" ? !!kieKey() : !!geminiKey();
 
   // ============ 토스트 ============
@@ -299,33 +296,6 @@
     throw new Error("이미지가 생성되지 않았습니다. " + (txt || "모델 응답에 이미지 없음"));
   }
 
-  // ============ Gemini TTS ============
-  async function genTTS(text) {
-    const key = geminiKey();
-    if (!key) throw new Error("NO_GEMINI_KEY");
-    const body = {
-      contents: [{ parts: [{ text: text }] }],
-      generationConfig: {
-        responseModalities: ["AUDIO"],
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: geminiVoice() } } }
-      }
-    };
-    const res = await fetch(GEMINI_BASE + TTS_MODEL + ":generateContent?key=" + encodeURIComponent(key), {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body)
-    });
-    if (!res.ok) {
-      let d = ""; try { d = (await res.json()).error?.message; } catch (e) { d = await res.text(); }
-      throw new Error(`Gemini 음성 ${res.status}: ${d}`);
-    }
-    const j = await res.json();
-    const part = (j.candidates?.[0]?.content?.parts || []).find((p) => p.inlineData?.data);
-    if (!part) throw new Error("음성이 생성되지 않았습니다.");
-    const mime = part.inlineData.mimeType || "audio/L16;rate=24000";
-    const rate = parseInt((mime.match(/rate=(\d+)/) || [])[1] || "24000", 10);
-    const wav = pcm16ToWav(base64ToBytes(part.inlineData.data), rate);
-    return { dataUrl: "data:audio/wav;base64," + bytesToBase64(wav), durationSec: (wav.length - 44) / 2 / rate };
-  }
-
   // ============ Inworld TTS ============
   function measureAudio(dataUrl) {
     return new Promise((res) => {
@@ -407,18 +377,6 @@
     for (let i = 0; i < bytes.length; i += CH) s += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
     return btoa(s);
   }
-  function pcm16ToWav(pcm, rate) {
-    const out = new Uint8Array(44 + pcm.length);
-    const dv = new DataView(out.buffer);
-    const ws = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
-    ws(0, "RIFF"); dv.setUint32(4, 36 + pcm.length, true); ws(8, "WAVE");
-    ws(12, "fmt "); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
-    dv.setUint32(24, rate, true); dv.setUint32(28, rate * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
-    ws(36, "data"); dv.setUint32(40, pcm.length, true);
-    out.set(pcm, 44);
-    return out;
-  }
-
   // ============ Store-only ZIP ============
   const CRC = (function () {
     const t = new Uint32Array(256);
@@ -1350,7 +1308,7 @@ JSON만:
     const hasInworld = !!inworldKey() && !!inworldVoice();
     body.appendChild(el("p", "prod-sub", hasInworld
       ? "<b>Inworld TTS</b>로 장면 분위기를 분석해 감정·속도를 자동 적용합니다. 실제 음성 길이와 단어 타임스탬프로 자막을 정리합니다."
-      : "Inworld <b>Basic API 키와 목소리 ID</b>를 ⚙에 넣으면 장면별 감정·속도를 자동 적용합니다. Gemini 음성과 파일 업로드도 예비 수단으로 사용할 수 있어요."));
+      : "Inworld <b>Basic API 키와 목소리 ID</b>를 입력하면 장면별 감정·속도를 자동 적용합니다. 직접 만든 음성 파일도 올릴 수 있어요."));
 
     const iwSettings = el("div", "scene");
     iwSettings.style.marginBottom = "16px";
@@ -1395,10 +1353,6 @@ JSON만:
       up.appendChild(file);
       acts.appendChild(up);
 
-      const gen = el("button", "btn sm btn-ghost", "Gemini 음성");
-      gen.onclick = () => genOneVoice(i, gen);
-      acts.appendChild(gen);
-
       if (s.audioDataUrl) {
         const au = el("audio"); au.controls = true; au.src = s.audioDataUrl; au.style.height = "34px"; au.style.maxWidth = "220px";
         acts.appendChild(au);
@@ -1408,7 +1362,6 @@ JSON만:
     });
     body.appendChild(pkg);
     navBtn("전체 Inworld 음성 생성", genAllInworld);
-    navBtn("전체 Gemini 음성 생성", genAllVoices);
     navBtn("편집·미리보기 →", () => { goStep("edit"); }, true);
   }
 
@@ -1460,29 +1413,6 @@ JSON만:
     };
     reader.readAsDataURL(fileObj);
   }
-  async function genOneVoice(i, btn) {
-    const s = project.scenes[i];
-    if (btn) { btn.disabled = true; btn.textContent = "생성 중…"; }
-    try {
-      const r = await genTTS(s.text);
-      s.audioDataUrl = r.dataUrl; s.durationSec = r.durationSec;
-      saveProject(); render();
-    } catch (e) {
-      toast("음성 실패: " + (String(e.message).includes("NO_GEMINI_KEY") ? "Gemini 키 필요" : e.message.slice(0, 60)));
-      if (btn) { btn.disabled = false; btn.textContent = "음성 생성"; }
-    }
-  }
-  async function genAllVoices() {
-    if (!geminiKey()) { toast("⚙ Google AI 키가 필요해요"); openKeys(); return; }
-    for (let i = 0; i < project.scenes.length; i++) {
-      const s = project.scenes[i];
-      try { const r = await genTTS(s.text); s.audioDataUrl = r.dataUrl; s.durationSec = r.durationSec; }
-      catch (e) { toast("일부 음성 실패: " + e.message.slice(0, 50)); }
-    }
-    saveProject(); render();
-    toast("음성 생성 완료");
-  }
-
   // ---- 7. 편집 · 미리보기 (캡컷 스타일) ----
   function renderEdit(body) {
     body.appendChild(el("h2", "prod-h", "편집 · 미리보기"));
@@ -1865,7 +1795,6 @@ JSON만: {"image":"...","video":"..."}`;
       $("#prodInworldVoice").value = inworldVoice();
       $("#prodInworldModel").value = inworldModel();
       if ($("#prodGoogleClientId")) $("#prodGoogleClientId").value = localStorage.getItem(LS.googleClientId) || "";
-      if ($("#prodGeminiVoice")) $("#prodGeminiVoice").value = geminiVoice();
     }
   }
 
@@ -1901,7 +1830,6 @@ JSON만: {"image":"...","video":"..."}`;
       localStorage.setItem(LS.inworldVoice, $("#prodInworldVoice").value.trim());
       localStorage.setItem(LS.inworldModel, $("#prodInworldModel").value || "inworld-tts-2");
       if ($("#prodGoogleClientId")) localStorage.setItem(LS.googleClientId, $("#prodGoogleClientId").value.trim());
-      if ($("#prodGeminiVoice")) localStorage.setItem(LS.geminiVoice, $("#prodGeminiVoice").value);
       $("#prodKeyPanel").hidden = true;
       render();
       toast("키를 저장했어요");
