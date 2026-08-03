@@ -2219,22 +2219,30 @@ JSON만: {"video":"..."}`;
 
   let _projCache = null;   // 메모리 캐시 (IDB에서 로드)
   let _projLoaded = false; // IDB 최초 로드 완료 여부
+  let _pendingProjectSave = false;
 
   function loadProjects() {
     if (_projCache === null) { try { _projCache = JSON.parse(localStorage.getItem(LS.projects)) || []; } catch (e) { _projCache = []; } }
     return _projCache;
   }
   function persistProjects() {
-    idbSet("projects", _projCache).catch(() => {});
+    // 현재 목록을 덮기 전에 직전 전체 목록을 복구용으로 한 번 더 보관한다.
+    idbGet("projects").then((old) => {
+      if (Array.isArray(old) && old.length) return idbSet("projects_backup", old);
+    }).then(() => idbSet("projects", _projCache)).catch(() => {});
     // 가벼운 백업(이미지 제외)도 localStorage에 — IDB 못 쓰는 환경 대비
     try {
       const light = _projCache.map((p) => ({ ...p, scenes: (p.scenes || []).map((s) => ({ ...s, imageDataUrl: "", audioDataUrl: "" })), characters: (p.characters || []).map((c) => ({ ...c, imageDataUrl: "" })), thumb: p.thumb ? { ...p.thumb, imageDataUrl: "", finalDataUrl: "", copies: (p.thumb.copies || []).map((c) => ({ ...c, imageDataUrl: "", finalDataUrl: "" })) } : p.thumb }));
+      const previous = localStorage.getItem(LS.projects);
+      if (previous) localStorage.setItem("yeti_projects_backup", previous);
       localStorage.setItem(LS.projects, JSON.stringify(light));
     } catch (e) {}
   }
   function saveProject() {
     project.lastStep = STEPS[stepIdx]?.key || project.lastStep || "category";
     project.updatedAt = Date.now();
+    // IndexedDB가 아직 로딩 중일 때 빈 캐시로 기존 프로젝트를 덮지 않는다.
+    if (!_projLoaded) { _pendingProjectSave = true; return; }
     const all = loadProjects();
     const idx = all.findIndex((p) => p.id === project.id);
     const meta = { ...project };
@@ -2244,15 +2252,31 @@ JSON만: {"video":"..."}`;
   // 최초 IDB 로드 — 이미지 포함 전체 프로젝트 복원
   function initProjectStore() {
     idbGet("projects").then(async (list) => {
+      let local = [];
+      try { local = JSON.parse(localStorage.getItem(LS.projects)) || []; } catch (e) {}
       if (list === undefined) {
         // 최초 실행: 기존 localStorage 데이터를 IDB로 이관
         const ls = loadProjects();
         if (ls.length) { _projCache = ls; await idbSet("projects", ls).catch(() => {}); }
         else _projCache = [];
       } else {
-        _projCache = Array.isArray(list) ? list : [];
+        const merged = new Map();
+        [...(Array.isArray(list) ? list : []), ...(Array.isArray(local) ? local : [])].forEach((p) => {
+          if (!p?.id) return;
+          const old = merged.get(p.id);
+          if (!old || (p.updatedAt || 0) > (old.updatedAt || 0)) merged.set(p.id, p);
+        });
+        _projCache = [...merged.values()].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      }
+      if (!_projCache.length) {
+        let backup = await idbGet("projects_backup").catch(() => []);
+        if (!Array.isArray(backup) || !backup.length) {
+          try { backup = JSON.parse(localStorage.getItem("yeti_projects_backup")) || []; } catch (e) { backup = []; }
+        }
+        if (Array.isArray(backup) && backup.length) _projCache = backup;
       }
       _projLoaded = true;
+      if (_pendingProjectSave) { _pendingProjectSave = false; saveProject(); }
       if ($("#prodProjPanel") && !$("#prodProjPanel").hidden) renderProjList();
     }).catch(() => { _projLoaded = true; loadProjects(); });
   }
