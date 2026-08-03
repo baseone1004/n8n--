@@ -587,6 +587,28 @@
     return { dataUrl, durationSec: dur };
   }
 
+  async function checkInworldVoice() {
+    const out = $("#prodCheckInworldVoiceResult");
+    const key = ($("#prodInworldKey")?.value || inworldKey()).trim().replace(/^Basic\s+/i, "");
+    const voiceId = ($("#prodInworldVoiceKo")?.value || inworldVoice()).trim();
+    if (!key || !voiceId) { if (out) out.textContent = "API 키와 한국어 Voice ID를 먼저 넣어주세요."; return; }
+    if (out) out.textContent = "음성 정보를 확인하는 중…";
+    try {
+      const res = await apiFetch("https://api.inworld.ai/voices/v1/voices/" + encodeURIComponent(voiceId), {
+        headers: { "authorization": "Basic " + key }
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.message || j.error?.message || `조회 실패 ${res.status}`);
+      const langs = j.promptLanguages || j.languages || [];
+      const korean = j.langCode === "KO_KR" || j.langCode === "AUTO" || langs.some((x) => /^ko(?:-|$)/i.test(x));
+      const gender = ({ female: "여성", male: "남성", neutral: "중성" })[j.gender] || j.gender || "정보 없음";
+      const age = ({ middle_aged: "중년", elderly: "노년", young: "청년" })[j.ageGroup] || j.ageGroup || "정보 없음";
+      if (out) out.innerHTML = `${korean ? "✅" : "⚠️"} <b>${korean ? "한국어 사용 가능" : "한국어 보이스로 등록되지 않음"}</b> · 기본 언어 ${esc(j.langCode || "정보 없음")} · ${esc(gender)} · ${esc(age)}<br>${esc(j.description || "음색 설명 없음")}`;
+    } catch (e) {
+      if (out) out.textContent = "확인 실패: " + String(e.message || e).slice(0, 120);
+    }
+  }
+
   // ============ 바이트 헬퍼 ============
   function base64ToBytes(b64) {
     const bin = atob(b64), a = new Uint8Array(bin.length);
@@ -2380,6 +2402,7 @@ JSON만: {"video":"..."}`;
     });
 
     $("#prodSettings").onclick = openKeys;
+    if ($("#prodCheckInworldVoice")) $("#prodCheckInworldVoice").onclick = checkInworldVoice;
     $("#prodProjects").onclick = () => { $("#prodKeyPanel").hidden = true; const p = $("#prodProjPanel"); p.hidden = !p.hidden; if (!p.hidden) renderProjList(); };
     const textSel = $("#prodTextProvider");
     if (textSel) textSel.onchange = () => {
