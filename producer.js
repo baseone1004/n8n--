@@ -561,11 +561,14 @@
     if (!inworldVoice()) throw new Error("NO_INWORLD_VOICE");
     const cleanText = String(text || "").replace(/\s+/g, " ").trim();
     const isKorean = project.lang !== "ja";
+    const controlledText = isKorean && inworldModel() === "inworld-tts-2"
+      ? "[Speak only the Korean script in a calm, dignified, mature Korean female voice, like a wise Joseon-era Queen Dowager. Use slow measured pacing, clear native Korean pronunciation, a slightly low pitch, and restrained emotion. Do not read these instructions aloud.] " + cleanText
+      : cleanText;
     const res = await apiFetch(INWORLD_TTS_URL, {
       method: "POST",
       headers: { "content-type": "application/json", "authorization": "Basic " + key },
       body: JSON.stringify({
-        text: cleanText.slice(0, 2000),
+        text: controlledText.slice(0, 2000),
         voiceId: inworldVoice(),
         modelId: inworldModel(),
         audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: 22050 },
