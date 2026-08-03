@@ -7,6 +7,7 @@
   const TTS_MODEL = "gemini-2.5-flash-preview-tts";
   const KIE_CREATE = "https://api.kie.ai/api/v1/jobs/createTask";
   const KIE_RECORD = "https://api.kie.ai/api/v1/jobs/recordInfo?taskId=";
+  const KIE_UPLOAD_BASE64 = "https://kieai.redpandaai.co/api/file-base64-upload";
   // 이미지 1장당 예상 비용(원) — 대략치. 환율/모델에 따라 달라질 수 있음.
   const IMG_COST = {
     "gemini-2.5-flash-image": 55, "gemini-2.5-flash-image-preview": 55,
@@ -333,6 +334,20 @@
   function blobToDataURL(blob) {
     return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
   }
+  async function uploadImageToKIE(dataUrl, fileName) {
+    if (/^https?:\/\//.test(dataUrl || "")) return dataUrl;
+    if (!/^data:image\//.test(dataUrl || "")) throw new Error("영상 변환용 이미지 파일이 없습니다");
+    const res = await apiFetch(KIE_UPLOAD_BASE64, {
+      method: "POST",
+      headers: { "content-type": "application/json", "authorization": "Bearer " + kieKey() },
+      body: JSON.stringify({ base64Data: dataUrl, uploadPath: "images/intro", fileName: fileName || ("intro-" + Date.now() + ".png") })
+    });
+    const j = await res.json();
+    if (!res.ok || (j.code && j.code !== 200) || j.success === false) throw new Error("KIE 이미지 업로드 실패: " + (j.msg || res.status));
+    const url = j.data?.downloadUrl || j.data?.fileUrl || j.downloadUrl || j.fileUrl;
+    if (!url) throw new Error("KIE 이미지 업로드 URL 없음");
+    return url;
+  }
 
   // ============ KIE.ai 공용 (createTask → recordInfo 폴링) ============
   // 이미지·영상 모두 같은 흐름. maxTries 만큼 2초 간격 폴링. 결과 URL 반환.
@@ -421,7 +436,7 @@
     return p + " Family-friendly Korean folktale illustration. Gentle non-graphic emotional storytelling; everyone is fully clothed and visibly safe; calm symbolic staging suitable for all ages.";
   }
   const isSensitiveKieError = (e) => /sensitive|flagged|moderation|safety|unsafe content/i.test(String(e?.message || e));
-  async function genImage(prompt) {
+  async function genImage(prompt, onSourceUrl) {
     const full = charLockText() + prompt + styleLockText() + " 16:9 widescreen cinematic composition.";
     const input = { prompt: full, image_input: [], aspect_ratio: "16:9", resolution: kieRes(), output_format: "png" };
     const refs = charRefUrls();
@@ -435,6 +450,7 @@
       input.prompt = safeImagePrompt(full, true);
       url = await kieTask(kieModel(), input, 90);
     }
+    if (onSourceUrl) onSourceUrl(url);
     try { const r = await apiFetch(url); return await blobToDataURL(await r.blob()); }
     catch (e) { return url; } // CORS로 바이트 못 가져오면 URL 그대로(미리보기는 됨, ZIP 제외)
   }
@@ -1348,9 +1364,23 @@ JSON 배열만: [{"name":"..","age":38,"look":".."}]`;
       dl.onclick = () => downloadOneImage(i);
       acts.appendChild(dl);
     }
+    if (s.isIntro) {
+      const videoBtn = el("button", "btn sm btn-primary", s.videoUrl ? "🎞 인트로 영상 다시 만들기" : "🎞 이 이미지로 영상 만들기");
+      videoBtn.disabled = !s.imageDataUrl;
+      videoBtn.onclick = () => genIntroVideoKIE(i, videoBtn);
+      acts.appendChild(videoBtn);
+    }
     right.appendChild(acts);
     row.appendChild(right);
     c.appendChild(row);
+    if (s.isIntro && s.videoUrl) {
+      const videoBox = el("div", "grok-box");
+      videoBox.appendChild(el("div", "field-label", "🎞 완성된 인트로 영상"));
+      const video = el("video"); video.src = s.videoUrl; video.controls = true; video.style.width = "100%"; video.style.borderRadius = "10px";
+      videoBox.appendChild(video);
+      const open = el("button", "btn sm", "영상 열기·다운로드"); open.onclick = () => window.open(s.videoUrl, "_blank");
+      videoBox.appendChild(open); c.appendChild(videoBox);
+    }
     return c;
   }
 
@@ -1358,6 +1388,7 @@ JSON 배열만: [{"name":"..","age":38,"look":".."}]`;
     const reader = new FileReader();
     reader.onload = () => {
       project.scenes[i].imageDataUrl = reader.result;
+      project.scenes[i].imageUrl = "";
       saveProject();
       const box = $("#img-" + i);
       if (box) { box.innerHTML = ""; const im = el("img"); im.src = reader.result; box.appendChild(im); }
@@ -1395,7 +1426,7 @@ JSON 배열만: [{"name":"..","age":38,"look":".."}]`;
     const box = $("#img-" + i);
     if (box) { box.innerHTML = ""; box.appendChild(el("div", "spinner")); }
     try {
-      s.imageDataUrl = await genImage(s.imagePrompt || s.text);
+      s.imageDataUrl = await genImage(s.imagePrompt || s.text, (url) => { s.imageUrl = url; });
       saveProject();
       if (box) { box.innerHTML = ""; const im = el("img"); im.src = s.imageDataUrl; box.appendChild(im); }
       return { ok: true };
@@ -1956,8 +1987,15 @@ JSON만: {"image":"...","video":"..."}`;
       if (!s.grokVideo) { try { await genGrokIntroSilently(i); } catch (e) {} }
       const prompt = s.grokVideo || s.text || project.title;
       // 이미지가 공개 URL이면 이미지→영상, data URL(업로드/base64)이면 텍스트→영상
-      const imgUrl = (s.imageDataUrl && /^https?:\/\//.test(s.imageDataUrl)) ? s.imageDataUrl : null;
-      if (s.imageDataUrl && !imgUrl) toast("인트로 이미지가 파일이라 텍스트→영상으로 만듭니다");
+      if (!s.imageDataUrl) throw new Error("먼저 인트로 이미지를 생성하거나 올려주세요");
+      let imgUrl = s.imageUrl || (/^https?:\/\//.test(s.imageDataUrl) ? s.imageDataUrl : "");
+      if (!imgUrl) {
+        if (btn) btn.textContent = "이미지 업로드 중…";
+        imgUrl = await uploadImageToKIE(s.imageDataUrl, `intro-scene-${i + 1}-${Date.now()}.png`);
+        s.imageUrl = imgUrl;
+        saveProject();
+      }
+      if (btn) btn.textContent = "영상 생성 중… (수분)";
       s.videoUrl = await genVideoKIE(prompt, imgUrl);
       saveProject(); render();
       toast("인트로 영상 생성 완료 🎞");
