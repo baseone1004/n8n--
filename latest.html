@@ -78,7 +78,7 @@
             </label>
             <div id="geminiTextField">
               <label class="field">
-                <span class="field-label">Google AI(Gemini) API 키 <small>(대본 무료 + Gemini 음성)</small></span>
+                <span class="field-label">Google AI(Gemini) API 키 <small>(대본 작성 전용)</small></span>
                 <input type="password" id="prodGeminiKey" placeholder="AIza..." autocomplete="off" />
               </label>
               <div class="yt-row" style="margin:0 0 6px">
@@ -145,54 +145,33 @@
             </label>
             <p class="settings-note">💰 이미지 약 15~60원/장 · 영상은 모델별로 수백~수천원/편. <br>⚠ KIE API는 서버용이라 <b>웹주소에선 막힐(CORS)</b> 수 있어요. 그럴 땐 <b>수익분석_켜기.bat</b>(로컬 서버)로 열거나, KIE 웹에서 뽑아 <b>올리기</b>로 넣으세요. 영상 모델 이름은 본인 KIE 계정에서 쓰는 이름으로 넣으세요.</p>
 
-            <div class="key-divider">음성 (선택)</div>
-            <p class="settings-note" style="margin-bottom:8px">🇰🇷 한국어 / 🇯🇵 일본어 목소리를 각각 저장해두면, 언어를 바꿀 때 <b>자동으로 해당 언어 목소리</b>로 생성됩니다. Gemini 음성은 위 <b>글작성 Google AI 키</b>를 함께 씁니다.</p>
-            <div class="editor-row">
-              <label class="field" style="flex:1">
-                <span class="field-label">🇰🇷 Gemini 한국어 목소리</span>
-                <select id="prodGeminiVoiceKo"></select>
-              </label>
-              <label class="field" style="flex:1">
-                <span class="field-label">🇯🇵 Gemini 일본어 목소리</span>
-                <select id="prodGeminiVoiceJa"></select>
-              </label>
-            </div>
-            <p class="settings-note">위 목소리로 음성 단계의 'Gemini 음성' 버튼이 생성됩니다. 아래 타입캐스트는 선택 사항이에요.</p>
-
-            <div class="key-divider">타입캐스트 (선택 · 안 되면 업로드 사용)</div>
+            <div class="key-divider">인월드 음성</div>
             <label class="field">
-              <span class="field-label">타입캐스트(Typecast) API 키</span>
-              <input type="password" id="prodTypecastKey" placeholder="Typecast API Key" autocomplete="off" />
-            </label>
-            <label class="field">
-              <span class="field-label">목소리 목록에서 골라 언어별로 넣기</span>
-              <div class="yt-row" style="margin:0">
-                <select id="prodTcVoiceSelect" style="flex:1"><option value="">목록을 불러오세요</option></select>
-                <button type="button" class="btn sm" id="prodTcLoadVoices">목소리 불러오기</button>
-              </div>
-              <div class="yt-row" style="margin-top:6px">
-                <button type="button" class="btn sm" id="prodTcToKo">▲ 한국어에 넣기</button>
-                <button type="button" class="btn sm" id="prodTcToJa">▲ 일본어에 넣기</button>
-              </div>
+              <span class="field-label">Inworld API 키</span>
+              <input type="password" id="prodInworldKey" placeholder="Inworld API Key" autocomplete="off" />
             </label>
             <div class="editor-row">
               <label class="field" style="flex:1">
-                <span class="field-label">🇰🇷 한국어 voice_id</span>
-                <input type="text" id="prodTypecastVoiceKo" placeholder="tc_..." autocomplete="off" />
+                <span class="field-label">🇰🇷 한국어 Voice ID</span>
+                <input type="text" id="prodInworldVoiceKo" placeholder="default-bbhe..." autocomplete="off" />
               </label>
               <label class="field" style="flex:1">
-                <span class="field-label">🇯🇵 일본어 voice_id</span>
-                <input type="text" id="prodTypecastVoiceJa" placeholder="tc_..." autocomplete="off" />
+                <span class="field-label">🇯🇵 일본어 Voice ID</span>
+                <input type="text" id="prodInworldVoiceJa" placeholder="일본어 목소리 ID (선택)" autocomplete="off" />
               </label>
             </div>
-            <p class="settings-note">⭐ 타입캐스트 API는 <b>수익분석_켜기.bat</b>(로컬 서버)로 열 때만 작동해요(CORS 우회). 웹주소에선 <b>음성 올리기</b>를 쓰세요.</p>
+            <label class="field">
+              <span class="field-label">Inworld TTS 모델</span>
+              <select id="prodInworldModel"><option value="inworld-tts-2">inworld-tts-2 (감정 표현 추천)</option><option value="inworld-tts-1.5-max">inworld-tts-1.5-max</option></select>
+            </label>
+            <p class="settings-note">민담 장면에 맞춰 감정 표현을 자동 적용합니다. 요청하신 중년 여성 Voice ID를 한국어 칸에 넣으세요.</p>
 
             <div class="key-divider">대본 모델</div>
             <label class="field">
               <span class="field-label">대본 생성 모델</span>
               <input type="text" id="prodModel" list="modelList" placeholder="claude-opus-5" />
             </label>
-            <p class="settings-note">키는 이 브라우저에만 저장됩니다. Anthropic: <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> · Google AI: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> · KIE: <a href="https://kie.ai" target="_blank" rel="noopener">kie.ai</a> · Typecast: <a href="https://typecast.ai" target="_blank" rel="noopener">typecast.ai</a></p>
+            <p class="settings-note">키는 이 브라우저에만 저장됩니다. Google AI: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> · KIE: <a href="https://kie.ai" target="_blank" rel="noopener">kie.ai</a> · Inworld: <a href="https://platform.inworld.ai" target="_blank" rel="noopener">platform.inworld.ai</a></p>
             <button class="btn btn-primary sm" id="prodSaveKeys">저장</button>
           </div>
 
@@ -477,7 +456,7 @@
   <script src="prompts.js"></script>
   <script src="app.js"></script>
   <script src="studio.js"></script>
-  <script src="producer.js?v=gemini-key-validation-20260803"></script>
+  <script src="producer.js?v=inworld-only-20260803"></script>
   <script src="youtube.js"></script>
 </body>
 </html>

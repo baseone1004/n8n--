@@ -26,16 +26,16 @@
     kieVideoModel: "yeti_kie_video_model",
     kieRes: "yeti_kie_res",
     channelName: "yeti_channel_name",
-    typecast: "yeti_typecast_key",
-    typecastVoice: "yeti_typecast_voice",      // 구버전(마이그레이션용)
-    typecastVoiceKo: "yeti_typecast_voice_ko",
-    typecastVoiceJa: "yeti_typecast_voice_ja",
+    inworld: "yeti_inworld_key",
+    inworldVoiceKo: "yeti_inworld_voice_ko",
+    inworldVoiceJa: "yeti_inworld_voice_ja",
+    inworldModel: "yeti_inworld_model",
     geminiVoice: "yeti_gemini_voice",          // 구버전
     geminiVoiceKo: "yeti_gemini_voice_ko",
     geminiVoiceJa: "yeti_gemini_voice_ja",
     projects: "yeti_projects"
   };
-  const TYPECAST_URL = "https://api.typecast.ai/v1/text-to-speech";
+  const INWORLD_TTS_URL = "https://api.inworld.ai/tts/v1/voice";
   const GEMINI_VOICES = [
     ["Kore", "Kore — 차분·기본 (여)"], ["Aoede", "Aoede — 부드러움 (여)"], ["Leda", "Leda — 밝고 또렷 (여)"],
     ["Callirrhoe", "Callirrhoe — 편안함 (여)"], ["Sulafat", "Sulafat — 따뜻함 (여)"], ["Achernar", "Achernar — 또렷 (여)"],
@@ -192,10 +192,11 @@
   const imgCostWon = () => IMG_COST[kieModel()] || 30;
   const imgCostText = () => `약 <b>${imgCostWon()}원/장</b> (KIE.ai 크레딧 기준 추정)`;
   const channelName = () => localStorage.getItem(LS.channelName) || "설루온";
-  const typecastKey = () => localStorage.getItem(LS.typecast) || "";
-  const typecastVoice = () => (project.lang === "ja"
-    ? (localStorage.getItem(LS.typecastVoiceJa) || localStorage.getItem(LS.typecastVoice))
-    : (localStorage.getItem(LS.typecastVoiceKo) || localStorage.getItem(LS.typecastVoice))) || "";
+  const inworldKey = () => localStorage.getItem(LS.inworld) || "";
+  const inworldVoice = () => (project.lang === "ja"
+    ? localStorage.getItem(LS.inworldVoiceJa)
+    : localStorage.getItem(LS.inworldVoiceKo)) || "default-bbhejrkjoavwpl_ixpg3lw__design-voice-fc2ebf9a";
+  const inworldModel = () => localStorage.getItem(LS.inworldModel) || "inworld-tts-2";
   const geminiVoice = () => (project.lang === "ja"
     ? (localStorage.getItem(LS.geminiVoiceJa) || localStorage.getItem(LS.geminiVoice))
     : (localStorage.getItem(LS.geminiVoiceKo) || localStorage.getItem(LS.geminiVoice))) || "Kore";
@@ -463,7 +464,7 @@
     return { dataUrl: "data:audio/wav;base64," + bytesToBase64(wav), durationSec: (wav.length - 44) / 2 / rate };
   }
 
-  // ============ 타입캐스트 TTS ============
+  // ============ Inworld TTS ============
   function measureAudio(dataUrl) {
     return new Promise((res) => {
       const a = new Audio();
@@ -472,74 +473,34 @@
       a.src = dataUrl;
     });
   }
-  async function genTypecast(text) {
-    const key = typecastKey();
-    if (!key) throw new Error("NO_TYPECAST_KEY");
-    if (!typecastVoice()) throw new Error("NO_TYPECAST_VOICE");
-    const res = await apiFetch(TYPECAST_URL, {
+  async function genInworld(text) {
+    const key = inworldKey();
+    if (!key) throw new Error("NO_INWORLD_KEY");
+    if (!inworldVoice()) throw new Error("NO_INWORLD_VOICE");
+    const res = await apiFetch(INWORLD_TTS_URL, {
       method: "POST",
-      headers: { "content-type": "application/json", "authorization": "Bearer " + key },
+      headers: { "content-type": "application/json", "authorization": "Basic " + key },
       body: JSON.stringify({
-        voice_id: typecastVoice(),
-        text: text,
-        model: "ssfm-v30",
-        language: project.lang === "ja" ? "jpn" : "kor",
-        output: { audio_format: "wav" }
+        text: text.slice(0, 2000),
+        voiceId: inworldVoice(),
+        modelId: inworldModel(),
+        audioConfig: { audioEncoding: "LINEAR16", sampleRateHertz: 22050 },
+        language: project.lang === "ja" ? "ja-JP" : "ko-KR",
+        deliveryMode: /[!！?？]|놀라|분노|울부짖|통곡|절규|기뻐|환호/.test(text) ? "CREATIVE" : "BALANCED",
+        applyTextNormalization: "ON",
+        enhanceGeneration: true
       })
     });
     if (!res.ok) {
       let d = ""; try { d = JSON.stringify(await res.json()); } catch (e) { d = await res.text(); }
-      throw new Error(`Typecast ${res.status}: ${d.slice(0, 120)}`);
+      throw new Error(`Inworld ${res.status}: ${d.slice(0, 120)}`);
     }
-    const ct = res.headers.get("content-type") || "";
-    let dataUrl;
-    if (ct.includes("application/json")) {
-      const j = await res.json();
-      const b64 = j.audio || j.audio_base64 || j.data;
-      const url = j.audio_url || j.url;
-      if (b64) dataUrl = "data:audio/wav;base64," + b64;
-      else if (url) { const r = await fetch(url); dataUrl = await blobToDataURL(await r.blob()); }
-      else throw new Error("Typecast: 오디오를 찾을 수 없음");
-    } else {
-      dataUrl = await blobToDataURL(await res.blob());
-    }
+    const j = await res.json();
+    const b64 = j.audioContent || j.result?.audioContent;
+    if (!b64) throw new Error("Inworld: 오디오를 찾을 수 없음");
+    const dataUrl = "data:audio/wav;base64," + b64;
     const dur = (await measureAudio(dataUrl)) || estDur(text);
     return { dataUrl, durationSec: dur };
-  }
-
-  async function loadTypecastVoices() {
-    const key = ($("#prodTypecastKey").value || typecastKey()).trim();
-    if (!key) { toast("타입캐스트 API 키를 먼저 넣어주세요"); return; }
-    const btn = $("#prodTcLoadVoices"); const sel = $("#prodTcVoiceSelect");
-    if (btn) { btn.disabled = true; btn.textContent = "불러오는 중…"; }
-    try {
-      let data = null;
-      for (const url of ["https://api.typecast.ai/v1/voices", "https://api.typecast.ai/v2/voices"]) {
-        try {
-          const r = await apiFetch(url, { headers: { "authorization": "Bearer " + key } });
-          if (r.ok) { data = await r.json(); break; }
-        } catch (e) {}
-      }
-      if (!data) throw new Error("목소리 목록을 불러오지 못했어요(CORS/키 확인).");
-      const arr = Array.isArray(data) ? data : (data.voices || data.result || data.data || []);
-      if (!arr.length) throw new Error("목소리가 없습니다.");
-      sel.innerHTML = "";
-      arr.forEach((v) => {
-        const id = v.voice_id || v.id || v.actor_id || v.voiceId;
-        const name = v.name || v.voice_name || v.display_name || v.title || id;
-        const lang = v.language || v.lang || (Array.isArray(v.languages) ? v.languages.join("/") : "");
-        if (!id) return;
-        const o = el("option", null, esc(name) + (lang ? ` (${esc(String(lang))})` : ""));
-        o.value = id; sel.appendChild(o);
-      });
-      const cur = typecastVoice();
-      if (cur) sel.value = cur;
-      toast(arr.length + "개 불러옴 · 아래 '한국어에 넣기/일본어에 넣기'로 지정하세요");
-    } catch (e) {
-      toast("실패: " + String(e.message).slice(0, 60));
-    } finally {
-      if (btn) { btn.disabled = false; btn.textContent = "목소리 불러오기"; }
-    }
   }
 
   // ============ 바이트 헬퍼 ============
@@ -1706,15 +1667,15 @@ JSON만:
   // ---- 6. 음성·자막 ----
   function renderVoice(body) {
     body.appendChild(el("h2", "prod-h", "음성 · 자막"));
-    const hasTC = !!typecastKey() && !!typecastVoice();
-    body.appendChild(el("p", "prod-sub", hasTC
-      ? "<b>타입캐스트 API</b>로 장면별 음성을 자동 생성합니다. (파일 업로드·Gemini 음성도 가능) 음성 길이에 맞춰 자막(SRT)이 자동 싱크됩니다."
-      : "타입캐스트 <b>API 키/voice_id</b>를 ⚙에 넣으면 버튼 한 번으로 자동 생성돼요. 없으면 타입캐스트 앱에서 만든 음성을 <b>올리기</b>로 넣으세요. (Gemini 음성도 가능)"));
+    const hasInworld = !!inworldKey() && !!inworldVoice();
+    body.appendChild(el("p", "prod-sub", hasInworld
+      ? "<b>인월드 TTS</b>로 장면별 감정을 자동 반영해 음성을 생성합니다. 음성 길이에 맞춰 자막(SRT)이 자동으로 동기화됩니다."
+      : "⚙ API 키에서 <b>Inworld API 키와 Voice ID</b>를 저장하면 장면별 음성을 자동 생성합니다."));
 
-    if (!hasTC) {
+    if (!hasInworld) {
       const kb = el("div", "keybar"); kb.style.marginBottom = "16px";
-      kb.innerHTML = "🗣 타입캐스트 API로 자동 생성하려면 키가 필요해요.";
-      const b = el("button", "btn sm btn-primary", "타입캐스트 키 입력"); b.onclick = openKeys;
+      kb.innerHTML = "🗣 인월드 음성 생성을 위한 API 키가 필요해요.";
+      const b = el("button", "btn sm btn-primary", "인월드 키 입력"); b.onclick = openKeys;
       kb.appendChild(b); body.appendChild(kb);
     }
 
@@ -1728,19 +1689,15 @@ JSON만:
       c.appendChild(el("div", null, esc(s.text)));
       const acts = el("div", "scene-actions");
 
-      const tc = el("button", "btn sm btn-primary", "🗣 타입캐스트 음성");
-      tc.onclick = () => genOneTypecast(i, tc);
-      acts.appendChild(tc);
+      const iw = el("button", "btn sm btn-primary", "🗣 인월드 음성");
+      iw.onclick = () => genOneInworld(i, iw);
+      acts.appendChild(iw);
 
       const up = el("label", "btn sm", "🎙 음성 올리기");
       const file = el("input"); file.type = "file"; file.accept = "audio/*"; file.style.display = "none";
       file.onchange = () => { if (file.files[0]) loadAudioFile(i, file.files[0]); };
       up.appendChild(file);
       acts.appendChild(up);
-
-      const gen = el("button", "btn sm btn-ghost", "Gemini 음성");
-      gen.onclick = () => genOneVoice(i, gen);
-      acts.appendChild(gen);
 
       if (s.audioDataUrl) {
         const au = el("audio"); au.controls = true; au.src = s.audioDataUrl; au.style.height = "34px"; au.style.maxWidth = "220px";
@@ -1750,32 +1707,31 @@ JSON만:
       pkg.appendChild(c);
     });
     body.appendChild(pkg);
-    navBtn("전체 타입캐스트 음성 생성", genAllTypecast);
-    navBtn("전체 Gemini 음성 생성", genAllVoices);
+    navBtn("전체 인월드 음성 생성", genAllInworld);
     navBtn("편집·미리보기 →", () => { goStep("edit"); }, true);
   }
 
-  async function genOneTypecast(i, btn) {
+  async function genOneInworld(i, btn) {
     const s = project.scenes[i];
-    if (!typecastKey() || !typecastVoice()) { toast("⚙에 타입캐스트 키/voice_id를 넣어주세요"); openKeys(); return; }
+    if (!inworldKey() || !inworldVoice()) { toast("⚙에 인월드 API 키와 Voice ID를 넣어주세요"); openKeys(); return; }
     if (btn) { btn.disabled = true; btn.textContent = "생성 중…"; }
     try {
-      const r = await genTypecast(s.text);
+      const r = await genInworld(s.text);
       s.audioDataUrl = r.dataUrl; s.durationSec = r.durationSec;
       saveProject(); render();
     } catch (e) {
       const m = String(e.message);
-      toast("타입캐스트 실패: " + (/NO_TYPECAST_VOICE/.test(m) ? "voice_id 필요" : /NO_TYPECAST_KEY/.test(m) ? "API 키 필요" : /Failed to fetch/.test(m) ? "CORS/네트워크(웹은 막힐 수 있음 → 업로드 사용)" : m.slice(0, 70)));
-      if (btn) { btn.disabled = false; btn.textContent = "🗣 타입캐스트 음성"; }
+      toast("인월드 실패: " + (/NO_INWORLD_VOICE/.test(m) ? "Voice ID 필요" : /NO_INWORLD_KEY/.test(m) ? "API 키 필요" : m.slice(0, 70)));
+      if (btn) { btn.disabled = false; btn.textContent = "🗣 인월드 음성"; }
     }
   }
-  async function genAllTypecast() {
-    if (!typecastKey() || !typecastVoice()) { toast("⚙에 타입캐스트 키/voice_id를 넣어주세요"); openKeys(); return; }
+  async function genAllInworld() {
+    if (!inworldKey() || !inworldVoice()) { toast("⚙에 인월드 API 키와 Voice ID를 넣어주세요"); openKeys(); return; }
     for (let i = 0; i < project.scenes.length; i++) {
-      try { const r = await genTypecast(project.scenes[i].text); project.scenes[i].audioDataUrl = r.dataUrl; project.scenes[i].durationSec = r.durationSec; }
+      try { const r = await genInworld(project.scenes[i].text); project.scenes[i].audioDataUrl = r.dataUrl; project.scenes[i].durationSec = r.durationSec; }
       catch (e) { toast("일부 실패: " + String(e.message).slice(0, 50)); break; }
     }
-    saveProject(); render(); toast("타입캐스트 음성 생성 완료");
+    saveProject(); render(); toast("인월드 음성 생성 완료");
   }
 
   function loadAudioFile(i, fileObj) {
@@ -2272,11 +2228,10 @@ JSON만: {"video":"..."}`;
       if ($("#prodKieModel")) $("#prodKieModel").value = kieModel();
       if ($("#prodKieRes")) $("#prodKieRes").value = kieRes();
       if ($("#prodKieVideoModel")) $("#prodKieVideoModel").value = kieVideoModel();
-      $("#prodTypecastKey").value = typecastKey();
-      $("#prodTypecastVoiceKo").value = localStorage.getItem(LS.typecastVoiceKo) || localStorage.getItem(LS.typecastVoice) || "";
-      $("#prodTypecastVoiceJa").value = localStorage.getItem(LS.typecastVoiceJa) || "";
-      $("#prodGeminiVoiceKo").value = localStorage.getItem(LS.geminiVoiceKo) || localStorage.getItem(LS.geminiVoice) || "Kore";
-      $("#prodGeminiVoiceJa").value = localStorage.getItem(LS.geminiVoiceJa) || localStorage.getItem(LS.geminiVoice) || "Kore";
+      if ($("#prodInworldKey")) $("#prodInworldKey").value = inworldKey();
+      if ($("#prodInworldVoiceKo")) $("#prodInworldVoiceKo").value = localStorage.getItem(LS.inworldVoiceKo) || "default-bbhejrkjoavwpl_ixpg3lw__design-voice-fc2ebf9a";
+      if ($("#prodInworldVoiceJa")) $("#prodInworldVoiceJa").value = localStorage.getItem(LS.inworldVoiceJa) || "";
+      if ($("#prodInworldModel")) $("#prodInworldModel").value = inworldModel();
     }
   }
 
@@ -2326,29 +2281,14 @@ JSON만: {"video":"..."}`;
       if ($("#prodKieModel")) localStorage.setItem(LS.kieModel, $("#prodKieModel").value.trim() || "nano-banana-2");
       if ($("#prodKieRes")) localStorage.setItem(LS.kieRes, $("#prodKieRes").value);
       if ($("#prodKieVideoModel")) localStorage.setItem(LS.kieVideoModel, $("#prodKieVideoModel").value.trim() || "veo3-fast");
-      localStorage.setItem(LS.typecast, $("#prodTypecastKey").value.trim());
-      localStorage.setItem(LS.typecastVoiceKo, $("#prodTypecastVoiceKo").value.trim());
-      localStorage.setItem(LS.typecastVoiceJa, $("#prodTypecastVoiceJa").value.trim());
-      localStorage.setItem(LS.geminiVoiceKo, $("#prodGeminiVoiceKo").value);
-      localStorage.setItem(LS.geminiVoiceJa, $("#prodGeminiVoiceJa").value);
+      if ($("#prodInworldKey")) localStorage.setItem(LS.inworld, $("#prodInworldKey").value.trim().replace(/^Basic\s+/i, ""));
+      if ($("#prodInworldVoiceKo")) localStorage.setItem(LS.inworldVoiceKo, $("#prodInworldVoiceKo").value.trim());
+      if ($("#prodInworldVoiceJa")) localStorage.setItem(LS.inworldVoiceJa, $("#prodInworldVoiceJa").value.trim());
+      if ($("#prodInworldModel")) localStorage.setItem(LS.inworldModel, $("#prodInworldModel").value);
       $("#prodKeyPanel").hidden = true;
       render();
       toast("키를 저장했어요");
     };
-
-    // Gemini 목소리 드롭다운(한/일) 채우기
-    ["#prodGeminiVoiceKo", "#prodGeminiVoiceJa"].forEach((sid) => {
-      const sel = $(sid); if (!sel || sel.options.length) return;
-      GEMINI_VOICES.forEach(([v, label]) => { const o = el("option", null, label); o.value = v; sel.appendChild(o); });
-    });
-    $("#prodGeminiVoiceKo").value = localStorage.getItem(LS.geminiVoiceKo) || localStorage.getItem(LS.geminiVoice) || "Kore";
-    $("#prodGeminiVoiceJa").value = localStorage.getItem(LS.geminiVoiceJa) || localStorage.getItem(LS.geminiVoice) || "Kore";
-
-    // 타입캐스트 목소리 목록 불러오기 + 언어별 지정
-    const tcLoad = $("#prodTcLoadVoices");
-    if (tcLoad) tcLoad.onclick = () => loadTypecastVoices();
-    if ($("#prodTcToKo")) $("#prodTcToKo").onclick = () => { const v = $("#prodTcVoiceSelect").value; if (v) { $("#prodTypecastVoiceKo").value = v; toast("한국어 목소리로 지정"); } };
-    if ($("#prodTcToJa")) $("#prodTcToJa").onclick = () => { const v = $("#prodTcVoiceSelect").value; if (v) { $("#prodTypecastVoiceJa").value = v; toast("일본어 목소리로 지정"); } };
 
     // 언어 전환 (한국어 / 日本語)
     const langT = $("#langToggle");
