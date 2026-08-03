@@ -7,48 +7,34 @@
   const TTS_MODEL = "gemini-2.5-flash-preview-tts";
   const KIE_CREATE = "https://api.kie.ai/api/v1/jobs/createTask";
   const KIE_RECORD = "https://api.kie.ai/api/v1/jobs/recordInfo?taskId=";
-  // 이미지 1장당 예상 비용(원) — 대략치. 환율/모델에 따라 달라질 수 있음.
-  const IMG_COST = {
-    "gemini-2.5-flash-image": 55, "gemini-2.5-flash-image-preview": 55,
-    "gemini-2.0-flash-preview-image-generation": 55,
-    "nano-banana-2": 30, "nano-banana-pro": 60, "nano-banana-2-lite": 15
-  };
   const LS = {
     claude: "yeti_api_key",          // 대본 공방과 공유
     gemini: "yeti_gemini_key",
     model: "yeti_model_daebon",      // 대본 공방과 공유
     imgModel: "yeti_img_model",
-    textProvider: "yeti_text_provider", // 'claude' | 'gemini'
-    geminiTextModel: "yeti_gemini_text_model",
-    provider: "yeti_img_provider",   // 항상 'kie'
+    provider: "yeti_img_provider",   // 'gemini' | 'kie'
     kie: "yeti_kie_key",
     kieModel: "yeti_kie_model",
-    kieVideoModel: "yeti_kie_video_model",
-    kieRes: "yeti_kie_res",
-    channelName: "yeti_channel_name",
-    typecast: "yeti_typecast_key",
-    typecastVoice: "yeti_typecast_voice",      // 구버전(마이그레이션용)
-    typecastVoiceKo: "yeti_typecast_voice_ko",
-    typecastVoiceJa: "yeti_typecast_voice_ja",
-    geminiVoice: "yeti_gemini_voice",          // 구버전
-    geminiVoiceKo: "yeti_gemini_voice_ko",
-    geminiVoiceJa: "yeti_gemini_voice_ja",
+    inworld: "yeti_inworld_key",
+    inworldVoice: "yeti_inworld_voice",
+    inworldModel: "yeti_inworld_model",
+    geminiVoice: "yeti_gemini_voice",
+    googleClientId: "yeti_yt_client_id",
     projects: "yeti_projects"
   };
-  const TYPECAST_URL = "https://api.typecast.ai/v1/text-to-speech";
-  const GEMINI_VOICES = [
-    ["Kore", "Kore — 차분·기본 (여)"], ["Aoede", "Aoede — 부드러움 (여)"], ["Leda", "Leda — 밝고 또렷 (여)"],
-    ["Callirrhoe", "Callirrhoe — 편안함 (여)"], ["Sulafat", "Sulafat — 따뜻함 (여)"], ["Achernar", "Achernar — 또렷 (여)"],
-    ["Charon", "Charon — 묵직·낮음 (남)"], ["Puck", "Puck — 경쾌 (남)"], ["Fenrir", "Fenrir — 강렬 (남)"],
-    ["Orus", "Orus — 단단함 (남)"], ["Enceladus", "Enceladus — 숨결 섞인 (남)"], ["Iapetus", "Iapetus — 담담 (남)"]
-  ];
+  const INWORLD_TTS_URL = "https://api.inworld.ai/tts/v1/voice";
+  const KIE_VIDEO_MODEL = "kling-2.6/image-to-video";
+  const DEFAULT_INWORLD_VOICE = "default-bbhejrkjoavwpl_ixpg3lw__design-voice-fc2ebf9a";
+  let lastKieAssetUrl = "";
 
   const STEPS = [
     { key: "category", name: "주제 고르기" },
     { key: "topic", name: "주제 추천" },
     { key: "script", name: "대본·정보" },
+    { key: "character", name: "주인공 고정" },
     { key: "prompt", name: "이미지 프롬프트" },
     { key: "image", name: "이미지 생성" },
+    { key: "video", name: "영상 변환" },
     { key: "thumb", name: "썸네일" },
     { key: "voice", name: "음성·자막" },
     { key: "edit", name: "편집·미리보기" },
@@ -77,6 +63,12 @@
   const langDirective = () => project.lang === "ja"
     ? "\n\n중요: 결과의 모든 텍스트(제목·설명·태그·대본 등)는 반드시 자연스러운 '일본어'로 작성한다."
     : "";
+  function formatSeoTitle(title, lang) {
+    title = String(title || "").trim();
+    const suffix = lang === "ja" ? " | 日本昔話 | 怪談 | 朗読" : " | 야담 | 민담 | 옛날이야기 | 오디오북";
+    const core = title.split("|")[0].trim();
+    return core + suffix;
+  }
 
   // 언어별 그림체 프리셋 — 한국: 반실사 웹툰(만화)풍 / 일본: 부드러운 애니 셀화풍
   const STYLE_PRESETS = {
@@ -99,11 +91,12 @@
 
   // 대본 규칙(정제본 v11.3) — 제목 패턴 / 인트로 / 고정 멘트
   const TITLE_PATTERNS =
-    "- 충격 행동 + 반전 궁금증: 장터에서 아기를 100냥에 사온 과부, 그 아이의 정체는?\n" +
-    "- A vs B 대비: 큰 며느리는 땅 갖고 막내 며느리는 시어머니를 가졌다\n" +
-    "- 상황 + 미완성 반응: 세자빈 간택에 거지 차림으로 나온 처자, 모두 비웃었는데..\n" +
-    "- 은혜 행동 + 그날 밤 결과: 흰 뱀을 구한 농부, 그날 밤 문 앞에 나타난 소녀\n" +
-    "- 신분역전 + 운명: 거지 소년을 거둔 과부, 10년 후 벌어진 일";
+    "- 구체적 나이·신분 + 비범한 사건: 11살에 장원급제한 천재 꼬마 사또\n" +
+    "- 사건을 해결했는데 + 더 큰 반복 미스터리: 범인을 잡았는데 다음 날 똑같은 사건이 또\n" +
+    "- 과거의 행동 + 세월 뒤 귀환: 과거에 내쳤는데 벼슬을 마다하고 돌아온 선비\n" +
+    "- 명문가/권력자 + 뜻밖의 인물: 고을 최고 부자를 살려치료한 떠돌이 의원\n" +
+    "- 핵심 제목 뒤 검색형 꼬리표: [사건 제목] | 야담 | 민담 | 옛날이야기 | 오디오북\n" +
+    "규칙: 앞부분에 나이·직업·신분·행동 중 최소 2개를 구체적으로 넣고, 결말은 숨긴다. 낚시성 물음표 남발 금지.";
   const CTA_KO = "구독과 좋아요는 더 좋은 이야기를 만드는 힘이 됩니다. 그럼 지금부터…";
   const OUTRO_KO =
     "다음 영상을 빠르게 만나보시려면 좋아요와 구독을 눌러주세요. " +
@@ -141,8 +134,9 @@
       description: "",
       tags: [],
       style: STYLE_PRESETS[lang][0].tail,
+      visualBible: "",
+      character: { profile: "", imagePrompt: "", imageDataUrl: "", remoteUrl: "" },
       scenes: [],       // {text, imagePrompt, imageDataUrl, audioDataUrl, durationSec, isIntro, zoom}
-      characters: [],   // {name, look, imageDataUrl, imageUrl} — 모든 장면에 고정되는 주인공
       watermark: LANG[lang].watermark,
       thumb: { copies: [], chosen: -1, imagePrompt: "", imageDataUrl: "" }
     };
@@ -164,28 +158,15 @@
   const claudeKey = () => localStorage.getItem(LS.claude) || "";
   const geminiKey = () => localStorage.getItem(LS.gemini) || "";
   const claudeModel = () => localStorage.getItem(LS.model) || "claude-opus-5";
-  const textProvider = () => localStorage.getItem(LS.textProvider) || "claude";
-  const geminiTextModel = () => {
-    const m = localStorage.getItem(LS.geminiTextModel);
-    // 신규 사용자에게 막힌 옛 모델명은 최신 별칭으로 자동 교정
-    if (!m || /^gemini-2\.5-flash$|^gemini-1\.5-flash$|^gemini-2\.0-flash$/.test(m)) return "gemini-flash-latest";
-    return m;
-  };
-  // 이미지·영상 생성 API — KIE.ai 전용 (글작성 키와 분리)
+  const imgModel = () => localStorage.getItem(LS.imgModel) || "gemini-2.5-flash-image";
+  const imgProvider = () => localStorage.getItem(LS.provider) || "kie";
   const kieKey = () => localStorage.getItem(LS.kie) || "";
   const kieModel = () => localStorage.getItem(LS.kieModel) || "nano-banana-2";
-  const kieVideoModel = () => localStorage.getItem(LS.kieVideoModel) || "veo3-fast";
-  const imgKeyOk = () => !!kieKey();
-  const imgCostWon = () => IMG_COST[kieModel()] || 30;
-  const imgCostText = () => `약 <b>${imgCostWon()}원/장</b> (KIE.ai 크레딧 기준 추정)`;
-  const channelName = () => localStorage.getItem(LS.channelName) || "설루온";
-  const typecastKey = () => localStorage.getItem(LS.typecast) || "";
-  const typecastVoice = () => (project.lang === "ja"
-    ? (localStorage.getItem(LS.typecastVoiceJa) || localStorage.getItem(LS.typecastVoice))
-    : (localStorage.getItem(LS.typecastVoiceKo) || localStorage.getItem(LS.typecastVoice))) || "";
-  const geminiVoice = () => (project.lang === "ja"
-    ? (localStorage.getItem(LS.geminiVoiceJa) || localStorage.getItem(LS.geminiVoice))
-    : (localStorage.getItem(LS.geminiVoiceKo) || localStorage.getItem(LS.geminiVoice))) || "Kore";
+  const inworldKey = () => localStorage.getItem(LS.inworld) || "";
+  const inworldVoice = () => localStorage.getItem(LS.inworldVoice) || DEFAULT_INWORLD_VOICE;
+  const inworldModel = () => localStorage.getItem(LS.inworldModel) || "inworld-tts-2";
+  const geminiVoice = () => localStorage.getItem(LS.geminiVoice) || "Kore";
+  const imgKeyOk = () => imgProvider() === "kie" ? !!kieKey() : !!geminiKey();
 
   // ============ 토스트 ============
   let tT;
@@ -198,9 +179,8 @@
     tT = setTimeout(() => { t.classList.remove("show"); setTimeout(() => (t.hidden = true), 260); }, 2100);
   }
 
-  // ============ 대본 JSON 호출 (엔진: Gemini 무료 / Claude) ============
+  // ============ Claude JSON 호출 ============
   async function claudeJSON(system, user, maxTokens) {
-    if (textProvider() === "gemini") return geminiJSON(system, user, maxTokens);
     const key = claudeKey();
     if (!key) throw new Error("NO_CLAUDE_KEY");
     const res = await fetch(CLAUDE_URL, {
@@ -226,44 +206,8 @@
     const text = (j.content || []).map((c) => c.text || "").join("");
     return parseJSON(text);
   }
-  // Gemini 무료 텍스트 생성 (Google AI Studio 키의 무료 사용량 사용)
-  async function geminiJSON(system, user, maxTokens) {
-    const key = geminiKey();
-    if (!key) throw new Error("NO_GEMINI_KEY");
-    // 최신 Gemini는 thinking 토큰이 출력 한도를 잡아먹으므로 넉넉히(최소 16000) 확보
-    const cap = Math.min(Math.max(maxTokens || 8000, 16000), 60000);
-    const call = (noThink) => {
-      const gen = { temperature: 0.95, maxOutputTokens: cap, responseMimeType: "application/json" };
-      // thinking(생각) 토큰이 출력 한도를 잡아먹어 JSON이 잘리는 것 방지 → 끔
-      if (noThink) gen.thinkingConfig = { thinkingBudget: 0 };
-      return fetch(GEMINI_BASE + geminiTextModel() + ":generateContent?key=" + encodeURIComponent(key), {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: [{ parts: [{ text: user }] }], generationConfig: gen })
-      });
-    };
-    let res = await call(true);
-    if (!res.ok) {
-      let d = ""; try { d = (await res.clone().json()).error?.message || ""; } catch (e) {}
-      // thinkingConfig 미지원 모델이면 그 옵션 없이 재시도
-      if (/thinking|Unknown name|not supported|Invalid|INVALID_ARGUMENT/i.test(d)) res = await call(false);
-    }
-    if (!res.ok) {
-      let d = ""; try { d = (await res.json()).error?.message; } catch (e) { d = await res.text(); }
-      throw new Error(`Gemini(대본) ${res.status}: ${d}`);
-    }
-    const j = await res.json();
-    const cand = j.candidates?.[0];
-    const text = (cand?.content?.parts || []).map((p) => p.text || "").join("");
-    if (!text) {
-      if (cand?.finishReason === "MAX_TOKENS") throw new Error("Gemini 응답이 잘렸어요(길이 초과). 모델을 gemini-2.5-flash로 바꾸거나 다시 시도하세요.");
-      throw new Error("Gemini 응답이 비었어요. 다시 시도하세요.");
-    }
-    return parseJSON(text);
-  }
-
   function parseJSON(text) {
-    let t = (text || "").trim();
-    if (!t) throw new Error("AI 응답이 비었어요. 다시 시도하세요.");
+    let t = text.trim();
     const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (fence) t = fence[1].trim();
     const s = t.indexOf("{"), e = t.lastIndexOf("}");
@@ -271,67 +215,43 @@
     let cut = t;
     if (a >= 0 && (a < s || s < 0)) cut = t.slice(a, b + 1);
     else if (s >= 0) cut = t.slice(s, e + 1);
-    try { return JSON.parse(cut); }
-    catch (err) {
-      // 잘린 JSON 배열 복구 시도: 마지막 완성된 항목까지만 취함
-      const salv = salvageArray(cut);
-      if (salv) return salv;
-      throw new Error("AI 응답이 잘렸어요(길이 초과). 다시 시도하면 대개 해결돼요.");
-    }
-  }
-  // 잘린 JSON 배열에서 '완성된 최상위 항목'(객체 또는 문자열)만 골라 복구
-  function salvageArray(cut) {
-    if (cut[0] !== "[") return null;
-    const items = []; let depth = 0, inStr = false, esc = false, start = -1;
-    for (let i = 1; i < cut.length; i++) {
-      const ch = cut[i];
-      if (inStr) {
-        if (esc) esc = false;
-        else if (ch === "\\") esc = true;
-        else if (ch === '"') { inStr = false; if (depth === 0 && start >= 0) { items.push(cut.slice(start, i + 1)); start = -1; } }
-        continue;
-      }
-      if (ch === '"') { if (depth === 0 && start < 0) start = i; inStr = true; continue; }
-      if (ch === "{" || ch === "[") { if (depth === 0 && start < 0) start = i; depth++; continue; }
-      if (ch === "}" || ch === "]") { if (depth > 0) { depth--; if (depth === 0 && start >= 0) { items.push(cut.slice(start, i + 1)); start = -1; } } else break; continue; }
-    }
-    if (!items.length) return null;
-    // 뒤에서부터 완성된 만큼만 파싱 (마지막 잘린 항목 버림)
-    for (let k = items.length; k > 0; k--) {
-      try { return JSON.parse("[" + items.slice(0, k).join(",") + "]"); } catch (e) {}
-    }
-    return null;
+    return JSON.parse(cut);
   }
 
-  // ============ 이미지 헬퍼 ============
+  // ============ 이미지 생성 (제공자 분기) ============
+  async function genImage(prompt, options) {
+    return imgProvider() === "kie" ? genImageKIE(prompt, options) : genImageGemini(prompt, options);
+  }
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   function blobToDataURL(blob) {
     return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
   }
 
-  // ============ KIE.ai 공용 (createTask → recordInfo 폴링) ============
-  // 이미지·영상 모두 같은 흐름. maxTries 만큼 2초 간격 폴링. 결과 URL 반환.
-  async function kieTask(model, input, maxTries) {
+  // ---- KIE.ai (createTask → recordInfo 폴링) ----
+  async function genImageKIE(prompt, options) {
+    options = options || {};
     const key = kieKey();
     if (!key) throw new Error("NO_KIE_KEY");
     const create = await apiFetch(KIE_CREATE, {
       method: "POST",
       headers: { "content-type": "application/json", "authorization": "Bearer " + key },
-      body: JSON.stringify({ model, input })
+      body: JSON.stringify({
+        model: kieModel(),
+        input: {
+          prompt: prompt + (options.allowText ? " . Render the requested title text exactly, large, bold and readable." : " . no text, no watermark, no letters."),
+          aspect_ratio: "16:9", resolution: "4K", output_format: "png",
+          image_input: (options.referenceUrls || []).filter(Boolean)
+        }
+      })
     });
     if (!create.ok) {
       let d = ""; try { d = (await create.json()).msg; } catch (e) { d = await create.text(); }
       throw new Error(`KIE ${create.status}: ${d}`);
     }
     const cj = await create.json();
-    // KIE는 HTTP 200이어도 본문 code로 오류를 알림 (예: 433=포인트 부족)
-    if (cj.code && cj.code !== 200) {
-      if (cj.code === 433 || /point|insufficient|credit|balance/i.test(cj.msg || "")) throw new Error("KIE_NO_CREDIT");
-      throw new Error(`KIE ${cj.code}: ${cj.msg || ""}`);
-    }
     const taskId = cj.data?.taskId || cj.data?.id || cj.taskId;
-    if (!taskId) throw new Error("KIE: " + (cj.msg || "taskId 없음") + " " + JSON.stringify(cj).slice(0, 100));
-    for (let n = 0; n < (maxTries || 90); n++) {
+    if (!taskId) throw new Error("KIE: taskId 없음 " + JSON.stringify(cj).slice(0, 120));
+    for (let n = 0; n < 90; n++) {
       await sleep(2000);
       const q = await apiFetch(KIE_RECORD + encodeURIComponent(taskId), { headers: { "authorization": "Bearer " + key } });
       if (!q.ok) continue;
@@ -342,63 +262,41 @@
         if (typeof rj === "string") { try { rj = JSON.parse(rj); } catch (e) { rj = {}; } }
         const url = rj.resultUrls?.[0] || rj.result_urls?.[0] || (Array.isArray(rj.resultUrls) ? rj.resultUrls[0] : null);
         if (!url) throw new Error("KIE: 결과 URL 없음");
-        return url;
+        lastKieAssetUrl = url;
+        try { const r = await apiFetch(url); return await blobToDataURL(await r.blob()); }
+        catch (e) { return url; } // CORS로 바이트 못 가져오면 URL 그대로(미리보기는 됨, ZIP 제외)
       }
       if (st === "fail") throw new Error("KIE 실패: " + (qj.data.failMsg || "알 수 없음"));
     }
-    throw new Error("KIE 시간 초과. 나중에 다시 시도하세요.");
+    throw new Error("KIE 시간 초과(3분). 나중에 다시 시도하세요.");
   }
 
-  // ---- 일관성(캐릭터·화풍) 고정 ----
-  // 모든 장면에 같은 주인공 외형을 강제
-  function charLockText() {
-    const cs = (project.characters || []).filter((c) => c.look);
-    if (!cs.length) return "";
-    return "Keep these recurring characters IDENTICAL in every image — same face, hairstyle, age and clothing every time: " +
-      cs.map((c) => `[${c.name}] ${c.look}`).join("; ") + ". ";
-  }
-  // 화풍 고정 + 실사화 방지 (nano-banana가 실사로 튀는 것 차단)
-  function styleLockText() {
-    return " . Art style (keep EXACTLY the same across all images): " + (project.style || "flat 2D Korean webtoon manhwa illustration") +
-      ". Flat 2D drawn cel-shaded webtoon/manhwa illustration. CRITICAL: NOT photorealistic, NOT a real photograph, NOT 3D render, NOT realistic skin/lighting — it must look hand-drawn like the reference style. no text, no letters, no watermark.";
-  }
-  // 캐릭터 참조 이미지(공개 URL만) — nano-banana 이미지 조건부 생성용
-  function charRefUrls() {
-    return (project.characters || []).map((c) => c.imageUrl).filter((u) => u && /^https?:\/\//.test(u));
-  }
-
-  const kieRes = () => localStorage.getItem(LS.kieRes) || "2K"; // 해상도(1K/2K/4K) — 기본 2K로 비용 절약(4K 기본은 비쌈)
-
-  // ---- KIE 이미지 생성 (주인공·화풍 고정 포함) ----
-  async function genImage(prompt) {
-    const full = charLockText() + prompt + styleLockText() + " 16:9 widescreen cinematic composition.";
-    const input = { prompt: full, aspect_ratio: "16:9", resolution: kieRes(), output_format: "png" };
-    const refs = charRefUrls();
-    if (refs.length) input.image_input = refs.slice(0, 3); // 주인공 참조로 일관성 강화(nano-banana-2 필드: image_input)
-    const url = await kieTask(kieModel(), input, 90);
-    try { const r = await apiFetch(url); return await blobToDataURL(await r.blob()); }
-    catch (e) { return url; } // CORS로 바이트 못 가져오면 URL 그대로(미리보기는 됨, ZIP 제외)
-  }
-
-  // ---- 주인공 캐릭터 레퍼런스 이미지 생성 ----
-  async function genCharImage(idx) {
-    const c = project.characters[idx];
-    const prompt = "Character reference sheet, single full-body character, front view, neutral standing pose, clear visible face, plain light background. " +
-      c.look + styleLockText();
-    const url = await kieTask(kieModel(), { prompt, aspect_ratio: "3:4", resolution: kieRes(), output_format: "png" }, 90);
-    c.imageUrl = url; // 조건부 생성용 원본 URL 보관
-    try { const r = await apiFetch(url); c.imageDataUrl = await blobToDataURL(await r.blob()); }
-    catch (e) { c.imageDataUrl = url; }
-    return c.imageDataUrl;
-  }
-
-  // ---- KIE 인트로 영상 생성 (이미지→영상 또는 텍스트→영상) ----
-  async function genVideoKIE(prompt, imageUrl) {
-    const input = { prompt: prompt, aspect_ratio: "16:9" };
-    // 인트로 이미지가 공개 URL(http)이면 image-to-video 입력으로 넣는다. (data URL은 못 넣음 → 텍스트→영상)
-    if (imageUrl && /^https?:\/\//.test(imageUrl)) { input.image_urls = [imageUrl]; input.image_url = imageUrl; }
-    const url = await kieTask(kieVideoModel(), input, 180); // 영상은 오래 걸림(최대 6분)
-    return url; // 영상은 URL 그대로 사용(미리보기/다운로드)
+  // ---- Google Gemini 직접 ----
+  async function genImageGemini(prompt, options) {
+    options = options || {};
+    const key = geminiKey();
+    if (!key) throw new Error("NO_GEMINI_KEY");
+    const model = imgModel();
+    const body = {
+      contents: [{ parts: [{ text: prompt + (options.allowText ? " . Render the requested title text exactly, large, bold and readable." : " . 16:9 widescreen cinematic composition, no text, no watermark, no letters.") }] }]
+    };
+    if (/2\.0-flash-preview-image/.test(model)) {
+      body.generationConfig = { responseModalities: ["TEXT", "IMAGE"] };
+    }
+    const res = await fetch(GEMINI_BASE + model + ":generateContent?key=" + encodeURIComponent(key), {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body)
+    });
+    if (!res.ok) {
+      let d = ""; try { d = (await res.json()).error?.message; } catch (e) { d = await res.text(); }
+      throw new Error(`Gemini 이미지 ${res.status}: ${d}`);
+    }
+    const j = await res.json();
+    const parts = j.candidates?.[0]?.content?.parts || [];
+    for (const p of parts) {
+      if (p.inlineData?.data) return "data:" + (p.inlineData.mimeType || "image/png") + ";base64," + p.inlineData.data;
+    }
+    const txt = parts.map((p) => p.text || "").join(" ");
+    throw new Error("이미지가 생성되지 않았습니다. " + (txt || "모델 응답에 이미지 없음"));
   }
 
   // ============ Gemini TTS ============
@@ -428,7 +326,7 @@
     return { dataUrl: "data:audio/wav;base64," + bytesToBase64(wav), durationSec: (wav.length - 44) / 2 / rate };
   }
 
-  // ============ 타입캐스트 TTS ============
+  // ============ Inworld TTS ============
   function measureAudio(dataUrl) {
     return new Promise((res) => {
       const a = new Audio();
@@ -437,74 +335,65 @@
       a.src = dataUrl;
     });
   }
-  async function genTypecast(text) {
-    const key = typecastKey();
-    if (!key) throw new Error("NO_TYPECAST_KEY");
-    if (!typecastVoice()) throw new Error("NO_TYPECAST_VOICE");
-    const res = await apiFetch(TYPECAST_URL, {
+  function inferVoiceDirection(scene) {
+    const text = scene.text || "";
+    let emotion = "차분";
+    let rate = 0.94;
+    let direction = "따뜻하고 차분한 이야기꾼처럼, 문장 사이를 자연스럽게 쉬며 말한다";
+    if (scene.isIntro || /놀라|충격|다급|위기|쫓|비명|칼|불길/.test(text)) {
+      emotion = "긴장"; rate = 1.04;
+      direction = "긴장감 있게, 핵심 단어를 강조하고 약간 빠른 속도로 말한다";
+    } else if (/슬프|눈물|이별|죽|그리움|애틋|가슴/.test(text)) {
+      emotion = "슬픔"; rate = 0.86;
+      direction = "슬픔을 억누르는 낮은 목소리로, 여운을 두고 천천히 말한다";
+    } else if (/기쁘|웃|행복|잔치|반가|감사/.test(text)) {
+      emotion = "기쁨"; rate = 1.0;
+      direction = "은은한 기쁨과 미소가 느껴지는 따뜻한 목소리로 말한다";
+    } else if (/분노|화가|원통|복수|꾸짖|호통/.test(text)) {
+      emotion = "분노"; rate = 0.98;
+      direction = "절제된 분노와 단단한 힘을 담아 또렷하게 말한다";
+    } else if (/수상|기이|어둠|귀신|도깨비|정체|비밀/.test(text)) {
+      emotion = "미스터리"; rate = 0.9;
+      direction = "낮고 조용한 목소리로, 불길한 여백과 궁금증을 살려 말한다";
+    }
+    scene.voiceDirection = { emotion, rate, direction };
+    return scene.voiceDirection;
+  }
+  async function genInworld(scene) {
+    const key = inworldKey();
+    if (!key) throw new Error("NO_INWORLD_KEY");
+    if (!inworldVoice()) throw new Error("NO_INWORLD_VOICE");
+    const voice = scene.voiceDirection || inferVoiceDirection(scene);
+    const model = inworldModel();
+    const steeredText = model === "inworld-tts-2" ? `[${voice.direction}] ${scene.text}` : scene.text;
+    const res = await apiFetch(INWORLD_TTS_URL, {
       method: "POST",
-      headers: { "content-type": "application/json", "authorization": "Bearer " + key },
+      headers: { "content-type": "application/json", "authorization": "Basic " + key.replace(/^Basic\s+/i, "") },
       body: JSON.stringify({
-        voice_id: typecastVoice(),
-        text: text,
-        model: "ssfm-v30",
-        language: project.lang === "ja" ? "jpn" : "kor",
-        output: { audio_format: "wav" }
+        text: steeredText,
+        voiceId: inworldVoice(),
+        modelId: model,
+        language: project.lang === "ja" ? "ja-JP" : "ko-KR",
+        audioConfig: { audioEncoding: "MP3", sampleRateHertz: 48000, speakingRate: voice.rate },
+        deliveryMode: model === "inworld-tts-2" ? (emotionToDelivery(voice.emotion)) : undefined,
+        timestampType: "WORD",
+        applyTextNormalization: "ON",
+        enhanceGeneration: true
       })
     });
     if (!res.ok) {
       let d = ""; try { d = JSON.stringify(await res.json()); } catch (e) { d = await res.text(); }
-      throw new Error(`Typecast ${res.status}: ${d.slice(0, 120)}`);
+      throw new Error(`Inworld ${res.status}: ${d.slice(0, 160)}`);
     }
-    const ct = res.headers.get("content-type") || "";
-    let dataUrl;
-    if (ct.includes("application/json")) {
-      const j = await res.json();
-      const b64 = j.audio || j.audio_base64 || j.data;
-      const url = j.audio_url || j.url;
-      if (b64) dataUrl = "data:audio/wav;base64," + b64;
-      else if (url) { const r = await fetch(url); dataUrl = await blobToDataURL(await r.blob()); }
-      else throw new Error("Typecast: 오디오를 찾을 수 없음");
-    } else {
-      dataUrl = await blobToDataURL(await res.blob());
-    }
-    const dur = (await measureAudio(dataUrl)) || estDur(text);
-    return { dataUrl, durationSec: dur };
+    const j = await res.json();
+    if (!j.audioContent) throw new Error("Inworld: 오디오를 찾을 수 없음");
+    const dataUrl = "data:audio/mpeg;base64," + j.audioContent;
+    const dur = (await measureAudio(dataUrl)) || estDur(scene.text) / voice.rate;
+    return { dataUrl, durationSec: dur, wordAlignment: j.timestampInfo?.wordAlignment || null };
   }
 
-  async function loadTypecastVoices() {
-    const key = ($("#prodTypecastKey").value || typecastKey()).trim();
-    if (!key) { toast("타입캐스트 API 키를 먼저 넣어주세요"); return; }
-    const btn = $("#prodTcLoadVoices"); const sel = $("#prodTcVoiceSelect");
-    if (btn) { btn.disabled = true; btn.textContent = "불러오는 중…"; }
-    try {
-      let data = null;
-      for (const url of ["https://api.typecast.ai/v1/voices", "https://api.typecast.ai/v2/voices"]) {
-        try {
-          const r = await apiFetch(url, { headers: { "authorization": "Bearer " + key } });
-          if (r.ok) { data = await r.json(); break; }
-        } catch (e) {}
-      }
-      if (!data) throw new Error("목소리 목록을 불러오지 못했어요(CORS/키 확인).");
-      const arr = Array.isArray(data) ? data : (data.voices || data.result || data.data || []);
-      if (!arr.length) throw new Error("목소리가 없습니다.");
-      sel.innerHTML = "";
-      arr.forEach((v) => {
-        const id = v.voice_id || v.id || v.actor_id || v.voiceId;
-        const name = v.name || v.voice_name || v.display_name || v.title || id;
-        const lang = v.language || v.lang || (Array.isArray(v.languages) ? v.languages.join("/") : "");
-        if (!id) return;
-        const o = el("option", null, esc(name) + (lang ? ` (${esc(String(lang))})` : ""));
-        o.value = id; sel.appendChild(o);
-      });
-      const cur = typecastVoice();
-      if (cur) sel.value = cur;
-      toast(arr.length + "개 불러옴 · 아래 '한국어에 넣기/일본어에 넣기'로 지정하세요");
-    } catch (e) {
-      toast("실패: " + String(e.message).slice(0, 60));
-    } finally {
-      if (btn) { btn.disabled = false; btn.textContent = "목소리 불러오기"; }
-    }
+  function emotionToDelivery(emotion) {
+    return /긴장|슬픔|분노|미스터리/.test(emotion || "") ? "CREATIVE" : "BALANCED";
   }
 
   // ============ 바이트 헬퍼 ============
@@ -593,15 +482,60 @@
     return `${p(h, 2)}:${p(m, 2)}:${p(s, 2)},${p(ms, 3)}`;
   }
   function buildSRT() {
-    let t = 0, out = "";
-    project.scenes.forEach((s, i) => {
+    let t = 0, n = 1, out = "";
+    project.scenes.forEach((s) => {
       const dur = s.durationSec || estDur(s.text);
-      out += `${i + 1}\n${srtTime(t)} --> ${srtTime(t + dur)}\n${s.text.trim()}\n\n`;
+      const chunks = subtitleChunks(s.text);
+      const weights = chunks.map((x) => Math.max(1, x.replace(/\s/g, "").length));
+      const total = weights.reduce((a, b) => a + b, 0) || 1;
+      chunks.forEach((chunk, i) => {
+        const end = i === chunks.length - 1 ? t + dur : t + dur * (weights.slice(0, i + 1).reduce((a, b) => a + b, 0) / total);
+        const start = i ? t + dur * (weights.slice(0, i).reduce((a, b) => a + b, 0) / total) : t;
+        out += `${n++}\n${srtTime(start)} --> ${srtTime(end)}\n${chunk}\n\n`;
+      });
       t += dur;
     });
     return out;
   }
-  function estDur(text) { return Math.max(2, Math.round((text || "").replace(/\s/g, "").length / (SCRIPT_CPM / 60))); }
+  function subtitleChunks(text) {
+    const sentences = String(text || "").replace(/\s+/g, " ").trim().match(/[^.!?。！？]+[.!?。！？]?/g) || [];
+    const out = [];
+    sentences.forEach((sentence) => {
+      let rest = sentence.trim();
+      while (rest.length > 32) {
+        let cut = Math.max(rest.lastIndexOf(" ", 32), rest.lastIndexOf(",", 32), rest.lastIndexOf("，", 32));
+        if (cut < 12) cut = 28;
+        out.push(rest.slice(0, cut).trim()); rest = rest.slice(cut).trim();
+      }
+      if (rest) out.push(rest);
+    });
+    return out.length ? out : [String(text || "").trim()];
+  }
+  function inferSfx(scene) {
+    const text = scene.text || "";
+    const rules = [
+      [/비|폭우|빗방울/, "rain", "빗소리", -24], [/천둥|번개/, "thunder", "천둥", -16],
+      [/문을|문이|대문/, "wooden_door", "나무문 여닫힘", -20], [/말발굽|말을 타|기마/, "horse_hooves", "말발굽", -20],
+      [/발걸음|걸어|달려|뛰어/, "footsteps", "흙길 발걸음", -24], [/불길|화로|장작불/, "fire", "장작 타는 소리", -26],
+      [/바람|솔바람|찬바람/, "wind", "바람", -26], [/새벽|숲|산속|산길/, "forest_ambience", "숲 앰비언스", -30],
+      [/시장|장터|사람들/, "market_crowd", "장터 군중", -30], [/귀신|도깨비|기이|정체/, "mystery_sting", "미스터리 전환음", -22]
+    ];
+    return rules.filter(([re]) => re.test(text)).slice(0, 2).map(([, key, label, volume], i) => ({ key, label, offsetSec: i * 1.5, volumeDb: volume }));
+  }
+  function projectQA() {
+    const issues = [];
+    if (!project.scenes.length) issues.push("장면이 없습니다.");
+    project.scenes.forEach((s, i) => {
+      if (!s.text?.trim()) issues.push(`장면 ${i + 1}: 대본 없음`);
+      if (!s.imageDataUrl) issues.push(`장면 ${i + 1}: 이미지 없음`);
+      if (!s.audioDataUrl) issues.push(`장면 ${i + 1}: 음성 없음`);
+      if (!s.durationSec) issues.push(`장면 ${i + 1}: 실제 음성 길이 미확인`);
+    });
+    if (!project.thumb?.imageDataUrl) issues.push("썸네일 이미지 없음");
+    if (!project.title?.trim()) issues.push("유튜브 제목 없음");
+    return issues;
+  }
+  function estDur(text) { return Math.max(2, Math.round((text || "").replace(/\s/g, "").length / 5.5)); }
 
   // ============ 렌더 ============
   function render() {
@@ -613,17 +547,21 @@
     const key = STEPS[stepIdx].key;
     ({
       category: renderCategory, topic: renderTopic, script: renderScript,
-      prompt: renderPrompt, image: renderImage, thumb: renderThumb, voice: renderVoice,
+      character: renderCharacter, prompt: renderPrompt, image: renderImage, video: renderVideo,
+      thumb: renderThumb, voice: renderVoice,
       edit: renderEdit, export: renderExport
     }[key])(body);
   }
 
   function keyBar(body) {
-    const gemText = textProvider() === "gemini";
-    if (gemText ? geminiKey() : claudeKey()) return;
-    const textLabel = gemText ? "Google AI 키(대본 무료)" : "Anthropic(Claude) 키";
+    const needC = !claudeKey(), needI = !imgKeyOk();
+    if (!needC && !needI) return;
+    const imgLabel = imgProvider() === "kie" ? "KIE.ai 키" : "Google AI 키";
     const bar = el("div", "keybar");
-    const txt = el("div", null, "🔑 시작하려면 API 키가 필요해요 — " + `<b>${textLabel}</b>`);
+    const txt = el("div", null,
+      "🔑 시작하려면 API 키가 필요해요 — " +
+      (needC ? "<b>Anthropic 키</b>" : "") + (needC && needI ? " · " : "") +
+      (needI ? `<b>${imgLabel}</b>` : ""));
     bar.appendChild(txt);
     const b = el("button", "btn sm btn-primary", "여기에 API 키 입력하기");
     b.onclick = openKeys;
@@ -638,10 +576,6 @@
       const st = el("div", "pstep" + (i === stepIdx ? " active" : i < stepIdx ? " done" : ""));
       st.appendChild(el("div", "pstep-dot", i < stepIdx ? "✓" : String(i + 1)));
       st.appendChild(el("div", "pstep-name", s.name));
-      // 단계 번호를 눌러서 바로 이동
-      st.title = "이 단계로 이동";
-      st.style.cursor = busy ? "default" : "pointer";
-      if (!busy) st.onclick = () => { if (i !== stepIdx) { stepIdx = i; render(); } };
       w.appendChild(st);
     });
   }
@@ -677,79 +611,13 @@
     body.prepend(e);
   }
   function keyMissingMsg(e) {
-    const m = String(e.message);
-    if (m.includes("NO_CLAUDE_KEY")) return "⚙ 키 설정에서 <b>Anthropic API 키</b>를 먼저 넣어주세요.";
-    if (m.includes("NO_GEMINI_KEY")) return "⚙ 키 설정에서 <b>✍️ 글작성(대본) API</b> 칸에 <b>Google AI 키(AIza…)</b>를 먼저 넣어주세요.";
-    if (m.includes("NO_KIE_KEY")) return "⚙ 키 설정에서 <b>KIE.ai 키</b>를 먼저 넣어주세요.";
-    // Gemini 모델 사용 불가(404/deprecated)
-    if (/Gemini\(대본\)\s*404/.test(m) || /no longer available|is not found|not supported|update your code to use a newer model/.test(m)) {
-      return "⚙ <b>Gemini 대본 모델</b>이 지금 계정에서 안 돼요.<br>🔑 API 키 → <b>Gemini 대본 모델</b> 칸에서 <b>gemini-2.0-flash</b>(또는 gemini-flash-latest)로 바꾸고 저장 후 다시 시도하세요. <small>(원본: " + esc(m) + ")</small>";
-    }
-    // Gemini 인증 오류(잘못된 키/빈 키/키 위치 혼동)
-    if (/Gemini\(대본\)\s*(400|401|403)/.test(m) || /invalid authentication|API key not valid|API_KEY_INVALID|Expected OAuth/.test(m)) {
-      return "🔑 <b>글작성(대본) Google AI 키가 올바르지 않아요.</b><br>" +
-        "① 🔑 API 키 → <b>✍️ 글작성(대본) API</b> 칸에 <b>AIza…</b>로 시작하는 키를 넣었는지 확인하세요(🖼️ 이미지 칸이 아니라 글작성 칸!).<br>" +
-        "② 키는 <a href='https://aistudio.google.com/apikey' target='_blank' rel='noopener'>aistudio.google.com/apikey</a>에서 무료로 발급해요(OAuth 클라이언트 ID 아님).<br>" +
-        "③ 저장 후 다시 시도하세요. <small>(원본: " + esc(m) + ")</small>";
-    }
-    if (m.includes("Failed to fetch")) return "네트워크/CORS 오류. 인터넷 연결과 키를 확인하세요. (게시본이 아닌 로컬 파일에서 실행해야 합니다.)";
-    return "오류: " + esc(m);
+    if (String(e.message).includes("NO_CLAUDE_KEY")) return "⚙ 키 설정에서 <b>Anthropic API 키</b>를 먼저 넣어주세요.";
+    if (String(e.message).includes("NO_GEMINI_KEY")) return "⚙ 키 설정에서 <b>Google AI(Gemini) 키</b>를 먼저 넣어주세요.";
+    if (String(e.message).includes("NO_KIE_KEY")) return "⚙ 키 설정에서 <b>KIE.ai 키</b>를 먼저 넣어주세요.";
+    if (String(e.message).includes("Failed to fetch")) return "네트워크/CORS 오류. 인터넷 연결과 키를 확인하세요. (게시본이 아닌 로컬 파일에서 실행해야 합니다.)";
+    return "오류: " + esc(e.message);
   }
   function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
-
-  // 글작성 Google AI 키가 진짜 되는지 즉석 확인
-  async function testGeminiKey() {
-    const out = $("#prodTestGeminiResult");
-    const key = ($("#prodGeminiKey").value || "").trim();
-    const set = (msg, ok) => { if (out) { out.innerHTML = msg; out.style.color = ok ? "var(--good)" : "var(--danger)"; } };
-    if (!key) { set("❌ 키가 비었어요. AIza…로 시작하는 키를 넣으세요.", false); return; }
-    if (/apps\.googleusercontent\.com/.test(key) || key.includes(".apps.")) {
-      set("❌ 이건 <b>OAuth 클라이언트 ID</b>예요. 대본용은 <b>AIza…</b> API 키가 필요합니다.", false); return;
-    }
-    if (!/^AIza/.test(key)) { set("⚠ 보통 <b>AIza</b>로 시작해요. 그래도 테스트해볼게요…", false); }
-    else set("⏳ 테스트 중…", true);
-    try {
-      const res = await fetch(GEMINI_BASE + geminiTextModel() + ":generateContent?key=" + encodeURIComponent(key), {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }], generationConfig: { maxOutputTokens: 5 } })
-      });
-      if (res.ok) { set("✅ 키 정상! <b>저장</b>을 누른 뒤 대본을 만들 수 있어요.", true); return; }
-      let d = ""; try { d = (await res.json()).error?.message || ""; } catch (e) { d = await res.text(); }
-      if (res.status === 400 && /API key not valid|API_KEY_INVALID/.test(d)) set("❌ 잘못된 키예요. <a href='https://aistudio.google.com/apikey' target='_blank' rel='noopener'>aistudio.google.com/apikey</a>에서 새로 발급하세요.", false);
-      else if (/SERVICE_DISABLED|has not been used|is disabled/.test(d)) set("❌ 이 키 프로젝트에서 <b>Generative Language API</b>가 꺼져 있어요. 콘솔에서 사용 설정 후 다시 시도.", false);
-      else if (res.status === 401 || /OAuth|invalid authentication/.test(d)) set("❌ 키가 인식되지 않아요(OAuth 오류). <b>AIza…</b> API 키가 맞는지 확인하세요(로그인 ID 아님).", false);
-      else set("❌ 오류 " + res.status + ": " + esc(d.slice(0, 90)), false);
-    } catch (e) { set("❌ 네트워크 오류: " + esc(String(e.message).slice(0, 60)), false); }
-  }
-
-  // 이 키에서 실제로 대본 생성(generateContent) 가능한 모델 목록 불러오기
-  async function loadGeminiModels() {
-    const out = $("#prodGeminiModelsResult");
-    const key = ($("#prodGeminiKey").value || "").trim();
-    const set = (msg, ok) => { if (out) { out.innerHTML = msg; out.style.color = ok ? "var(--good)" : "var(--danger)"; } };
-    if (!key) { set("❌ 먼저 Google AI 키를 넣으세요.", false); return; }
-    set("⏳ 불러오는 중…", true);
-    try {
-      const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=" + encodeURIComponent(key));
-      if (!res.ok) {
-        let d = ""; try { d = (await res.json()).error?.message || ""; } catch (e) { d = await res.text(); }
-        set("❌ 목록 실패: " + esc(d.slice(0, 90)), false); return;
-      }
-      const j = await res.json();
-      const models = (j.models || [])
-        .filter((m) => (m.supportedGenerationMethods || []).includes("generateContent"))
-        .map((m) => (m.name || "").replace(/^models\//, ""))
-        .filter((n) => /gemini/.test(n) && !/embedding|aqa|imagen|tts|image|vision-latest/.test(n));
-      if (!models.length) { set("❌ 사용 가능한 대본 모델이 없어요. 키/프로젝트를 확인하세요.", false); return; }
-      // 데이터리스트 갱신
-      const dl = $("#geminiTextModelList");
-      if (dl) { dl.innerHTML = ""; models.forEach((n) => { const o = el("option"); o.value = n; dl.appendChild(o); }); }
-      // 좋은 기본값 자동 선택: flash-latest > 아무 flash > 첫 번째
-      const pick = models.find((n) => /flash-latest/.test(n)) || models.find((n) => /flash/.test(n) && !/lite/.test(n)) || models.find((n) => /flash/.test(n)) || models[0];
-      $("#prodGeminiTextModel").value = pick;
-      set(`✅ ${models.length}개 발견! <b>${esc(pick)}</b> 선택됨. <b>저장</b> 누르세요.`, true);
-    } catch (e) { set("❌ 네트워크 오류: " + esc(String(e.message).slice(0, 60)), false); }
-  }
 
   // ---- 1. 카테고리 ----
   function renderCategory(body) {
@@ -798,34 +666,24 @@
     busy = true; loading(body, "실제 인기 영상을 참고해 주제 10개를 뽑는 중…"); renderNav();
     try {
       const trend = await fetchTrendingSample(project.lang);
-      const sys = `너는 ${LANG[project.lang].audience} 채널의 '클릭률 극대화' 제목 카피라이터다. 시청자가 스크롤하다 멈추고 저절로 누르게 만드는 후킹 제목을 잘 뽑는다. 반드시 유효한 JSON만 출력한다.`;
+      const sys = `너는 ${LANG[project.lang].audience} 채널 기획 전문가다. 조회수가 잘 나오는(떡상하는) 주제를 잘 안다. 반드시 유효한 JSON만 출력한다. 설명·군더더기 금지.`;
       const usr =
 `카테고리: "${project.category}"
 
-이 카테고리로, 시니어 시청자가 <b>도저히 안 누르고 못 배기는</b> 초강력 후킹 제목 10개를 뽑아줘.
-후킹 원칙(반드시 반영):
-- 첫머리에 충격·반전·금기의 냄새를 풍긴다(예: 팔려간, 버려진, 소름, 죽은 줄 알았던, 감히).
-- 구체적 숫자·금액·관계 대비를 넣는다(100냥, 10년 후, 셋째 며느리 vs 맏며느리).
-- 결말·정체는 절대 노출하지 말고, "그 아이의 정체는?", "그날 밤 벌어진 일" 처럼 궁금증에서 끊는다.
-- 감정 버튼(억울함·통쾌함·오싹함·애틋함)을 하나 확실히 누른다.
-- 흔한 클리셰 반복 금지, 10개 소재를 서로 다르게 분산.
-아래 검증된 제목 패턴 골격을 활용(결말·정체 노출 금지):
+이 카테고리로 ${LANG[project.lang].audience}에서 클릭률·조회수가 높을 만한 이야기 주제 10개를 추천해줘.
+자극적이되 흔한 클리셰의 반복은 피하고, 서로 소재가 겹치지 않게 분산해줘.
+제목은 아래 검증된 패턴 중 하나를 활용해서 궁금증을 남긴다(결말·정체 노출 금지):
 ${TITLE_PATTERNS}
-★ 제목 길이 제한(매우 중요): 제목은 <b>썸네일 2줄에 다 들어가야</b> 한다. 짧고 강하게 — 공백 포함 <b>16~24자</b>, 절대 26자 넘기지 말 것. 두 덩어리로 끊어 읽히게(예: "죽은 며느리가 / 10년 만에 돌아왔다"). 길게 늘어지는 제목 금지.
-- thumb: 위 제목을 썸네일용 <b>2줄</b>로 나눈 배열. 각 줄 6~12자, 큰 글씨로 시원하게 읽히게.
 각 주제는 아래 JSON 배열 형식으로만:
 [
-  {"title":"짧고 강한 제목(16~24자, 썸네일 2줄에 들어감)","thumb":["썸네일 1줄","썸네일 2줄"],"hook":"왜 끌리는지 한 줄 훅","why":"떡상 포인트 한 줄","score":85},
+  {"title":"구체적 사건 제목 | 야담 | 민담 | 옛날이야기 | 오디오북","hook":"왜 끌리는지 한 줄 훅","why":"떡상 포인트 한 줄","score":85},
   ... (정확히 10개)
 ]
 ${trend && trend.length ? "★ 최근 30일 실제로 조회수가 높았던 영상들(근거로 삼아라):\n" + trend.map((t) => `- ${t.title} (조회 ${t.views.toLocaleString()})`).join("\n") + "\n위 실제 사례와 소재·후킹이 얼마나 닮았는지를 근거로 score를 매겨라. 실제 대박 영상과 매우 유사하면 높게, 동떨어지면 낮게.\n" : ""}score는 '떡상(대박) 확률' 추정 정수(%)다. 40~95 사이에서 현실적으로 분산(전부 90+ 금지). 클릭률·소재 신선함·감정 강도·위 실제 데이터와의 유사도를 종합.${langDirective()}`;
-      const arr = await claudeJSON(sys, usr, 8000);
-      project.topics = (Array.isArray(arr) ? arr : [])
-        .filter((t) => t && typeof t === "object" && (t.title || "").trim())
-        .slice(0, 10)
-        .map((t) => ({ ...t, score: Math.max(0, Math.min(100, parseInt(t.score, 10) || 70)) }))
+      const arr = await claudeJSON(sys, usr, 4000);
+      project.topics = (Array.isArray(arr) ? arr : []).slice(0, 10)
+        .map((t) => ({ ...t, title: formatSeoTitle(t.title, project.lang), score: Math.max(0, Math.min(100, parseInt(t.score, 10) || 70)) }))
         .sort((a, b) => b.score - a.score);
-      if (!project.topics.length) throw new Error("주제를 만들지 못했어요. 다시 시도해 주세요.");
       project.topicIdx = -1;
       busy = false; goStep("topic");
     } catch (e) {
@@ -847,11 +705,6 @@ ${trend && trend.length ? "★ 최근 30일 실제로 조회수가 높았던 영
       }
       c.appendChild(el("div", "topic-rank", `${i + 1}위`));
       c.appendChild(el("div", "topic-title", esc(t.title || "")));
-      if (Array.isArray(t.thumb) && t.thumb.length) {
-        const th = el("div", "topic-thumb2");
-        th.innerHTML = "🖼 썸네일 2줄: " + t.thumb.slice(0, 2).map((x) => `<b>${esc(x)}</b>`).join(" · ");
-        c.appendChild(th);
-      }
       if (t.hook) c.appendChild(el("div", "topic-hook", esc(t.hook)));
       if (t.why) c.appendChild(el("div", "topic-why", "📈 " + esc(t.why)));
       c.onclick = () => {
@@ -867,9 +720,8 @@ ${trend && trend.length ? "★ 최근 30일 실제로 조회수가 높았던 영
   }
 
   // 대본: 1시간 30분~2시간(약 35,000~40,000자). 뼈대 → 장면별 긴 나레이션 배치 생성.
-  const SCENE_COUNT = 40;   // 장면 수 (이미지 컷 수) — 40컷 고정
+  const SCENE_COUNT = 32;   // 장면 수 (이미지 컷 수)
   const BATCH = 4;          // 배치당 장면 수
-  const SCRIPT_CPM = 300;   // 낭독 분당 글자수(추정) — 30,000자 ≈ 100분
 
   async function loadScript() {
     if (project.topicIdx < 0) { toast("주제를 하나 고르세요"); return; }
@@ -887,24 +739,18 @@ ${trend && trend.length ? "★ 최근 30일 실제로 조회수가 높았던 영
 ${langDirective()}
 1시간 30분~2시간짜리 긴 영상의 뼈대를 만들어줘. 7단계 골격(발단→일상·갈등씨앗→사건→시련(가장 길게, 에피소드 여럿)→위기→반전·해결→마무리)을 ${SCENE_COUNT}개 장면으로 촘촘히 나눠라.
 제목은 아래 패턴 중 하나(결말 노출 금지): ${TITLE_PATTERNS}
-★ 제목은 <b>썸네일 2줄에 다 들어가게</b> 짧고 강하게: 공백 포함 16~24자(최대 26자). 후킹·떡상 지향, 결말 노출 금지.
-★ A/B 테스트용: 서로 <b>각도가 다른</b> 후킹 제목 2개(A/B)와 태그 2개(A/B)를 만들어라. B는 A와 다른 감정버튼·다른 표현으로.
 JSON만:
 {
- "title":"제목 A (16~24자, 썸네일 2줄, 결말 노출 금지)",
- "titleB":"제목 B (A와 다른 각도의 후킹, 16~24자)",
- "titleTag":"제목 옆 태그 A (2~4개, ${ja ? "#日本昔話 등" : "#야담 #실화 등"})",
- "titleTagB":"제목 옆 태그 B (A와 다른 조합)",
- "description":"유튜브 설명란 (4~6문장 + '${channelName()}' 채널 구독 유도)",
+ "title":"구체적 나이·신분·사건이 앞에 오고 뒤에 | 야담 | 민담 | 옛날이야기 | 오디오북을 붙인 제목",
+ "titleTag":"제목 옆 태그 2~4개 (${ja ? "#日本昔話 등" : "#야담 #실화 등"})",
+ "description":"유튜브 설명란 (4~6문장 + 구독 유도)",
  "tags":["태그","8~12개"],
  "scenes":[ {"beat":"장면1 한 줄 요약(=인트로 도입)","isIntro":true}, {"beat":"장면2 한 줄 요약","isIntro":false} ]
 }
 scenes는 정확히 ${SCENE_COUNT}개. 각 beat는 한 컷 이미지로 그릴 수 있는 한 장면. 전체가 이어지는 완결된 이야기.`;
       const pkg = await claudeJSON(sysO, usrO, 6000);
-      project.title = pkg.title || topic.title;
-      project.titleB = pkg.titleB || "";
+      project.title = formatSeoTitle(pkg.title || topic.title, project.lang);
       project.titleTag = pkg.titleTag || "";
-      project.titleTagB = pkg.titleTagB || "";
       project.description = pkg.description || "";
       project.tags = Array.isArray(pkg.tags) ? pkg.tags : [];
       let beats = (pkg.scenes || []).map((s) => ({ beat: s.beat || "", isIntro: !!s.isIntro }));
@@ -936,8 +782,7 @@ scenes는 정확히 ${SCENE_COUNT}개. 각 beat는 한 컷 이미지로 그릴 �
 전체 장면 개요:
 ${outline}
 
-${prev ? "직전 장면 마지막 부분(자연스럽게 이어서):\n" + prev + "\n\n" : ""}지금은 아래 장면들의 '완성된 낭독 대본'만 순서대로 써라.
-★ 길이 필수(매우 중요): 인트로 외 각 장면은 <b>최소 1000자, 목표 1200~1500자</b>. 짧으면 안 된다. 대사·심리묘사·상황묘사·회상을 충분히 넣어 분량을 채워라(40장면 합계 30,000~40,000자 = 1시간 30분~2시간).
+${prev ? "직전 장면 마지막 부분(자연스럽게 이어서):\n" + prev + "\n\n" : ""}지금은 아래 장면들의 '완성된 낭독 대본'만 순서대로 써라. 각 장면은 넉넉히 길게(각 900~1400자), 대사와 묘사를 풍부하게.
 ${targets.map((t) => "- " + t).join("\n")}
 ${b === 0 ? `\n첫 장면(인트로)은 6문장 포맷: 파격 대사→압축 상황(결말 금지)→'그런데…' 궁금증→마지막에 "${ja ? "구독 유도 문구를 일본어로" : CTA_KO}". (인트로만 250자 내외로 짧게)` : ""}
 ${end === n ? `\n마지막 장면은 이 이야기에 맞는 주제 한 문장 + 고정 마무리 멘트: "${ja ? OUTRO_KO + " (일본어로)" : OUTRO_KO}"` : ""}
@@ -953,7 +798,7 @@ JSON 배열만, 정확히 ${end - b}개: ["장면 대본", ...]`;
       }
       const total = project.scenes.reduce((a, s) => a + (s.text || "").replace(/\s/g, "").length, 0);
       busy = false; goStep("script");
-      toast(`대본 완성 · 약 ${total.toLocaleString()}자 (~${Math.round(total / SCRIPT_CPM)}분)`);
+      toast(`대본 완성 · 약 ${total.toLocaleString()}자 (~${Math.round(total / 270)}분)`);
     } catch (e) {
       busy = false; renderTopic(body); showErr(body, keyMissingMsg(e));
     } finally { busy = false; }
@@ -979,126 +824,165 @@ JSON 배열만, 정확히 ${end - b}개: ["장면 대본", ...]`;
   function renderScript(body) {
     body.appendChild(el("h2", "prod-h", "대본과 유튜브 정보"));
     body.appendChild(el("p", "prod-sub", "자유롭게 <b>고쳐 쓸 수</b> 있어요. 다 됐으면 다음 단계로 넘어가세요."));
+    const importer = el("div", "scene");
+    importer.appendChild(el("div", "scene-no", "완성 대본 자동 장면 분리"));
+    importer.appendChild(el("p", "prod-sub", "기존 대본을 붙여넣으면 장소·시간·행동·감정 변화 기준으로 영상 장면을 다시 나눕니다."));
+    const fullScript = el("textarea"); fullScript.id = "fullScriptImport"; fullScript.placeholder = "여기에 완성 대본을 붙여넣으세요"; fullScript.style.minHeight = "120px";
+    importer.appendChild(fullScript);
+    const split = el("button", "btn sm btn-primary", "장면 자동 분리"); split.onclick = () => splitImportedScript(fullScript.value, split);
+    importer.appendChild(split); body.appendChild(importer);
     const pkg = el("div", "pkg");
-    const abNote = el("p", "prod-sub");
-    abNote.style.margin = "0 0 6px";
-    abNote.innerHTML = "🅰️🅱️ 제목·태그를 <b>A/B 두 개</b>로 준비했어요. 유튜브 <b>제목 실험(A/B 테스트)</b>에 A와 B를 각각 넣어 어느 쪽이 더 터지는지 비교하세요.";
-    pkg.appendChild(abNote);
-    pkg.appendChild(field("제목 A", () => project.title, false, (v) => { project.title = v; saveDebounced(); }));
-    pkg.appendChild(field("제목 B", () => project.titleB || "", false, (v) => { project.titleB = v; saveDebounced(); }));
-    pkg.appendChild(field("제목 옆 태그 A", () => project.titleTag, false, (v) => { project.titleTag = v; saveDebounced(); }));
-    pkg.appendChild(field("제목 옆 태그 B", () => project.titleTagB || "", false, (v) => { project.titleTagB = v; saveDebounced(); }));
+    pkg.appendChild(field("제목", () => project.title, false, (v) => { project.title = v; saveDebounced(); }));
+    pkg.appendChild(field("제목 옆 태그", () => project.titleTag, false, (v) => { project.titleTag = v; saveDebounced(); }));
     pkg.appendChild(field("설명", () => project.description, true, (v) => { project.description = v; saveDebounced(); }));
     pkg.appendChild(field("설명 아래 태그 (쉼표로 구분)", () => project.tags.join(", "), true, (v) => { project.tags = v.split(",").map((x) => x.trim()).filter(Boolean); saveDebounced(); }));
 
-    const totalChars = project.scenes.reduce((a, s) => a + (s.text || "").replace(/\s/g, "").length, 0);
-    const mm = Math.round(totalChars / SCRIPT_CPM); // 낭독 분당 글자수 기준
-    const lenTier = totalChars >= 30000 ? "good" : totalChars >= 24000 ? "mid" : "low";
-    const lenNote = el("div", "pkg-label");
-    lenNote.innerHTML = `<span>전체 대본 · <b class="len-${lenTier}">약 ${mm}분</b> (${totalChars.toLocaleString("ko")}자) — ${totalChars >= 27000 ? "1시간 30분↑ 목표 도달" : "1시간 30분엔 30,000자↑ 필요 (아래 '더 길게'로 늘리세요)"}</span>`;
-    pkg.appendChild(lenNote);
-
-    // 칸 나누지 않고 하나의 대본으로 표시 (장면은 빈 줄로 구분되어 내부 관리)
-    const ta = el("textarea", "script-all");
-    ta.value = project.scenes.map((s) => s.text).join("\n\n");
-    ta.style.minHeight = "420px"; ta.style.lineHeight = "1.7";
-    ta.oninput = () => { syncScriptText(ta.value); saveDebounced(); };
-    pkg.appendChild(ta);
+    const sceneHead = el("div", "pkg-field");
+    sceneHead.appendChild(el("div", "pkg-label", `<span>장면 대본 (${project.scenes.length}개)</span>`));
+    pkg.appendChild(sceneHead);
+    project.scenes.forEach((s, i) => pkg.appendChild(sceneTextCard(s, i)));
     body.appendChild(pkg);
 
-    navBtn("📋 전체 대본 복사", () => { navigator.clipboard.writeText(project.scenes.map((s) => s.text).join("\n\n")); toast("전체 대본을 복사했어요"); });
-    navBtn("⬆ 더 길게 늘리기", expandScript);
-    navBtn("이미지 프롬프트 만들기 →", loadPrompts, true);
+    navBtn("주인공 기준 만들기 →", prepareCharacter, true);
   }
 
-  // 하나의 텍스트를 빈 줄 기준으로 나눠 40개 장면에 다시 배분(장면 수는 유지)
-  function syncScriptText(full) {
-    const blocks = String(full).split(/\n{2,}/).map((x) => x.trim());
-    const n = project.scenes.length;
-    if (blocks.length === n) { project.scenes.forEach((s, i) => (s.text = blocks[i])); return; }
-    for (let i = 0; i < n; i++) {
-      if (i < n - 1) project.scenes[i].text = blocks[i] || "";
-      else project.scenes[i].text = blocks.slice(i).join("\n\n"); // 마지막 장면에 나머지 전부
+  async function prepareCharacter() {
+    const body = $("#prodBody");
+    busy = true; loading(body, "주인공 외형과 영상 미술 기준을 고정하는 중…"); renderNav();
+    try {
+      const story = project.scenes.map((s) => s.text).join("\n").slice(0, 12000);
+      const r = await claudeJSON("너는 시대극 캐릭터·미술 설정 감독이다. 반드시 유효한 JSON 객체만 출력한다.",
+`다음 이야기에서 가장 중요한 주인공 한 명을 선정하고 모든 장면에서 절대 바뀌지 않을 외형 기준을 작성하라.
+언어/시대 기준: ${LANG[project.lang].setting}
+선택된 그림체: ${project.style}
+
+JSON 형식:
+{"profile":"이름, 성별, 나이, 얼굴형, 눈, 눈썹, 코, 피부, 머리 모양, 머리색, 체형, 상의, 하의, 외투, 신발, 장신구를 빠짐없이 적은 영어 고정 묘사", "referencePrompt":"정면/측면/전신이 한 화면에 보이는 캐릭터 시트 영어 프롬프트", "visualBible":"전체 영상의 고정 색상 팔레트, 조명, 선화, 질감, 시대 배경 건축과 소품 규칙을 영어로 명시"}
+
+이야기:
+${story}`, 5000);
+      project.character = project.character || {};
+      project.character.profile = r.profile || "";
+      project.character.imagePrompt = `${r.referencePrompt || r.profile}. Character reference sheet, front view, side view and full body, neutral pose, plain warm background. ${project.style}. no text, no labels, no modern objects.`;
+      project.visualBible = r.visualBible || project.style;
+      saveProject(); busy = false; goStep("character");
+    } catch (e) { busy = false; render(); showErr($("#prodBody"), keyMissingMsg(e)); }
+  }
+
+  function renderCharacter(body) {
+    const ch = project.character || (project.character = { profile: "", imagePrompt: "", imageDataUrl: "", remoteUrl: "" });
+    body.appendChild(el("h2", "prod-h", "주인공 이미지 고정"));
+    body.appendChild(el("p", "prod-sub", "먼저 주인공 기준 이미지를 확정합니다. 이후 모든 장면은 이 이미지와 외형·복식·그림체 기준을 참조합니다."));
+    body.appendChild(el("div", "field-label", "기준 이미지 생성 전 그림체 확정"));
+    const styles = el("div", "style-list");
+    stylePresetsFor(project.lang).forEach((preset) => {
+      const chip = el("button", "style-chip" + (project.style === preset.tail ? " sel" : "")); chip.disabled = !!ch.imageDataUrl;
+      chip.innerHTML = `<b>${esc(preset.name)}</b><span>${esc(preset.desc)}</span>`;
+      chip.onclick = () => { project.style = preset.tail; ch.imagePrompt = `${ch.profile}. Character reference sheet, front view, side view and full body, neutral pose, plain warm background. ${project.style}. no text, no labels, no modern objects.`; saveProject(); render(); };
+      styles.appendChild(chip);
+    });
+    body.appendChild(styles);
+    body.appendChild(field("주인공 고정 외형", () => ch.profile || "", true, (v) => { ch.profile = v; saveDebounced(); }));
+    body.appendChild(field("고정 미술·배경 기준", () => project.visualBible || "", true, (v) => { project.visualBible = v; saveDebounced(); }));
+    const card = el("div", "scene"); card.appendChild(el("div", "scene-no", "주인공 기준 이미지 · KIE 4K"));
+    const box = el("div", "scene-img"); box.id = "characterImage"; box.style.maxWidth = "640px";
+    if (ch.imageDataUrl) { const img = el("img"); img.src = ch.imageDataUrl; box.appendChild(img); } else box.textContent = "기준 이미지 생성 전";
+    card.appendChild(box);
+    card.appendChild(field("기준 이미지 프롬프트", () => ch.imagePrompt || "", true, (v) => { ch.imagePrompt = v; saveDebounced(); }));
+    const gen = el("button", "btn btn-primary", ch.imageDataUrl ? "↻ 주인공 이미지 다시 생성" : "주인공 이미지 먼저 생성"); gen.onclick = genCharacterImage; card.appendChild(gen);
+    body.appendChild(card);
+    navBtn("장면 이미지 프롬프트 만들기 →", loadPrompts, true);
+  }
+
+  async function genCharacterImage() {
+    if (!imgKeyOk()) { toast("KIE 이미지 키를 먼저 넣어주세요"); openKeys(); return; }
+    const ch = project.character;
+    if (ch.imageDataUrl && !confirm("주인공 기준 이미지를 다시 생성할까요? KIE 4K 이미지 비용이 다시 발생하며, 이후 장면도 새 기준에 맞춰 다시 생성하는 것이 좋습니다.")) return;
+    const box = $("#characterImage"); if (box) { box.innerHTML = ""; box.appendChild(el("div", "spinner")); }
+    try {
+      ch.imageDataUrl = await genImage(ch.imagePrompt || ch.profile);
+      ch.remoteUrl = imgProvider() === "kie" ? lastKieAssetUrl : "";
+      saveProject(); render(); toast("주인공 기준 이미지를 고정했어요");
+    } catch (e) { toast("주인공 이미지 실패: " + String(e.message).slice(0, 80)); render(); }
+  }
+
+  async function splitImportedScript(text, btn) {
+    text = String(text || "").trim();
+    if (text.length < 100) { toast("분리할 대본을 100자 이상 붙여넣어 주세요"); return; }
+    btn.disabled = true; btn.textContent = "분석 중…";
+    try {
+      const result = await claudeJSON("너는 영상 편집용 장면 분리 전문가다. 반드시 유효한 JSON 객체만 출력한다.",
+`다음 대본을 장소·시간·등장인물·핵심 행동·감정 전환 기준으로 장면 분리하라.
+- 장면당 한 컷 이미지로 표현 가능한 내용
+- 원문 문장을 삭제하거나 요약하지 말고 순서대로 모두 보존
+- 너무 짧은 장면은 합치고 장면당 약 250~900자를 권장
+- 첫 장면만 isIntro=true
+- 각 장면의 mood는 차분/긴장/슬픔/기쁨/분노/미스터리 중 하나
+JSON 형식: {"scenes":[{"text":"원문", "beat":"한 줄 시각 요약", "isIntro":true, "mood":"긴장"}]}
+
+대본:
+${text}`, 16000);
+      const scenes = result.scenes || [];
+      if (!scenes.length) throw new Error("장면 결과가 없습니다.");
+      project.scenes = scenes.map((s, i) => ({
+        text: String(s.text || ""), beat: String(s.beat || ""), isIntro: i === 0,
+        zoom: i % 2 ? "out" : "in", voiceDirection: { ...inferVoiceDirection({ text: s.text || "", isIntro: i === 0 }), emotion: s.mood || inferVoiceDirection({ text: s.text || "", isIntro: i === 0 }).emotion },
+        sfx: inferSfx({ text: s.text || "" })
+      }));
+      saveProject(); render(); toast(`${project.scenes.length}개 장면으로 분리했어요`);
+    } catch (e) {
+      toast("장면 분리 실패: " + keyMissingMsg(e).slice(0, 80));
+      btn.disabled = false; btn.textContent = "장면 자동 분리";
     }
   }
 
-  // 기존 대본을 새 이야기 없이 더 길게(풍부하게) 늘리기
-  async function expandScript() {
-    if (!project.scenes.length) { toast("먼저 대본을 만들어주세요"); return; }
-    const body = $("#prodBody");
-    busy = true; loading(body, "대본을 더 길게 늘리는 중…"); renderNav();
-    try {
-      const n = project.scenes.length;
-      const sysE = `너는 ${LANG[project.lang].audience} 낭독 대본을 '더 길고 풍부하게' 늘리는 작가다. 원래 내용·순서·결말은 그대로 두고, 대사·심리묘사·상황묘사·회상을 더해 각 장면을 1.5~2배로 늘린다. 반드시 JSON 배열(문자열)만, 요청 개수와 정확히 일치.`;
-      for (let b = 0; b < n; b += BATCH) {
-        const end = Math.min(b + BATCH, n);
-        loading(body, `대본 늘리는 중… (${end}/${n})`);
-        const items = [];
-        for (let i = b; i < end; i++) items.push(`[장면 ${i + 1}${project.scenes[i].isIntro ? " · 인트로: 짧게 유지" : ""}]\n${project.scenes[i].text}`);
-        const usrE =
-`아래 장면 대본들을 각각 더 길게 늘려줘. 규칙:
-- 새로운 사건·인물 추가 금지. 기존 내용을 대사·심리·상황 묘사로 풍부하게만.
-- 인트로 외 각 장면 목표 1200~1500자.  인트로는 지금 길이 유지.
-- 어미 반복 금지, 자연스러운 낭독체.${langDirective()}
-JSON 배열만, 정확히 ${end - b}개: ["늘린 장면 대본", ...]
-
-${items.join("\n\n")}`;
-        try {
-          const arr = await claudeJSON(sysE, usrE, 12000);
-          (Array.isArray(arr) ? arr : []).forEach((t, k) => { if (project.scenes[b + k] && String(t).trim()) project.scenes[b + k].text = String(t); });
-        } catch (e) {}
-        saveProject();
-      }
-      busy = false; render();
-      const total = project.scenes.reduce((a, s) => a + (s.text || "").replace(/\s/g, "").length, 0);
-      toast(`대본 늘리기 완료 · 약 ${total.toLocaleString()}자 (~${Math.round(total / SCRIPT_CPM)}분)`);
-    } catch (e) {
-      busy = false; render(); showErr($("#prodBody"), keyMissingMsg(e));
-    } finally { busy = false; }
+  function sceneTextCard(s, i) {
+    const c = el("div", "scene");
+    const head = el("div", "scene-head");
+    head.appendChild(el("div", "scene-no", `장면 ${i + 1}`));
+    const badge = el("span", "scene-badge", s.isIntro ? "인트로" : "일반");
+    badge.style.cursor = "pointer"; badge.title = "인트로 여부 전환";
+    badge.onclick = () => { s.isIntro = !s.isIntro; badge.textContent = s.isIntro ? "인트로" : "일반"; saveDebounced(); };
+    head.appendChild(badge);
+    c.appendChild(head);
+    const ta = el("textarea"); ta.value = s.text; ta.oninput = () => { s.text = ta.value; saveDebounced(); };
+    c.appendChild(ta);
+    return c;
   }
 
-  // ---- 4. 이미지 프롬프트 (배치로 나눠서 — 응답 잘림 방지) ----
+  // ---- 4. 이미지 프롬프트 ----
   async function loadPrompts() {
+    if (!project.character?.imageDataUrl) { toast("먼저 주인공 기준 이미지를 생성해 주세요"); goStep("character"); return; }
     const body = $("#prodBody");
     busy = true; loading(body, "각 장면의 이미지 프롬프트를 만드는 중…"); renderNav();
     try {
-      const n = project.scenes.length;
-      const PB = 5; // 한 번에 5장면씩 → 잘림 위험 최소화
-      const charBlock = (project.characters || []).filter((c) => c.look).length
-        ? "\n고정 주인공(등장할 때 항상 이 외형 그대로 묘사):\n" + project.characters.filter((c) => c.look).map((c) => `- ${c.name}: ${c.look}`).join("\n") + "\n"
-        : "";
       const sys = "너는 대본을 나노 바나나(이미지 생성)용 영어 프롬프트로 바꾸는 전문가다. 각 장면을 한 컷으로 그릴 수 있게 시각적으로 구체화한다. 반드시 유효한 JSON 배열만 출력.";
-      const mkUsr = (scenes) =>
+      const scenes = project.scenes.map((s, i) => `${i + 1}${s.isIntro ? "(인트로)" : ""}: ${s.text}`).join("\n");
+      const usr =
 `화풍(STYLE_TAIL): ${project.style}
-인물 기본: ${LANG[project.lang].setting}${charBlock}
+인물 기본: ${LANG[project.lang].setting}
+주인공 고정 외형(한 단어도 임의 변경 금지): ${project.character?.profile || ""}
+고정 미술·배경 기준: ${project.visualBible || project.style}
 
-아래 ${scenes.length}개 장면을 각각 위 화풍으로 그릴 영어 이미지 프롬프트로 만들어줘. 규칙:
+아래 장면들을 각각 위 화풍으로 그릴 영어 이미지 프롬프트로 만들어줘. 규칙:
 - 각 프롬프트는 완결된 영어 문장 2~4개. 콤마 키워드 나열 금지.
-- 인물은 ${LANG[project.lang].setting} 를 명시하고, 같은 인물은 장면마다 같은 복식·머리로 일관되게.
-- 장면마다 샷을 다르게. '정면에서 두 손 모은' 반복 금지.
-- 배경은 실제 로케이션. 회색 스튜디오 배경 금지.
+- 인물은 ${LANG[project.lang].setting} 를 명시하고, 같은 인물은 장면마다 같은 복식·머리로 일관되게 묘사(외투/상의/하의 분리).
+- 주인공이 등장하는 모든 프롬프트에는 위 '주인공 고정 외형'을 그대로 반복하고 기준 이미지와 동일 인물임을 명시한다. 나이·얼굴·머리·복식·색상을 바꾸지 않는다.
+- 모든 장면은 위 '고정 미술·배경 기준'의 팔레트·조명·선화·질감·시대 건축을 유지한다. 장면 도중 화풍이나 시대 배경 변경 금지.
+- 장면마다 샷을 다르게(클로즈업/미디엄/롱/투샷/오버숄더/로우앵글/측면 등 이웃 장면과 다르게).
+- 인물 자세를 장면마다 다르게(걷다 멈춤/뒤돌아봄/손 뻗기/기대기/먼 곳 응시/웅크려 살핌 등). '정면에서 두 손 모은' 반복 금지.
+- 배경은 실제 로케이션(마당/논밭/돌담/숲/관아/초가/기와집 등). 회색 스튜디오 배경 금지.
 - 각 프롬프트 끝에 반드시: "no text, no letters, no words, no modern objects. ${project.style}"
-JSON 배열만, 정확히 ${scenes.length}개: ["english image prompt", ...]
+- 결말·정체를 이미지로 스포일하지 않는다.
+JSON 배열만, 장면 순서대로 정확히 ${project.scenes.length}개:
+["english image prompt for scene 1", "...", ...]
 
 장면들:
-${scenes.join("\n")}`;
-      let failed = 0;
-      for (let b = 0; b < n; b += PB) {
-        const end = Math.min(b + PB, n);
-        loading(body, `이미지 프롬프트 만드는 중… (${b + 1}~${end} / ${n})`);
-        const scenes = [];
-        for (let i = b; i < end; i++) scenes.push(`${i + 1}${project.scenes[i].isIntro ? "(인트로)" : ""}: ${(project.scenes[i].text || "").slice(0, 800)}`);
-        // 한 묶음 실패해도 전체 멈추지 않게 — 두 번 시도, 그래도 안 되면 건너뜀
-        let arr = null;
-        for (let attempt = 0; attempt < 2 && !arr; attempt++) {
-          try { arr = await claudeJSON(sys, mkUsr(scenes), 8000); } catch (e) { arr = null; }
-        }
-        if (Array.isArray(arr)) arr.forEach((p, k) => { if (project.scenes[b + k] && String(p).trim()) project.scenes[b + k].imagePrompt = String(p); });
-        else failed += (end - b);
-        saveProject();
-      }
+${scenes}`;
+      const arr = await claudeJSON(sys, usr, 8000);
+      (arr || []).forEach((p, i) => { if (project.scenes[i]) project.scenes[i].imagePrompt = String(p); });
+      saveProject();
       busy = false; goStep("prompt");
-      if (failed) toast(`${failed}개 장면은 프롬프트 생성 실패 — 이미지 단계에서 대본으로 자동 대체돼요. '↻ 다시 만들기'로 채울 수 있어요.`);
     } catch (e) {
       busy = false; render(); showErr($("#prodBody"), keyMissingMsg(e));
     } finally { busy = false; }
@@ -1108,19 +992,7 @@ ${scenes.join("\n")}`;
     body.appendChild(el("h2", "prod-h", "이미지 프롬프트"));
     body.appendChild(el("p", "prod-sub", `그림체를 고르면 모든 장면에 적용돼요. ${project.lang === "ja" ? "일본 민담용 애니 셀화풍" : "한국 야담용 반실사 웹툰풍"} 중에서 선택하세요.`));
 
-    body.appendChild(el("div", "field-label", "그림체 고르기"));
-    const grid = el("div", "style-list");
-    stylePresetsFor(project.lang).forEach((preset) => {
-      const chip = el("button", "style-chip" + (project.style === preset.tail ? " sel" : ""));
-      chip.innerHTML = `<b>${esc(preset.name)}</b><span>${esc(preset.desc)}</span>`;
-      chip.onclick = () => { project.style = preset.tail; saveDebounced(); render(); };
-      grid.appendChild(chip);
-    });
-    body.appendChild(grid);
-
-    const styleF = field("직접 다듬기 (STYLE_TAIL · 영어)", () => project.style, true, (v) => { project.style = v; saveDebounced(); });
-    styleF.style.marginTop = "14px";
-    body.appendChild(styleF);
+    const locked = el("div", "keybar"); locked.innerHTML = "🔒 그림체·배경·주인공 외형이 기준 이미지에 맞춰 잠겼습니다. 변경하려면 ‘주인공 고정’ 단계에서 기준 이미지를 다시 생성하세요."; body.appendChild(locked);
     const pkg = el("div", "pkg");
     project.scenes.forEach((s, i) => {
       const c = el("div", "scene");
@@ -1130,142 +1002,26 @@ ${scenes.join("\n")}`;
       pkg.appendChild(c);
     });
     body.appendChild(pkg);
-    navBtn("↻ 프롬프트 다시 만들기", loadPrompts);
-    navBtn("이미지 만들기 →", () => { goStep("image"); }, true);
+    navBtn("이미지 전부 생성 →", () => { goStep("image"); genAllImages(); }, true);
   }
 
-  // ---- 5. 이미지 ----
+  // ---- 5. 이미지 생성 ----
   function renderImage(body) {
     body.appendChild(el("h2", "prod-h", "이미지 생성"));
-    const n = project.scenes.length;
-    const total = imgCostWon() * n;
-    body.appendChild(el("p", "prod-sub", `내 <b>이미지 생성 API</b>로 앱에서 바로 만들거나(유료), 무료 사이트에서 만든 그림을 <b>올리기</b>로 넣어도 돼요.`));
+    const prov = imgProvider() === "kie" ? "KIE.ai 크레딧" : "Google Gemini(장당 과금)";
+    body.appendChild(el("p", "prod-sub", `현재 이미지 생성 방식: <b>${prov}</b> · <b>16:9 4K 고정</b>. 주인공 기준 이미지와 고정 미술 설정을 모든 장면에 적용합니다.`));
 
-    const cost = el("div", "keybar");
-    cost.style.marginBottom = "18px";
-    cost.innerHTML = `💰 예상 비용 — 이미지 1장 ${imgCostText()}. 이 영상은 장면 <b>${n}개</b> → 전부 생성 시 <b>약 ${total.toLocaleString("ko")}원</b>. <br>🆓 아끼려면: <b>드롭샷</b>·<b>Bing 이미지 크리에이터</b>·<b>구글 Gemini(무료 사용량)</b> 등에서 만들어 <b>이미지 올리기</b>로 넣으세요.`;
-    body.appendChild(cost);
-
-    // 주인공 고정 섹션 (장면 생성 전에 먼저)
-    body.appendChild(characterSection());
+    const tip = el("div", "keybar");
+    tip.style.marginBottom = "18px";
+    tip.innerHTML = "🎨 일관성 잠금 — 주인공 기준 이미지, 동일 복식·얼굴, 고정 팔레트·조명·그림체를 장면마다 참조합니다. KIE 4K는 장당 과금이므로 재생성 횟수를 확인하세요.";
+    body.appendChild(tip);
 
     const pkg = el("div", "pkg");
     project.scenes.forEach((s, i) => pkg.appendChild(sceneImageCard(s, i)));
     body.appendChild(pkg);
-    navBtn("전체 생성 (없는 것만 · 유료)", genAllImages);
-    navBtn("프롬프트 전체 복사", copyAllImagePrompts);
+    navBtn("전체 다시 생성", genAllImages);
     navBtn("이미지 전체 다운로드", downloadImagesZip);
-    navBtn("썸네일 만들기 →", () => { goStep("thumb"); }, true);
-  }
-
-  function copyAllImagePrompts() {
-    const txt = project.scenes.map((s, i) => `[장면 ${i + 1}${s.isIntro ? " · 인트로" : ""}]\n${s.imagePrompt || s.text}`).join("\n\n");
-    navigator.clipboard.writeText(txt);
-    toast("이미지 프롬프트 전체를 복사했어요");
-  }
-
-  // ---- 주인공 캐릭터(고정) 섹션 ----
-  function characterSection() {
-    const wrap = el("div", "char-box");
-    wrap.appendChild(el("div", "prod-h2", "🧍 주인공 캐릭터 (고정)"));
-    wrap.appendChild(el("p", "prod-sub", "먼저 <b>주인공</b>을 정해두면, 아래 장면 이미지를 만들 때 <b>같은 얼굴·복장</b>으로 고정돼요. 그림체도 자동으로 고정(실사화 방지)됩니다."));
-
-    const chars = project.characters || [];
-    if (!chars.length) {
-      const b = el("button", "btn btn-primary sm", "✨ 대본에서 주인공 뽑기");
-      b.onclick = loadCharacters;
-      wrap.appendChild(b);
-      return wrap;
-    }
-    const grid = el("div", "pkg");
-    chars.forEach((c, i) => grid.appendChild(charCard(c, i)));
-    wrap.appendChild(grid);
-    const re = el("button", "btn sm", "↻ 주인공 다시 뽑기");
-    re.onclick = loadCharacters;
-    wrap.appendChild(re);
-    const note = el("p", "prod-sub");
-    note.style.marginTop = "8px";
-    note.innerHTML = charRefUrls().length
-      ? "✅ 주인공 참조 이미지가 있어서 장면마다 <b>더 강하게 고정</b>됩니다."
-      : "💡 주인공 이미지를 <b>생성</b>해 두면(또는 올리면) 장면 일관성이 더 좋아져요. (없어도 외형 설명으로 고정됩니다)";
-    wrap.appendChild(note);
-    return wrap;
-  }
-
-  function charCard(c, i) {
-    const card = el("div", "scene");
-    card.appendChild(el("div", "scene-no", `주인공 ${i + 1}`));
-    const row = el("div", "scene-img-row");
-    const box = el("div", "scene-img"); box.id = "char-" + i;
-    if (c.imageDataUrl) { const im = el("img"); im.src = c.imageDataUrl; box.appendChild(im); }
-    else box.textContent = "이미지 없음";
-    row.appendChild(box);
-    const right = el("div", "scene-prompt");
-    const nameIn = el("input"); nameIn.type = "text"; nameIn.value = c.name || ""; nameIn.placeholder = "이름/호칭";
-    nameIn.style.marginBottom = "6px";
-    nameIn.oninput = () => { c.name = nameIn.value; saveDebounced(); };
-    right.appendChild(nameIn);
-    const ta = el("textarea"); ta.value = c.look || ""; ta.style.minHeight = "60px"; ta.placeholder = "고정 외형(영어)";
-    ta.oninput = () => { c.look = ta.value; saveDebounced(); };
-    right.appendChild(ta);
-    const acts = el("div", "scene-actions");
-    const gen = el("button", "btn sm btn-primary", c.imageDataUrl ? "다시 생성" : `✨ 생성 (약 ${imgCostWon()}원)`);
-    gen.onclick = () => genOneChar(i);
-    acts.appendChild(gen);
-    const up = el("label", "btn sm btn-ghost", "🖼 올리기");
-    const file = el("input"); file.type = "file"; file.accept = "image/*"; file.style.display = "none";
-    file.onchange = () => {
-      if (!file.files[0]) return;
-      const reader = new FileReader();
-      reader.onload = () => { c.imageDataUrl = reader.result; c.imageUrl = ""; saveProject(); render(); toast("주인공 이미지 업로드"); };
-      reader.readAsDataURL(file.files[0]);
-    };
-    up.appendChild(file);
-    acts.appendChild(up);
-    right.appendChild(acts);
-    row.appendChild(right);
-    card.appendChild(row);
-    return card;
-  }
-
-  async function loadCharacters() {
-    const body = $("#prodBody");
-    busy = true; loading(body, "대본에서 주인공을 뽑는 중…"); renderNav();
-    try {
-      const key = project.scenes.map((s) => s.text).join(" ").slice(0, 3000);
-      const sys = "너는 대본에서 반복 등장하는 핵심 인물을 뽑아 '이미지 생성용 고정 외형'을 만드는 전문가다. 반드시 유효한 JSON 배열만 출력.";
-      const usr =
-`제목: ${project.title}
-줄거리(일부): ${key}
-인물 기본 설정: ${LANG[project.lang].setting}
-화풍: ${project.style}
-
-이 이야기에 반복 등장하는 핵심 주인공 1~4명을 뽑아줘.
-- name: 한국어 이름/호칭(예: 젊은 선비, 주모, 최 대감)
-- look: 장면마다 똑같이 유지할 고정 외형을 '영어'로 자세히 — 성별, 나이대, 얼굴 특징, 머리 모양/색, 상의·하의·외투와 색, 소품. ${LANG[project.lang].setting} 반영. 완결 영어 문장 1~2개.
-JSON 배열만: [{"name":"..","look":".."}]`;
-      const arr = await claudeJSON(sys, usr, 2000);
-      project.characters = (Array.isArray(arr) ? arr : []).slice(0, 4)
-        .map((c) => ({ name: c.name || "", look: c.look || "", imageDataUrl: "", imageUrl: "" }));
-      saveProject();
-      busy = false; render();
-    } catch (e) {
-      busy = false; render(); showErr($("#prodBody"), keyMissingMsg(e));
-    } finally { busy = false; }
-  }
-
-  async function genOneChar(i) {
-    if (!imgKeyOk()) { toast("⚙ 이미지 생성 API 키를 먼저 넣어주세요"); openKeys(); return; }
-    const box = $("#char-" + i);
-    if (box) { box.innerHTML = ""; box.appendChild(el("div", "spinner")); }
-    try {
-      await genCharImage(i);
-      saveProject(); render();
-      toast(`주인공 ${i + 1} 이미지 생성 완료`);
-    } catch (e) {
-      if (box) { box.innerHTML = ""; box.textContent = "실패"; }
-      toast("주인공 생성 실패: " + kieErrMsg(e));
-    }
+    navBtn("장면 영상으로 변환 →", () => { goStep("video"); }, true);
   }
 
   function sceneImageCard(s, i) {
@@ -1282,13 +1038,9 @@ JSON 배열만: [{"name":"..","look":".."}]`;
     ta.oninput = () => { s.imagePrompt = ta.value; saveDebounced(); };
     right.appendChild(ta);
     const acts = el("div", "scene-actions");
-    const gen = el("button", "btn sm btn-primary", `✨ 생성 (약 ${imgCostWon()}원)`);
-    gen.onclick = () => genOneImage(i);
-    acts.appendChild(gen);
-
-    const cp = el("button", "btn sm", "📋 프롬프트 복사");
-    cp.onclick = () => { navigator.clipboard.writeText(s.imagePrompt || s.text); toast(`장면 ${i + 1} 프롬프트 복사`); };
-    acts.appendChild(cp);
+    const one = el("button", "btn sm", s.imageDataUrl ? "↻ KIE 4K 다시 생성" : "🍌 KIE 4K 생성");
+    one.onclick = () => genOneImage(i);
+    acts.appendChild(one);
 
     const up = el("label", "btn sm btn-ghost", "🖼 이미지 올리기");
     const file = el("input"); file.type = "file"; file.accept = "image/*"; file.style.display = "none";
@@ -1337,56 +1089,101 @@ JSON 배열만: [{"name":"..","look":".."}]`;
         if (m) files.push({ name: `scene_${String(i + 1).padStart(2, "0")}.${m[1].split("/")[1].replace("jpeg", "jpg")}`, bytes: base64ToBytes(m[2]) });
       }
     });
-    if (!files.length) { toast("먼저 이미지를 넣어주세요"); return; }
+    if (!files.length) { toast("먼저 이미지를 생성하세요"); return; }
     download(makeZip(files), `${(project.title || "images").replace(/[\\/:*?"<>|]/g, "_")}_이미지.zip`);
     toast(files.length + "개 이미지를 내려받았어요");
   }
 
-  async function genOneImage(i) {
-    if (!imgKeyOk()) { toast("⚙ 이미지 생성 API 키를 먼저 넣어주세요"); openKeys(); return; }
+  async function genOneImage(i, skipConfirm) {
     const s = project.scenes[i];
+    if (s.imageDataUrl && !skipConfirm && !confirm(`장면 ${i + 1} 이미지를 다시 생성할까요? KIE 4K 이미지 비용이 다시 발생합니다.`)) return;
     const box = $("#img-" + i);
     if (box) { box.innerHTML = ""; box.appendChild(el("div", "spinner")); }
     try {
-      s.imageDataUrl = await genImage(s.imagePrompt || s.text);
+      const refs = project.character?.remoteUrl ? [project.character.remoteUrl] : [];
+      s.imageDataUrl = await genImage(`${s.imagePrompt || s.text}\nCONSISTENCY LOCK: ${project.character?.profile || ""}. VISUAL BIBLE: ${project.visualBible || project.style}`, { referenceUrls: refs });
+      s.imageRemoteUrl = imgProvider() === "kie" ? lastKieAssetUrl : "";
       saveProject();
       if (box) { box.innerHTML = ""; const im = el("img"); im.src = s.imageDataUrl; box.appendChild(im); }
-      return { ok: true };
     } catch (e) {
       if (box) { box.innerHTML = ""; box.textContent = "실패"; }
-      toast("이미지 실패: " + kieErrMsg(e));
-      return { ok: false, credit: String(e.message).includes("KIE_NO_CREDIT") };
+      const m = String(e.message);
+      toast("이미지 실패: " + (/NO_(GEMINI|KIE)_KEY/.test(m) ? "이미지 키 필요" : /Failed to fetch/.test(m) ? "CORS/네트워크(로컬 실행 확인)" : m.slice(0, 60)));
     }
-  }
-  // KIE/이미지 오류를 사람이 읽기 쉬운 한국어로
-  function kieErrMsg(e) {
-    const m = String(e.message);
-    if (m.includes("KIE_NO_CREDIT")) return "KIE 433: 이 API 키로 '포인트 부족' 응답. 크레딧이 있어도 뜨면 → ① kie.ai/logs 에서 실제 사유 확인 ② API 키에 사용한도 걸렸는지 확인 ③ 해상도 1K로 낮춰보기";
-    if (/NO_(GEMINI|KIE)_KEY/.test(m)) return "이미지 API 키 필요";
-    if (/Failed to fetch/.test(m)) return "CORS/네트워크 — 웹주소에선 KIE가 막힐 수 있어요(로컬 .bat 실행)";
-    return m.slice(0, 70);
   }
   async function genAllImages() {
-    if (!imgKeyOk()) { toast("⚙ 이미지 생성 API 키를 먼저 넣어주세요"); openKeys(); return; }
-    // 이미 이미지가 있는 장면은 건너뜀 → 오류로 멈춰도 처음부터 다시 안 함(크레딧 절약)
-    const todo = [];
-    project.scenes.forEach((s, i) => { if (!s.imageDataUrl) todo.push(i); });
-    const done = project.scenes.length - todo.length;
-    if (!todo.length) { toast("모든 장면에 이미 이미지가 있어요. 특정 장면만 바꾸려면 그 장면의 '다시 생성'을 쓰세요."); return; }
-    if (!confirm(`${done ? `이미 만든 ${done}개는 건너뛰고, ` : ""}남은 ${todo.length}개 장면만 생성해요. 약 ${(imgCostWon() * todo.length).toLocaleString("ko")}원. 진행할까요?`)) return;
-    let ok = 0;
-    for (const i of todo) {
-      const r = await genOneImage(i);
-      if (r && r.ok) ok++;
-      if (r && r.credit) { toast(`⛔ ${ok}개 만들고 중단(KIE 오류). 이미 만든 건 그대로 있어요 — 고친 뒤 '전체 생성'을 다시 누르면 남은 것만 이어서 만듭니다.`); return; }
-    }
-    toast(`이미지 생성 완료 (${ok}개 추가)`);
+    if (!imgKeyOk()) { toast("⚙ 이미지 생성용 키를 먼저 넣어주세요"); openKeys(); return; }
+    const hasExisting = project.scenes.some((s) => s.imageDataUrl);
+    if (hasExisting && !confirm("모든 장면 이미지를 다시 생성할까요? 기존 이미지가 교체되고 장면마다 KIE 4K 비용이 다시 발생합니다.")) return;
+    for (let i = 0; i < project.scenes.length; i++) { await genOneImage(i, true); }
+    toast("이미지 생성 완료");
   }
 
-  // ---- 5.5 썸네일 ----
+  // ---- 5.5 KIE 이미지 → 영상 ----
+  function renderVideo(body) {
+    body.appendChild(el("h2", "prod-h", "이미지를 영상으로 변환"));
+    body.appendChild(el("p", "prod-sub", "KIE Kling 2.6으로 각 4K 기준 이미지를 5초 영상으로 변환합니다. 원본 인물·복식·배경·그림체를 유지하고 카메라와 작은 동작만 추가합니다."));
+    const warn = el("div", "keybar"); warn.innerHTML = "💰 영상 생성은 이미지보다 비용이 큽니다. 먼저 인트로와 핵심 장면만 개별 생성해 확인한 뒤 전체 생성을 권장합니다."; body.appendChild(warn);
+    const pkg = el("div", "pkg");
+    project.scenes.forEach((s, i) => {
+      const c = el("div", "scene"); c.appendChild(el("div", "scene-no", `장면 ${i + 1}${s.isIntro ? " · 인트로" : ""}`));
+      if (s.videoUrl) { const v = el("video"); v.controls = true; v.src = s.videoUrl; v.style.width = "100%"; v.style.maxWidth = "640px"; c.appendChild(v); }
+      else if (s.imageDataUrl) { const box = el("div", "scene-img"); const im = el("img"); im.src = s.imageDataUrl; box.appendChild(im); c.appendChild(box); }
+      c.appendChild(field("영상 동작 프롬프트", () => s.videoPrompt || defaultVideoPrompt(s), true, (v) => { s.videoPrompt = v; saveDebounced(); }));
+      const acts = el("div", "scene-actions");
+      const gen = el("button", "btn sm btn-primary", s.videoUrl ? "영상 다시 생성" : "🎞 5초 영상 생성"); gen.onclick = () => genOneVideo(i, gen); acts.appendChild(gen);
+      if (s.videoUrl) { const open = el("button", "btn sm", "영상 열기/다운로드"); open.onclick = () => window.open(s.videoUrl, "_blank"); acts.appendChild(open); }
+      c.appendChild(acts); pkg.appendChild(c);
+    });
+    body.appendChild(pkg);
+    navBtn("이미지가 있는 장면 전체 영상 생성", genAllVideos);
+    navBtn("썸네일 만들기 →", () => goStep("thumb"), true);
+  }
+
+  function defaultVideoPrompt(s) {
+    return `Preserve the exact character identity, face, hairstyle, clothing, colors, historical background and illustration style from the source image. Subtle natural blinking and breathing, gentle fabric and environmental movement. Slow cinematic push-in. No morphing, no costume change, no new characters, no text.`;
+  }
+
+  async function genOneVideo(i, btn) {
+    const s = project.scenes[i];
+    if (!kieKey()) { toast("KIE API 키가 필요합니다"); openKeys(); return; }
+    if (!s.imageRemoteUrl) { toast("이 장면을 KIE 이미지로 먼저 생성해야 합니다"); return; }
+    if (btn) { btn.disabled = true; btn.textContent = "영상 생성 중…"; }
+    try {
+      const create = await apiFetch(KIE_CREATE, {
+        method: "POST", headers: { "content-type": "application/json", "authorization": "Bearer " + kieKey() },
+        body: JSON.stringify({ model: KIE_VIDEO_MODEL, input: { prompt: s.videoPrompt || defaultVideoPrompt(s), image_urls: [s.imageRemoteUrl], sound: false, duration: "5" } })
+      });
+      if (!create.ok) throw new Error(`KIE 영상 ${create.status}: ${await create.text()}`);
+      const cj = await create.json(); const taskId = cj.data?.taskId || cj.taskId;
+      if (!taskId) throw new Error("KIE 영상 taskId 없음");
+      for (let n = 0; n < 150; n++) {
+        await sleep(2000);
+        const q = await apiFetch(KIE_RECORD + encodeURIComponent(taskId), { headers: { "authorization": "Bearer " + kieKey() } });
+        if (!q.ok) continue;
+        const qj = await q.json(); const st = qj.data?.state;
+        if (st === "success") {
+          let rj = qj.data.resultJson; if (typeof rj === "string") { try { rj = JSON.parse(rj); } catch (e) { rj = {}; } }
+          s.videoUrl = rj.resultUrls?.[0] || rj.result_urls?.[0];
+          if (!s.videoUrl) throw new Error("KIE 영상 결과 URL 없음");
+          saveProject(); render(); toast(`장면 ${i + 1} 영상 완료`); return;
+        }
+        if (st === "fail") throw new Error(qj.data.failMsg || "KIE 영상 생성 실패");
+      }
+      throw new Error("KIE 영상 생성 시간 초과");
+    } catch (e) { toast("영상 실패: " + String(e.message).slice(0, 90)); if (btn) { btn.disabled = false; btn.textContent = "🎞 5초 영상 생성"; } }
+  }
+
+  async function genAllVideos() {
+    if (!confirm("이미지가 준비된 모든 장면을 5초 영상으로 생성할까요? KIE 영상 크레딧이 장면마다 사용됩니다.")) return;
+    for (let i = 0; i < project.scenes.length; i++) if (project.scenes[i].imageRemoteUrl) await genOneVideo(i);
+    toast("전체 영상 변환을 마쳤습니다");
+  }
+
+  // ---- 6. 썸네일 ----
   function renderThumb(body) {
     body.appendChild(el("h2", "prod-h", "썸네일"));
-    body.appendChild(el("p", "prod-sub", "클릭을 부르는 <b>썸네일 카피 4종</b>을 만들고, 고른 카피에 맞춰 <b>썸네일 이미지</b>(글자 들어갈 자리 비움)를 생성합니다. 글자는 캡컷/편집기에서 얹으세요."));
+    body.appendChild(el("p", "prod-sub", "클릭을 부르는 <b>썸네일 카피 4종</b> 중 하나를 고르면, 선택한 문구를 이미지 안에 직접 넣어 <b>4K 썸네일</b>을 생성합니다."));
 
     const t = project.thumb || (project.thumb = { copies: [], chosen: -1, imagePrompt: "", imageDataUrl: "" });
 
@@ -1395,48 +1192,56 @@ JSON 배열만: [{"name":"..","look":".."}]`;
       btn.onclick = genThumbCopies;
       body.appendChild(btn);
     } else {
-      body.appendChild(el("div", "field-label", "카피 고르기 (클릭)"));
+      t.copies = t.copies.slice(0, 4).map((c) => ({
+        ...c,
+        lines: (c.lines && c.lines.length ? c.lines : [c.topLine || "", ...(c.mainLines || [])]).filter(Boolean)
+      }));
+      if (t.chosen < 0 || t.chosen >= t.copies.length) t.chosen = 0;
+      body.appendChild(el("div", "field-label", "썸네일 글자 4개 중 하나를 선택하세요"));
       const list = el("div", "topic-list");
       t.copies.forEach((c, i) => {
         const card = el("div", "topic-card" + (t.chosen === i ? " sel" : ""));
-        card.appendChild(el("div", "topic-rank", c.pos || (i < 2 ? "좌측 4줄" : "하단 2줄")));
+        const selectRow = el("label", "thumb-choice");
+        const radio = el("input"); radio.type = "radio"; radio.name = "thumbCopy"; radio.checked = t.chosen === i;
+        radio.onchange = () => { t.chosen = i; t.imageDataUrl = ""; saveDebounced(); render(); };
+        selectRow.appendChild(radio);
+        selectRow.appendChild(el("b", null, `${i + 1}번 썸네일 글자 선택`));
+        card.appendChild(selectRow);
+        card.appendChild(el("div", "topic-rank", t.chosen === i ? "✓ 선택됨" : (c.pos || "인기 야담형")));
         const lines = el("div", "topic-title");
         lines.style.whiteSpace = "pre-line"; lines.style.fontSize = "18px";
         lines.textContent = (c.lines || []).join("\n");
         card.appendChild(lines);
         if (c.imageKo) card.appendChild(el("div", "topic-hook", "🖼 " + esc(c.imageKo)));
-        card.onclick = () => { t.chosen = i; saveDebounced(); render(); };
+        card.onclick = (e) => { if (e.target !== radio) { t.chosen = i; t.imageDataUrl = ""; saveDebounced(); render(); } };
         list.appendChild(card);
       });
       body.appendChild(list);
 
       if (t.chosen >= 0) {
+        const selected = t.copies[t.chosen];
         const box = el("div", "scene");
         box.style.marginTop = "16px";
-        box.appendChild(el("div", "scene-no", "썸네일 이미지"));
-        const promptTxt = t.copies[t.chosen].imageEn || t.copies[t.chosen].imageKo || "";
-        box.appendChild(el("p", "prod-sub", `내 이미지 API로 바로 만들거나(약 ${imgCostWon()}원), 무료 사이트에서 만들어 <b>올리기</b>로 넣으세요.`));
+        box.appendChild(el("div", "scene-no", `${t.chosen + 1}번 선택됨 · 썸네일에 넣을 글자`));
+        const copyEdit = el("textarea");
+        copyEdit.value = (selected.lines || []).join("\n");
+        copyEdit.rows = 4;
+        copyEdit.placeholder = "썸네일 문구를 줄마다 입력하세요";
+        copyEdit.oninput = () => {
+          selected.lines = copyEdit.value.split(/\r?\n/).map((v) => v.trim()).filter(Boolean).slice(0, 4);
+          t.imageDataUrl = "";
+          saveDebounced();
+        };
+        box.appendChild(copyEdit);
+        box.appendChild(el("div", "scene-no", "글자가 합성된 썸네일 이미지"));
         const imgWrap = el("div", "scene-img"); imgWrap.style.width = "100%"; imgWrap.style.maxWidth = "480px"; imgWrap.id = "thumbImg";
         if (t.imageDataUrl) { const im = el("img"); im.src = t.imageDataUrl; imgWrap.appendChild(im); }
-        else imgWrap.textContent = "아직 없음";
+        else imgWrap.textContent = "아직 생성 안 됨";
         box.appendChild(imgWrap);
         const acts = el("div", "scene-actions");
-        const gen = el("button", "btn sm btn-primary", t.imageDataUrl ? "다시 생성" : `✨ 생성 (약 ${imgCostWon()}원)`);
+        const gen = el("button", "btn sm btn-primary", t.imageDataUrl ? "↻ 글자 포함 4K 썸네일 다시 생성" : "글자 포함 4K 썸네일 생성");
         gen.onclick = genThumbImage;
         acts.appendChild(gen);
-        const cpp = el("button", "btn sm", "📋 이미지 프롬프트 복사");
-        cpp.onclick = () => { navigator.clipboard.writeText(promptTxt); toast("썸네일 이미지 프롬프트 복사"); };
-        acts.appendChild(cpp);
-        const up = el("label", "btn sm btn-ghost", "🖼 이미지 올리기");
-        const file = el("input"); file.type = "file"; file.accept = "image/*"; file.style.display = "none";
-        file.onchange = () => {
-          if (!file.files[0]) return;
-          const reader = new FileReader();
-          reader.onload = () => { t.imageDataUrl = reader.result; saveProject(); render(); toast("썸네일 이미지 업로드"); };
-          reader.readAsDataURL(file.files[0]);
-        };
-        up.appendChild(file);
-        acts.appendChild(up);
         if (t.imageDataUrl) {
           const dl = el("button", "btn sm", "이미지 다운로드");
           dl.onclick = () => { if (/^https?:/.test(t.imageDataUrl)) window.open(t.imageDataUrl); else { const m = t.imageDataUrl.match(/^data:(image\/\w+);base64,(.*)$/); if (m) download(new Blob([base64ToBytes(m[2])], { type: m[1] }), "thumbnail.png"); } };
@@ -1466,20 +1271,23 @@ JSON 배열만: [{"name":"..","look":".."}]`;
 
 이 영상의 썸네일 카피 4종과 각 이미지 묘사를 만들어줘.${langDirective()}
 규칙:
-- 1,2번은 '좌측 4줄'(한 줄 5~7자, 줄 안에서 의미 완결), 3,4번은 '하단 2줄'(한 줄 12~16자).
+- 참고 스타일은 인기 야담 채널 썸네일이다: 화면 위쪽에 짧은 대사형 한 줄, 왼쪽/중앙에 사건을 압축한 굵은 3줄.
+- topLine: 등장인물이 실제로 말할 법한 짧은 대사·의문·명령(6~12자). 예: "저 돌을 매우쳐라!", "네가 사또라고?"
+- mainLines: 정확히 3줄. 1줄은 구체적 나이/과거/신분, 2줄은 충격 사건, 3줄은 주인공 정체·직업 훅. 각 7~13자.
+- 문장은 설명문보다 압축된 사건형 문구로 쓰고, 조사와 군더더기를 줄인다.
 - 결말·정체·범인을 알 수 없게. 단서는 1~2개만. 뻔한 완료형 '~했다' 금지.
 - 4개의 사건 골격이 서로 달라야 함.
-- imageKo: 감정이 터지는 순간 한 컷(설명적 전신 금지, 얼굴/시선/동작 정점). 밤이어도 얼굴 보이게.
-- imageEn: 위 장면의 영어 이미지 프롬프트(완결 문장 2~3개). ${LANG[project.lang].setting}. 카피 자리(좌측4줄→왼쪽, 하단2줄→아래)를 비운다. 얼굴 잘 보이게, 어둠으로 덮지 않기. 글자/자막/말풍선 절대 없음.
+- imageKo: 밝고 선명한 조선시대 만화 장면. 주인공 얼굴과 행동을 크게, 주변 인물 반응도 보이게. 글자 영역은 왼쪽과 위쪽을 비운다.
+- imageEn: 밝은 전통 만화/웹툰풍, 강한 표정, 선명한 원색, 인물 크게, 사건이 즉시 이해되는 한 컷. ${LANG[project.lang].setting}. 글자/자막/말풍선 없음.
 JSON만:
 {"copies":[
- {"pos":"좌측 4줄","lines":["..","..","..",".."],"imageKo":"..","imageEn":".."},
- {"pos":"좌측 4줄","lines":["..","..","..",".."],"imageKo":"..","imageEn":".."},
- {"pos":"하단 2줄","lines":["..",".."],"imageKo":"..","imageEn":".."},
- {"pos":"하단 2줄","lines":["..",".."],"imageKo":"..","imageEn":".."}
+ {"pos":"인기 야담형","topLine":"짧은 대사","mainLines":["첫째 줄","둘째 줄","셋째 줄"],"imageKo":"..","imageEn":".."},
+ {"pos":"인기 야담형","topLine":"짧은 대사","mainLines":["첫째 줄","둘째 줄","셋째 줄"],"imageKo":"..","imageEn":".."},
+ {"pos":"인기 야담형","topLine":"짧은 대사","mainLines":["첫째 줄","둘째 줄","셋째 줄"],"imageKo":"..","imageEn":".."},
+ {"pos":"인기 야담형","topLine":"짧은 대사","mainLines":["첫째 줄","둘째 줄","셋째 줄"],"imageKo":"..","imageEn":".."}
 ]}`;
       const r = await claudeJSON(sys, usr, 4000);
-      project.thumb = { copies: (r.copies || []).slice(0, 4), chosen: -1, imagePrompt: "", imageDataUrl: "" };
+      project.thumb = { copies: (r.copies || []).slice(0, 4).map((c) => ({ ...c, lines: [c.topLine || "", ...(c.mainLines || [])].filter(Boolean) })), chosen: 0, imagePrompt: "", imageDataUrl: "" };
       saveProject();
       busy = false; render();
     } catch (e) {
@@ -1490,36 +1298,80 @@ JSON만:
   async function genThumbImage() {
     const t = project.thumb;
     if (t.chosen < 0) { toast("카피를 먼저 고르세요"); return; }
-    if (!imgKeyOk()) { toast("⚙ 이미지 생성 API 키를 먼저 넣어주세요"); openKeys(); return; }
+    if (t.imageDataUrl && !confirm("선택한 문구로 4K 썸네일을 다시 생성할까요? KIE 이미지 비용이 다시 발생합니다.")) return;
     const box = $("#thumbImg");
     if (box) { box.innerHTML = ""; box.appendChild(el("div", "spinner")); }
     try {
       const c = t.copies[t.chosen];
+      const copyText = (c.lines || []).join(" / ");
       const prompt = (c.imageEn || c.imageKo || project.title) +
-        " . emotional climax moment, face clearly visible, warm readable lighting, leave empty space for title text. no text, no letters, no captions, no speech bubbles. " + project.style;
+        ` . emotional climax moment with the exact same protagonist identity and clothing as the reference image. Create a finished YouTube thumbnail composition with clean empty space at ${c.pos || "left"} for this title: "${copyText}". Do not draw any letters because the app overlays the exact title after generation. ` +
+        `Fixed protagonist: ${project.character?.profile || ""}. Fixed visual bible: ${project.visualBible || project.style}.`;
       t.imagePrompt = prompt;
-      t.imageDataUrl = await genImage(prompt);
+      const baseImage = await genImage(prompt, { referenceUrls: project.character?.remoteUrl ? [project.character.remoteUrl] : [] });
+      t.imageDataUrl = await overlayThumbnailText(baseImage, c.lines || [], c.pos || "좌측 4줄");
+      t.remoteUrl = imgProvider() === "kie" ? lastKieAssetUrl : "";
       saveProject(); render();
     } catch (e) {
       if (box) { box.innerHTML = ""; box.textContent = "실패"; }
-      toast("썸네일 실패: " + (/NO_(GEMINI|KIE)_KEY/.test(String(e.message)) ? "이미지 API 키 필요" : String(e.message).slice(0, 60)));
+      toast("썸네일 실패: " + (/NO_(GEMINI|KIE)_KEY/.test(String(e.message)) ? "이미지 키 필요" : String(e.message).slice(0, 60)));
     }
+  }
+
+  function overlayThumbnailText(imageUrl, lines, pos) {
+    return new Promise((resolve, reject) => {
+      const img = new Image(); img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas"); canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d"); ctx.drawImage(img, 0, 0);
+        ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.lineJoin = "round";
+        const topLine = String(lines[0] || ""); const mainLines = lines.slice(1, 4).map(String);
+        const drawFitted = (text, x, y, maxWidth, startSize, color) => {
+          let size = startSize;
+          do { ctx.font = `900 ${Math.round(size)}px "Malgun Gothic", "Nanum Myeongjo", sans-serif`; size *= 0.94; } while (ctx.measureText(text).width > maxWidth && size > canvas.height * 0.055);
+          ctx.lineWidth = Math.max(9, size * 0.18); ctx.strokeStyle = "rgba(0,0,0,.96)"; ctx.fillStyle = color;
+          ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = size * 0.08; ctx.shadowOffsetY = size * 0.06;
+          ctx.strokeText(text, x, y); ctx.fillText(text, x, y); ctx.shadowColor = "transparent";
+        };
+        drawFitted(topLine, canvas.width * 0.34, canvas.height * 0.14, canvas.width * 0.61, canvas.height * 0.075, "#4dff62");
+        const colors = ["#ffe43b", "#ff7a28", "#63e9ff"];
+        const startY = canvas.height * 0.48; const gap = canvas.height * 0.145;
+        mainLines.forEach((line, i) => drawFitted(line, canvas.width * 0.035, startY + i * gap, canvas.width * 0.91, canvas.height * 0.115, colors[i]));
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.onerror = () => reject(new Error("썸네일 글자 합성용 이미지를 불러오지 못했습니다"));
+      img.src = imageUrl;
+    });
   }
 
   // ---- 6. 음성·자막 ----
   function renderVoice(body) {
     body.appendChild(el("h2", "prod-h", "음성 · 자막"));
-    const hasTC = !!typecastKey() && !!typecastVoice();
-    body.appendChild(el("p", "prod-sub", hasTC
-      ? "<b>타입캐스트 API</b>로 장면별 음성을 자동 생성합니다. (파일 업로드·Gemini 음성도 가능) 음성 길이에 맞춰 자막(SRT)이 자동 싱크됩니다."
-      : "타입캐스트 <b>API 키/voice_id</b>를 ⚙에 넣으면 버튼 한 번으로 자동 생성돼요. 없으면 타입캐스트 앱에서 만든 음성을 <b>올리기</b>로 넣으세요. (Gemini 음성도 가능)"));
+    const hasInworld = !!inworldKey() && !!inworldVoice();
+    body.appendChild(el("p", "prod-sub", hasInworld
+      ? "<b>Inworld TTS</b>로 장면 분위기를 분석해 감정·속도를 자동 적용합니다. 실제 음성 길이와 단어 타임스탬프로 자막을 정리합니다."
+      : "Inworld <b>Basic API 키와 목소리 ID</b>를 ⚙에 넣으면 장면별 감정·속도를 자동 적용합니다. Gemini 음성과 파일 업로드도 예비 수단으로 사용할 수 있어요."));
 
-    if (!hasTC) {
-      const kb = el("div", "keybar"); kb.style.marginBottom = "16px";
-      kb.innerHTML = "🗣 타입캐스트 API로 자동 생성하려면 키가 필요해요.";
-      const b = el("button", "btn sm btn-primary", "타입캐스트 키 입력"); b.onclick = openKeys;
-      kb.appendChild(b); body.appendChild(kb);
-    }
+    const iwSettings = el("div", "scene");
+    iwSettings.style.marginBottom = "16px";
+    iwSettings.appendChild(el("div", "scene-no", "Inworld 음성 설정 · 여기에서 바로 입력"));
+    const iwKeyField = el("label", "field");
+    iwKeyField.appendChild(el("span", "field-label", "Inworld API 키 (Basic/Base64)"));
+    const iwKeyInput = el("input"); iwKeyInput.type = "password"; iwKeyInput.id = "voiceInworldKey"; iwKeyInput.placeholder = "Inworld Portal → API Keys → Basic"; iwKeyInput.value = inworldKey();
+    iwKeyField.appendChild(iwKeyInput); iwSettings.appendChild(iwKeyField);
+    const iwVoiceField = el("label", "field");
+    iwVoiceField.appendChild(el("span", "field-label", "Inworld 목소리 ID"));
+    const iwVoiceInput = el("input"); iwVoiceInput.type = "text"; iwVoiceInput.id = "voiceInworldVoice"; iwVoiceInput.value = inworldVoice();
+    iwVoiceField.appendChild(iwVoiceInput); iwSettings.appendChild(iwVoiceField);
+    const iwSave = el("button", "btn sm btn-primary", "Inworld 설정 저장");
+    iwSave.onclick = () => {
+      localStorage.setItem(LS.inworld, iwKeyInput.value.trim().replace(/^Basic\s+/i, ""));
+      localStorage.setItem(LS.inworldVoice, iwVoiceInput.value.trim() || DEFAULT_INWORLD_VOICE);
+      toast("Inworld 설정을 저장했어요"); render();
+    };
+    iwSettings.appendChild(iwSave);
+    iwSettings.appendChild(el("p", "settings-note", "API 키는 비밀번호처럼 가려져 표시되며 이 브라우저에만 저장됩니다."));
+    body.appendChild(iwSettings);
 
     const pkg = el("div", "pkg");
     project.scenes.forEach((s, i) => {
@@ -1527,13 +1379,15 @@ JSON만:
       const head = el("div", "scene-head");
       head.appendChild(el("div", "scene-no", `장면 ${i + 1}${s.isIntro ? " · 인트로" : ""}`));
       head.appendChild(el("span", "pi-meta", s.durationSec ? `${s.durationSec.toFixed(1)}초` : "음성 없음"));
+      const direction = s.voiceDirection || inferVoiceDirection(s);
+      head.appendChild(el("span", "scene-badge", `${esc(direction.emotion)} · ${direction.rate.toFixed(2)}×`));
       c.appendChild(head);
       c.appendChild(el("div", null, esc(s.text)));
       const acts = el("div", "scene-actions");
 
-      const tc = el("button", "btn sm btn-primary", "🗣 타입캐스트 음성");
-      tc.onclick = () => genOneTypecast(i, tc);
-      acts.appendChild(tc);
+      const iw = el("button", "btn sm btn-primary", "🎙 Inworld 음성");
+      iw.onclick = () => genOneInworld(i, iw);
+      acts.appendChild(iw);
 
       const up = el("label", "btn sm", "🎙 음성 올리기");
       const file = el("input"); file.type = "file"; file.accept = "audio/*"; file.style.display = "none";
@@ -1553,32 +1407,36 @@ JSON만:
       pkg.appendChild(c);
     });
     body.appendChild(pkg);
-    navBtn("전체 타입캐스트 음성 생성", genAllTypecast);
+    navBtn("전체 Inworld 음성 생성", genAllInworld);
     navBtn("전체 Gemini 음성 생성", genAllVoices);
     navBtn("편집·미리보기 →", () => { goStep("edit"); }, true);
   }
 
-  async function genOneTypecast(i, btn) {
+  async function genOneInworld(i, btn) {
     const s = project.scenes[i];
-    if (!typecastKey() || !typecastVoice()) { toast("⚙에 타입캐스트 키/voice_id를 넣어주세요"); openKeys(); return; }
+    if (!inworldKey() || !inworldVoice()) { toast("⚙에 Inworld 키/목소리 ID를 넣어주세요"); openKeys(); return; }
     if (btn) { btn.disabled = true; btn.textContent = "생성 중…"; }
     try {
-      const r = await genTypecast(s.text);
-      s.audioDataUrl = r.dataUrl; s.durationSec = r.durationSec;
+      const r = await genInworld(s);
+      s.audioDataUrl = r.dataUrl; s.durationSec = r.durationSec; s.wordAlignment = r.wordAlignment;
       saveProject(); render();
     } catch (e) {
       const m = String(e.message);
-      toast("타입캐스트 실패: " + (/NO_TYPECAST_VOICE/.test(m) ? "voice_id 필요" : /NO_TYPECAST_KEY/.test(m) ? "API 키 필요" : /Failed to fetch/.test(m) ? "CORS/네트워크(웹은 막힐 수 있음 → 업로드 사용)" : m.slice(0, 70)));
-      if (btn) { btn.disabled = false; btn.textContent = "🗣 타입캐스트 음성"; }
+      toast("Inworld 실패: " + (/NO_INWORLD_VOICE/.test(m) ? "목소리 ID 필요" : /NO_INWORLD_KEY/.test(m) ? "Basic API 키 필요" : /Failed to fetch/.test(m) ? "CORS/네트워크(로컬 서버로 실행하세요)" : m.slice(0, 70)));
+      if (btn) { btn.disabled = false; btn.textContent = "🎙 Inworld 음성"; }
     }
   }
-  async function genAllTypecast() {
-    if (!typecastKey() || !typecastVoice()) { toast("⚙에 타입캐스트 키/voice_id를 넣어주세요"); openKeys(); return; }
+  async function genAllInworld() {
+    if (!inworldKey() || !inworldVoice()) { toast("⚙에 Inworld 키/목소리 ID를 넣어주세요"); openKeys(); return; }
     for (let i = 0; i < project.scenes.length; i++) {
-      try { const r = await genTypecast(project.scenes[i].text); project.scenes[i].audioDataUrl = r.dataUrl; project.scenes[i].durationSec = r.durationSec; }
+      try {
+        const s = project.scenes[i];
+        const r = await genInworld(s);
+        s.audioDataUrl = r.dataUrl; s.durationSec = r.durationSec; s.wordAlignment = r.wordAlignment;
+      }
       catch (e) { toast("일부 실패: " + String(e.message).slice(0, 50)); break; }
     }
-    saveProject(); render(); toast("타입캐스트 음성 생성 완료");
+    saveProject(); render(); toast("Inworld 음성 생성 완료");
   }
 
   function loadAudioFile(i, fileObj) {
@@ -1688,27 +1546,11 @@ JSON만:
       ctl.appendChild(rec);
     }
     if (s.isIntro) {
-      const kv = el("button", "btn sm btn-primary", s.videoUrl ? "🎞 인트로 영상 다시" : "🎞 인트로 영상 생성 (KIE)");
-      kv.onclick = () => genIntroVideoKIE(i, kv);
-      ctl.appendChild(kv);
-      const grok = el("button", "btn sm", "🎥 영상 프롬프트만");
+      const grok = el("button", "btn sm", "🎥 Grok 영상 프롬프트");
       grok.onclick = () => genGrokIntro(i, grok);
       ctl.appendChild(grok);
     }
     right.appendChild(ctl);
-
-    if (s.isIntro && s.videoUrl) {
-      const vb = el("div", "grok-box");
-      vb.appendChild(el("div", "field-label", "🎞 KIE 인트로 영상"));
-      const vid = el("video"); vid.src = s.videoUrl; vid.controls = true; vid.style.width = "100%"; vid.style.borderRadius = "10px";
-      vb.appendChild(vid);
-      const va = el("div", "scene-actions");
-      const vopen = el("button", "btn sm", "새 탭에서 열기/저장");
-      vopen.onclick = () => window.open(s.videoUrl, "_blank");
-      va.appendChild(vopen);
-      vb.appendChild(va);
-      right.appendChild(vb);
-    }
 
     if (s.grokImage || s.grokVideo) {
       const gb = el("div", "grok-box");
@@ -1760,45 +1602,8 @@ JSON만: {"image":"...","video":"..."}`;
   }
   function keyMissingMsgPlain(e) {
     const m = String(e.message);
-    if (m.includes("KIE_NO_CREDIT")) return "KIE 포인트(크레딧) 부족 — kie.ai에서 충전 후 다시 시도";
     if (m.includes("NO_CLAUDE_KEY")) return "Anthropic 키 필요";
-    if (m.includes("NO_KIE_KEY")) return "KIE.ai 키 필요";
-    if (/Failed to fetch/.test(m)) return "CORS/네트워크 — 웹주소에선 KIE가 막힐 수 있어요(로컬 .bat 실행 권장)";
-    return m.slice(0, 80);
-  }
-
-  // 인트로 이미지를 KIE로 영상 변환
-  async function genIntroVideoKIE(i, btn) {
-    if (!imgKeyOk()) { toast("⚙ KIE.ai 키를 먼저 넣어주세요"); openKeys(); return; }
-    const s = project.scenes[i];
-    const orig = btn ? btn.textContent : "";
-    if (btn) { btn.disabled = true; btn.textContent = "영상 생성 중… (수분)"; }
-    try {
-      // 영상 프롬프트 확보: 없으면 먼저 생성
-      if (!s.grokVideo) { try { await genGrokIntroSilently(i); } catch (e) {} }
-      const prompt = s.grokVideo || s.text || project.title;
-      // 이미지가 공개 URL이면 이미지→영상, data URL(업로드/base64)이면 텍스트→영상
-      const imgUrl = (s.imageDataUrl && /^https?:\/\//.test(s.imageDataUrl)) ? s.imageDataUrl : null;
-      if (s.imageDataUrl && !imgUrl) toast("인트로 이미지가 파일이라 텍스트→영상으로 만듭니다");
-      s.videoUrl = await genVideoKIE(prompt, imgUrl);
-      saveProject(); render();
-      toast("인트로 영상 생성 완료 🎞");
-    } catch (e) {
-      if (btn) { btn.disabled = false; btn.textContent = orig; }
-      toast("영상 실패: " + keyMissingMsgPlain(e));
-    }
-  }
-  // 버튼/렌더 없이 grokVideo만 채우기 (영상 생성 전 프롬프트 확보용)
-  async function genGrokIntroSilently(i) {
-    const s = project.scenes[i];
-    const sys = "너는 영상 생성용 인트로 프롬프트 생성기다. 스포일러 금지. 출력에 텍스트·자막·말풍선 금지. 반드시 유효한 JSON만 출력.";
-    const usr =
-`인트로 장면: ${s.text}
-인물 설정: ${LANG[project.lang].setting}
-이 장면의 [영상 프롬프트]를 영어로 만들어줘. ACTION / CAMERA / MOOD 중심, 카메라는 push-in 계열 "Camera moves, the subject does not walk or change position." 포함. 끝에 "CRITICAL: NO text, NO subtitles, NO captions, NO written words."
-JSON만: {"video":"..."}`;
-    const r = await claudeJSON(sys, usr, 2000);
-    s.grokVideo = r.video || s.grokVideo || "";
+    return m.slice(0, 60);
   }
 
   function openPlayer(startIdx, single) {
@@ -1806,12 +1611,12 @@ JSON만: {"video":"..."}`;
     let audio = null, timer = null, stopped = false;
     const overlay = el("div", "player");
     overlay.innerHTML =
-      "<div class='player-box'><div class='player-stage'><img class='player-img' id='pImg' alt=''></div>" +
+      "<div class='player-box'><div class='player-stage'><img class='player-img' id='pImg' alt=''><video class='player-img' id='pVideo' muted playsinline></video></div>" +
       "<div class='player-wm' id='pWm'></div><div class='player-cap' id='pCap'></div>" +
       "<button class='player-x' id='pX' title='닫기'>✕</button></div>";
     document.body.appendChild(overlay);
     $("#pWm").textContent = project.watermark;
-    function cleanup() { stopped = true; if (timer) clearTimeout(timer); if (audio) audio.pause(); overlay.remove(); }
+    function cleanup() { stopped = true; if (timer) clearTimeout(timer); if (audio) audio.pause(); const v = $("#pVideo"); if (v) v.pause(); overlay.remove(); }
     $("#pX").onclick = cleanup;
     overlay.addEventListener("click", (e) => { if (e.target === overlay) cleanup(); });
     document.addEventListener("keydown", function esc(e) { if (e.key === "Escape") { cleanup(); document.removeEventListener("keydown", esc); } });
@@ -1821,15 +1626,22 @@ JSON만: {"video":"..."}`;
       if (idx >= project.scenes.length) { cleanup(); return; }
       const s = project.scenes[idx];
       const im = $("#pImg");
+      const video = $("#pVideo");
       const dur = s.durationSec || estDur(s.text);
       const big = s.isIntro ? 1.22 : 1.12;
       const z = s.zoom || "in";
-      im.style.transition = "none";
-      im.src = s.imageDataUrl || "";
-      im.style.opacity = s.imageDataUrl ? "1" : "0.2";
-      if (z === "in") { im.style.transform = "scale(1)"; requestAnimationFrame(() => { im.style.transition = `transform ${dur}s linear`; im.style.transform = `scale(${big})`; }); }
-      else if (z === "out") { im.style.transform = `scale(${big})`; requestAnimationFrame(() => { im.style.transition = `transform ${dur}s linear`; im.style.transform = "scale(1)"; }); }
-      else { im.style.transform = "scale(1.04)"; }
+      video.pause(); video.removeAttribute("src"); video.style.display = s.videoUrl ? "block" : "none";
+      im.style.display = s.videoUrl ? "none" : "block";
+      if (s.videoUrl) {
+        video.src = s.videoUrl; video.loop = dur > 5; video.currentTime = 0; video.play().catch(() => {});
+      } else {
+        im.style.transition = "none";
+        im.src = s.imageDataUrl || "";
+        im.style.opacity = s.imageDataUrl ? "1" : "0.2";
+        if (z === "in") { im.style.transform = "scale(1)"; requestAnimationFrame(() => { im.style.transition = `transform ${dur}s linear`; im.style.transform = `scale(${big})`; }); }
+        else if (z === "out") { im.style.transform = `scale(${big})`; requestAnimationFrame(() => { im.style.transition = `transform ${dur}s linear`; im.style.transform = "scale(1)"; }); }
+        else { im.style.transform = "scale(1.04)"; }
+      }
       $("#pCap").textContent = s.text;
       if (audio) { audio.pause(); audio = null; }
       if (s.audioDataUrl) { audio = new Audio(s.audioDataUrl); audio.play().catch(() => {}); }
@@ -1888,13 +1700,19 @@ JSON만: {"video":"..."}`;
       `장면 <b>${project.scenes.length}</b>개 · 이미지 <b>${nImg}</b>개 · 음성 <b>${nAud}</b>개 준비됨`));
     body.appendChild(stat);
 
+    const issues = projectQA();
+    const qa = el("div", "scene");
+    qa.appendChild(el("div", "scene-no", issues.length ? `자동 검토 · 확인 필요 ${issues.length}건` : "자동 검토 · 통과"));
+    qa.appendChild(el("div", "prod-sub", issues.length
+      ? issues.slice(0, 12).map((x) => `• ${esc(x)}`).join("<br>") + (issues.length > 12 ? `<br>• 외 ${issues.length - 12}건` : "")
+      : "대본·이미지·음성·길이·썸네일·업로드 정보가 모두 준비됐습니다."));
+    body.appendChild(qa);
+
     // 유튜브 업로드 정보 (복사용)
     const yt = el("div", "scene");
     yt.appendChild(el("div", "scene-no", "유튜브 업로드 정보 (복사해서 붙여넣기)"));
-    yt.appendChild(copyRow("제목 A", project.title || ""));
-    if (project.titleB) yt.appendChild(copyRow("제목 B (A/B 테스트용)", project.titleB));
-    yt.appendChild(copyRow("제목 옆 태그 A", project.titleTag || ""));
-    if (project.titleTagB) yt.appendChild(copyRow("제목 옆 태그 B", project.titleTagB));
+    yt.appendChild(copyRow("제목", project.title || ""));
+    yt.appendChild(copyRow("제목 옆 태그", project.titleTag || ""));
     yt.appendChild(copyRow("설명", project.description || "", true));
     yt.appendChild(copyRow("설명 아래 태그", (project.tags || []).join(", "), true));
     body.appendChild(yt);
@@ -1904,8 +1722,8 @@ JSON만: {"video":"..."}`;
       "<div class='scene-no'>캡컷 사용법 (초보자용)</div>" +
       "<ol style='margin:8px 0 0;padding-left:20px;line-height:1.9;font-size:14px'>" +
       "<li>ZIP 압축을 풉니다.</li>" +
-      "<li>캡컷에서 새 프로젝트 → <b>images</b> 폴더의 사진을 번호 순서대로 타임라인에 올립니다.</li>" +
-      "<li><b>audio</b> 폴더의 같은 번호 음성을 각 사진 아래에 맞춥니다. (사진 길이 = 음성 길이)</li>" +
+      "<li>캡컷에서 새 프로젝트 → <b>videos</b> 폴더의 영상부터 번호 순서대로 올립니다. 영상이 없는 장면만 <b>images</b> 폴더의 같은 번호 사진을 사용합니다.</li>" +
+      "<li><b>audio</b> 폴더의 같은 번호 음성을 각 영상/사진 아래에 맞춥니다. 영상이 음성보다 짧으면 반복하거나 마지막 프레임을 늘립니다.</li>" +
       "<li>인트로(장면1)는 좀 더 크게/영상처럼, 나머지 사진은 <b>줌 인/줌 아웃</b> 효과를 줍니다.</li>" +
       "<li>자막: <b>subtitles.srt</b>를 캡컷 자막 가져오기로 불러옵니다.</li>" +
       "<li>왼쪽 위에 텍스트로 <b>“" + esc(project.watermark) + "”</b>를 넣습니다.</li>" +
@@ -1935,6 +1753,7 @@ JSON만: {"video":"..."}`;
   function strBytes(s) { return new TextEncoder().encode(s); }
   async function doExport() {
     const files = [];
+    const bundledVideos = new Set();
     const pad = (n) => String(n + 1).padStart(2, "0");
     project.scenes.forEach((s, i) => {
       if (s.imageDataUrl) {
@@ -1950,6 +1769,18 @@ JSON만: {"video":"..."}`;
         }
       }
     });
+    for (let i = 0; i < project.scenes.length; i++) {
+      const s = project.scenes[i];
+      if (!s.videoUrl) continue;
+      try {
+        const res = await apiFetch(s.videoUrl);
+        if (!res.ok) throw new Error(String(res.status));
+        const blob = await res.blob();
+        const ext = /webm/i.test(blob.type) ? "webm" : "mp4";
+        files.push({ name: `videos/scene_${pad(i)}.${ext}`, bytes: new Uint8Array(await blob.arrayBuffer()) });
+        bundledVideos.add(i);
+      } catch (e) { /* CORS/만료 URL은 아래 다운로드 링크로 보존 */ }
+    }
     if (project.thumb && project.thumb.imageDataUrl) {
       const tm = project.thumb.imageDataUrl.match(/^data:(image\/\w+);base64,(.*)$/);
       if (tm) files.push({ name: `thumbnail.${tm[1].split("/")[1].replace("jpeg", "jpg")}`, bytes: base64ToBytes(tm[2]) });
@@ -1959,14 +1790,28 @@ JSON만: {"video":"..."}`;
       if (c) files.push({ name: "thumbnail_copy.txt", bytes: strBytes(`[썸네일 카피]\n${(c.lines || []).join("\n")}`) });
     }
     files.push({ name: "subtitles.srt", bytes: strBytes(buildSRT()) });
+    let cursor = 0;
+    const timeline = ["scene,start_sec,duration_sec,media,audio,zoom,emotion,speed"];
+    const sfx = ["scene,start_sec,effect_key,effect_name,volume_db,note"];
+    project.scenes.forEach((s, i) => {
+      const dur = s.durationSec || estDur(s.text);
+      const voice = s.voiceDirection || inferVoiceDirection(s);
+      const media = bundledVideos.has(i) ? `videos/scene_${pad(i)}` : `images/scene_${pad(i)}`;
+      timeline.push([i + 1, cursor.toFixed(3), dur.toFixed(3), media, `audio/scene_${pad(i)}`, s.zoom || "in", voice.emotion, voice.rate].join(","));
+      (s.sfx || inferSfx(s)).forEach((fx) => sfx.push([i + 1, (cursor + fx.offsetSec).toFixed(3), fx.key, fx.label, fx.volumeDb, "권장 효과음 직접 선택"].join(",")));
+      cursor += dur;
+    });
+    files.push({ name: "timeline.csv", bytes: strBytes("\ufeff" + timeline.join("\n")) });
+    files.push({ name: "sfx_cues.csv", bytes: strBytes("\ufeff" + sfx.join("\n")) });
+    const videoLinks = project.scenes.map((s, i) => s.videoUrl ? `장면 ${i + 1}: ${s.videoUrl}` : "").filter(Boolean);
+    if (videoLinks.length) files.push({ name: "video_download_links.txt", bytes: strBytes(videoLinks.join("\n")) });
+    files.push({ name: "quality_report.txt", bytes: strBytes(projectQA().length ? projectQA().map((x) => "[확인] " + x).join("\n") : "[통과] 필수 제작 자료가 모두 준비되었습니다.") });
     files.push({ name: "script.txt", bytes: strBytes(project.scenes.map((s, i) => `[장면 ${i + 1}${s.isIntro ? " 인트로" : ""} · 줌:${s.zoom || "in"} · ${(s.durationSec || estDur(s.text)).toFixed(1)}초]\n${s.text}`).join("\n\n")) });
     files.push({
       name: "youtube_info.txt",
-      bytes: strBytes(`■ 제목 A\n${project.title}\n\n■ 제목 B (A/B 테스트용)\n${project.titleB || "-"}\n\n■ 제목 옆 태그 A\n${project.titleTag}\n\n■ 제목 옆 태그 B\n${project.titleTagB || "-"}\n\n■ 설명\n${project.description}\n\n■ 태그\n${project.tags.join(", ")}\n\n■ 워터마크(왼쪽 위 문구)\n${project.watermark}`)
+      bytes: strBytes(`■ 제목\n${project.title}\n\n■ 제목 옆 태그\n${project.titleTag}\n\n■ 설명\n${project.description}\n\n■ 태그\n${project.tags.join(", ")}\n\n■ 워터마크(왼쪽 위 문구)\n${project.watermark}`)
     });
-    const introVid = project.scenes.find((s) => s.isIntro && s.videoUrl);
-    const introLine = introVid ? `\n\n■ 인트로 영상(KIE 생성): 아래 링크에서 받아 맨 앞에 배치하세요.\n${introVid.videoUrl}` : "";
-    files.push({ name: "capcut_guide.txt", bytes: strBytes("images/ 를 번호순으로 타임라인에 올리고, audio/ 의 같은 번호 음성을 아래에 맞추세요.\n인트로 외 이미지는 줌 인/아웃 효과, 자막은 subtitles.srt 가져오기.\n왼쪽 위 텍스트: " + project.watermark + introLine) });
+    files.push({ name: "capcut_guide.txt", bytes: strBytes("videos/ 의 생성 영상을 번호순으로 먼저 올리고, 영상이 없는 장면만 images/ 의 같은 번호 사진을 사용하세요. audio/ 의 같은 번호 음성을 아래에 맞춥니다.\n영상이 음성보다 짧으면 반복하거나 마지막 프레임을 늘리세요.\n정확한 시작 시각·길이·미디어·감정은 timeline.csv를 확인하세요.\n효과음 추천 위치와 볼륨은 sfx_cues.csv를 확인하세요.\n자막은 subtitles.srt 가져오기.\n왼쪽 위 텍스트: " + project.watermark + "\n완성 MP4를 내보낸 뒤 영상·음성·자막 싱크를 최종 검토하고 YouTube에 업로드하세요.") });
 
     if (files.length <= 4) { toast("먼저 이미지/음성을 생성하세요"); return; }
     const blob = makeZip(files);
@@ -1974,79 +1819,31 @@ JSON만: {"video":"..."}`;
     toast("ZIP을 내려받았어요");
   }
 
-  // ============ 프로젝트 저장 (IndexedDB — 이미지 많아도 용량 걱정 없음) ============
-  function idbOpen() {
-    return new Promise((res, rej) => {
-      const r = indexedDB.open("yeti_db", 1);
-      r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains("kv")) r.result.createObjectStore("kv"); };
-      r.onsuccess = () => res(r.result);
-      r.onerror = () => rej(r.error);
-    });
-  }
-  function idbGet(key) {
-    return idbOpen().then((db) => new Promise((res, rej) => {
-      const t = db.transaction("kv", "readonly").objectStore("kv").get(key);
-      t.onsuccess = () => res(t.result); t.onerror = () => rej(t.error);
-    }));
-  }
-  function idbSet(key, val) {
-    return idbOpen().then((db) => new Promise((res, rej) => {
-      const t = db.transaction("kv", "readwrite").objectStore("kv").put(val, key);
-      t.onsuccess = () => res(); t.onerror = () => rej(t.error);
-    }));
-  }
-
-  let _projCache = null;   // 메모리 캐시 (IDB에서 로드)
-  let _projLoaded = false; // IDB 최초 로드 완료 여부
-
-  function loadProjects() {
-    if (_projCache === null) { try { _projCache = JSON.parse(localStorage.getItem(LS.projects)) || []; } catch (e) { _projCache = []; } }
-    return _projCache;
-  }
-  function persistProjects() {
-    idbSet("projects", _projCache).catch(() => {});
-    // 가벼운 백업(이미지 제외)도 localStorage에 — IDB 못 쓰는 환경 대비
-    try {
-      const light = _projCache.map((p) => ({ ...p, scenes: (p.scenes || []).map((s) => ({ ...s, imageDataUrl: "", audioDataUrl: "" })), characters: (p.characters || []).map((c) => ({ ...c, imageDataUrl: "" })), thumb: p.thumb ? { ...p.thumb, imageDataUrl: "" } : p.thumb }));
-      localStorage.setItem(LS.projects, JSON.stringify(light));
-    } catch (e) {}
-  }
+  // ============ 프로젝트 저장 ============
+  let saveT;
+  function saveDebounced() { clearTimeout(saveT); saveT = setTimeout(saveProject, 500); }
+  function loadProjects() { try { return JSON.parse(localStorage.getItem(LS.projects)) || []; } catch (e) { return []; } }
   function saveProject() {
     const all = loadProjects();
     const idx = all.findIndex((p) => p.id === project.id);
     const meta = { ...project };
     if (idx >= 0) all[idx] = meta; else all.unshift(meta);
-    persistProjects();
-  }
-  // 최초 IDB 로드 — 이미지 포함 전체 프로젝트 복원
-  function initProjectStore() {
-    idbGet("projects").then(async (list) => {
-      if (list === undefined) {
-        // 최초 실행: 기존 localStorage 데이터를 IDB로 이관
-        const ls = loadProjects();
-        if (ls.length) { _projCache = ls; await idbSet("projects", ls).catch(() => {}); }
-        else _projCache = [];
-      } else {
-        _projCache = Array.isArray(list) ? list : [];
-      }
-      _projLoaded = true;
-      if ($("#prodProjPanel") && !$("#prodProjPanel").hidden) renderProjList();
-    }).catch(() => { _projLoaded = true; loadProjects(); });
+    try { localStorage.setItem(LS.projects, JSON.stringify(all)); }
+    catch (e) { toast("저장 공간이 부족해요(이미지가 많으면 용량 초과). 캡컷으로 내보낸 뒤 새로 시작하세요."); }
   }
 
   function renderProjList() {
     const w = $("#prodProjList"); w.innerHTML = "";
-    if (!_projLoaded) { w.appendChild(el("div", "prod-sub", "불러오는 중…")); }
     const all = loadProjects();
-    if (!all.length) { if (_projLoaded) w.appendChild(el("div", "prod-sub", "저장된 프로젝트가 없어요.")); return; }
+    if (!all.length) { w.appendChild(el("div", "prod-sub", "저장된 프로젝트가 없어요.")); return; }
     all.forEach((p) => {
       const it = el("div", "proj-item");
       const t = el("div", "pi-title", esc(p.title || p.topics?.[p.topicIdx]?.title || p.category || "제목 미정"));
-      t.onclick = () => { project = p; if (!project.characters) project.characters = []; stepIdx = p.scenes?.length ? 2 : 1; $("#prodProjPanel").hidden = true; render(); };
+      t.onclick = () => { project = p; stepIdx = p.scenes?.length ? 2 : 1; $("#prodProjPanel").hidden = true; render(); };
       it.appendChild(t);
       it.appendChild(el("div", "pi-meta", new Date(p.createdAt).toLocaleDateString("ko")));
       const del = el("button", null, "삭제");
-      del.onclick = () => { _projCache = loadProjects().filter((x) => x.id !== p.id); persistProjects(); renderProjList(); };
+      del.onclick = () => { localStorage.setItem(LS.projects, JSON.stringify(loadProjects().filter((x) => x.id !== p.id))); renderProjList(); };
       it.appendChild(del);
       w.appendChild(it);
     });
@@ -2056,29 +1853,24 @@ JSON만: {"video":"..."}`;
     $("#prodProjPanel").hidden = true;
     const p = $("#prodKeyPanel"); p.hidden = !p.hidden;
     if (!p.hidden) {
-      if ($("#prodChannelName")) $("#prodChannelName").value = channelName();
-      const tp = $("#prodTextProvider");
-      if (tp) { tp.value = textProvider(); tp.dispatchEvent(new Event("change")); }
       $("#prodClaudeKey").value = claudeKey();
-      if ($("#prodGeminiKey")) $("#prodGeminiKey").value = geminiKey();
-      if ($("#prodGeminiTextModel")) $("#prodGeminiTextModel").value = geminiTextModel();
+      $("#prodGeminiKey").value = geminiKey();
       $("#prodModel").value = claudeModel();
-      if ($("#prodKieKey")) $("#prodKieKey").value = kieKey();
-      if ($("#prodKieModel")) $("#prodKieModel").value = kieModel();
-      if ($("#prodKieRes")) $("#prodKieRes").value = kieRes();
-      if ($("#prodKieVideoModel")) $("#prodKieVideoModel").value = kieVideoModel();
-      $("#prodTypecastKey").value = typecastKey();
-      $("#prodTypecastVoiceKo").value = localStorage.getItem(LS.typecastVoiceKo) || localStorage.getItem(LS.typecastVoice) || "";
-      $("#prodTypecastVoiceJa").value = localStorage.getItem(LS.typecastVoiceJa) || "";
-      $("#prodGeminiVoiceKo").value = localStorage.getItem(LS.geminiVoiceKo) || localStorage.getItem(LS.geminiVoice) || "Kore";
-      $("#prodGeminiVoiceJa").value = localStorage.getItem(LS.geminiVoiceJa) || localStorage.getItem(LS.geminiVoice) || "Kore";
+      $("#prodImgModel").value = imgModel();
+      const provSel = $("#prodProvider");
+      if (provSel) { provSel.value = imgProvider(); provSel.dispatchEvent(new Event("change")); }
+      $("#prodKieKey").value = kieKey();
+      $("#prodKieModel").value = kieModel();
+      $("#prodInworldKey").value = inworldKey();
+      $("#prodInworldVoice").value = inworldVoice();
+      $("#prodInworldModel").value = inworldModel();
+      if ($("#prodGoogleClientId")) $("#prodGoogleClientId").value = localStorage.getItem(LS.googleClientId) || "";
+      if ($("#prodGeminiVoice")) $("#prodGeminiVoice").value = geminiVoice();
     }
   }
 
   // ============ 초기화 ============
   function init() {
-    initProjectStore(); // IndexedDB에서 저장된 프로젝트 복원
-
     // 상단 제목을 활성 탭에 맞춰 갱신
     const tabsEl = document.getElementById("tabs");
     const topTitle = document.getElementById("topTitle");
@@ -2089,51 +1881,31 @@ JSON만: {"video":"..."}`;
 
     $("#prodSettings").onclick = openKeys;
     $("#prodProjects").onclick = () => { $("#prodKeyPanel").hidden = true; const p = $("#prodProjPanel"); p.hidden = !p.hidden; if (!p.hidden) renderProjList(); };
-    const textSel = $("#prodTextProvider");
-    if (textSel) textSel.onchange = () => {
-      const gem = textSel.value === "gemini";
-      if ($("#geminiTextField")) $("#geminiTextField").hidden = !gem;
-      if ($("#claudeTextField")) $("#claudeTextField").hidden = gem;
+    const provSel = $("#prodProvider");
+    const syncProvFields = () => {
+      const kie = provSel.value === "kie";
+      $("#kieFields").hidden = !kie;
+      $("#geminiFields").hidden = kie;
     };
-
-    if ($("#prodTestGemini")) $("#prodTestGemini").onclick = testGeminiKey;
-    if ($("#prodLoadGeminiModels")) $("#prodLoadGeminiModels").onclick = loadGeminiModels;
+    if (provSel) provSel.onchange = syncProvFields;
 
     $("#prodSaveKeys").onclick = () => {
-      if ($("#prodChannelName")) localStorage.setItem(LS.channelName, $("#prodChannelName").value.trim() || "설루온");
-      if (textSel) localStorage.setItem(LS.textProvider, textSel.value);
       localStorage.setItem(LS.claude, $("#prodClaudeKey").value.trim());
-      if ($("#prodGeminiKey")) localStorage.setItem(LS.gemini, $("#prodGeminiKey").value.trim());
-      if ($("#prodGeminiTextModel")) localStorage.setItem(LS.geminiTextModel, $("#prodGeminiTextModel").value.trim() || "gemini-2.0-flash");
+      localStorage.setItem(LS.gemini, $("#prodGeminiKey").value.trim());
       localStorage.setItem(LS.model, $("#prodModel").value.trim() || "claude-opus-5");
-      localStorage.setItem(LS.provider, "kie");
-      if ($("#prodKieKey")) localStorage.setItem(LS.kie, $("#prodKieKey").value.trim());
-      if ($("#prodKieModel")) localStorage.setItem(LS.kieModel, $("#prodKieModel").value.trim() || "nano-banana-2");
-      if ($("#prodKieRes")) localStorage.setItem(LS.kieRes, $("#prodKieRes").value);
-      if ($("#prodKieVideoModel")) localStorage.setItem(LS.kieVideoModel, $("#prodKieVideoModel").value.trim() || "veo3-fast");
-      localStorage.setItem(LS.typecast, $("#prodTypecastKey").value.trim());
-      localStorage.setItem(LS.typecastVoiceKo, $("#prodTypecastVoiceKo").value.trim());
-      localStorage.setItem(LS.typecastVoiceJa, $("#prodTypecastVoiceJa").value.trim());
-      localStorage.setItem(LS.geminiVoiceKo, $("#prodGeminiVoiceKo").value);
-      localStorage.setItem(LS.geminiVoiceJa, $("#prodGeminiVoiceJa").value);
+      localStorage.setItem(LS.imgModel, $("#prodImgModel").value.trim() || "gemini-2.5-flash-image");
+      localStorage.setItem(LS.provider, provSel ? provSel.value : "gemini");
+      localStorage.setItem(LS.kie, $("#prodKieKey").value.trim());
+      localStorage.setItem(LS.kieModel, $("#prodKieModel").value.trim() || "nano-banana-2");
+      localStorage.setItem(LS.inworld, $("#prodInworldKey").value.trim().replace(/^Basic\s+/i, ""));
+      localStorage.setItem(LS.inworldVoice, $("#prodInworldVoice").value.trim());
+      localStorage.setItem(LS.inworldModel, $("#prodInworldModel").value || "inworld-tts-2");
+      if ($("#prodGoogleClientId")) localStorage.setItem(LS.googleClientId, $("#prodGoogleClientId").value.trim());
+      if ($("#prodGeminiVoice")) localStorage.setItem(LS.geminiVoice, $("#prodGeminiVoice").value);
       $("#prodKeyPanel").hidden = true;
       render();
       toast("키를 저장했어요");
     };
-
-    // Gemini 목소리 드롭다운(한/일) 채우기
-    ["#prodGeminiVoiceKo", "#prodGeminiVoiceJa"].forEach((sid) => {
-      const sel = $(sid); if (!sel || sel.options.length) return;
-      GEMINI_VOICES.forEach(([v, label]) => { const o = el("option", null, label); o.value = v; sel.appendChild(o); });
-    });
-    $("#prodGeminiVoiceKo").value = localStorage.getItem(LS.geminiVoiceKo) || localStorage.getItem(LS.geminiVoice) || "Kore";
-    $("#prodGeminiVoiceJa").value = localStorage.getItem(LS.geminiVoiceJa) || localStorage.getItem(LS.geminiVoice) || "Kore";
-
-    // 타입캐스트 목소리 목록 불러오기 + 언어별 지정
-    const tcLoad = $("#prodTcLoadVoices");
-    if (tcLoad) tcLoad.onclick = () => loadTypecastVoices();
-    if ($("#prodTcToKo")) $("#prodTcToKo").onclick = () => { const v = $("#prodTcVoiceSelect").value; if (v) { $("#prodTypecastVoiceKo").value = v; toast("한국어 목소리로 지정"); } };
-    if ($("#prodTcToJa")) $("#prodTcToJa").onclick = () => { const v = $("#prodTcVoiceSelect").value; if (v) { $("#prodTypecastVoiceJa").value = v; toast("일본어 목소리로 지정"); } };
 
     // 언어 전환 (한국어 / 日本語)
     const langT = $("#langToggle");

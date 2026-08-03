@@ -522,9 +522,6 @@ textarea {
 }
 .prod-sub { color: var(--ink-soft); font-size: 14px; margin: 0 0 20px; }
 .prod-sub b { color: var(--accent); }
-.char-box { border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 0 0 20px; background: var(--paper-2); }
-.char-box .prod-h2 { font-size: 18px; font-weight: 800; margin: 0 0 6px; color: var(--ink); }
-.char-box .pkg { margin-bottom: 10px; }
 
 /* 카테고리 그리드 */
 .cat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
@@ -549,6 +546,8 @@ textarea {
 }
 .topic-card:hover { border-color: var(--seal); background: var(--paper); }
 .topic-card.sel { border-color: var(--seal); box-shadow: 0 0 0 3px rgba(139,92,246,0.30); }
+.thumb-choice { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; cursor: pointer; color: var(--seal); }
+.thumb-choice input { width: 20px; height: 20px; accent-color: var(--seal); cursor: pointer; }
 .topic-rank {
   position: absolute; top: 12px; right: 14px;
   font-size: 12px; color: var(--ink-soft); font-weight: 700;
@@ -563,14 +562,6 @@ textarea {
 .topic-score.low { background: rgba(255,255,255,0.06); color: var(--ink-soft); border: 1px solid var(--line); }
 .topic-title { font-size: 17px; font-weight: 700; padding-right: 40px; }
 .topic-hook { font-size: 13.5px; color: var(--ink-soft); margin-top: 5px; line-height: 1.55; }
-.topic-thumb2 { font-size: 12.5px; color: var(--seal-soft); margin-top: 5px; }
-.topic-thumb2 b { color: var(--accent); }
-.script-all { width: 100%; font-size: 15px; }
-.len-good { color: var(--good); }
-.len-mid { color: var(--accent); }
-.len-low { color: var(--danger); }
-.pstep { transition: opacity .15s; }
-.pstep:hover { opacity: .82; }
 .topic-why { font-size: 12.5px; color: var(--good); margin-top: 6px; }
 
 /* 대본 패키지 편집 */

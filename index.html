@@ -62,137 +62,100 @@
 
           <!-- 키 설정 패널 -->
           <div class="settings-panel" id="prodKeyPanel" hidden>
-            <div class="key-divider">📺 내 채널</div>
             <label class="field">
-              <span class="field-label">채널명 <small>(설명란 구독 유도에 사용)</small></span>
-              <input type="text" id="prodChannelName" placeholder="설루온" autocomplete="off" />
+              <span class="field-label">Anthropic API 키 <small>(대본·주제·프롬프트 생성)</small></span>
+              <input type="password" id="prodClaudeKey" placeholder="sk-ant-..." autocomplete="off" />
             </label>
-
-            <div class="key-divider">✍️ 글작성(대본) API</div>
             <label class="field">
-              <span class="field-label">대본 생성 엔진</span>
-              <select id="prodTextProvider">
-                <option value="gemini">Gemini (무료 · Google 키 사용) 💸무료</option>
-                <option value="claude">Claude (유료 · 고품질)</option>
+              <span class="field-label">이미지 생성 방식</span>
+              <select id="prodProvider">
+                <option value="kie">KIE.ai · 16:9 4K 고정 (권장)</option>
+                <option value="gemini">Google Gemini 직접 (예비)</option>
               </select>
             </label>
-            <div id="geminiTextField">
+            <div id="geminiFields">
               <label class="field">
-                <span class="field-label">Google AI(Gemini) API 키 <small>(대본 무료 + Gemini 음성)</small></span>
+                <span class="field-label">Google AI(Gemini) API 키 <small>(나노 바나나 이미지)</small></span>
                 <input type="password" id="prodGeminiKey" placeholder="AIza..." autocomplete="off" />
               </label>
-              <div class="yt-row" style="margin:0 0 6px">
-                <button type="button" class="btn sm" id="prodTestGemini">🔍 이 키 테스트</button>
-                <span id="prodTestGeminiResult" class="settings-note" style="margin:0"></span>
-              </div>
               <label class="field">
-                <span class="field-label">Gemini 대본 모델 <small>(막히면 '모델 불러오기'로 되는 걸 고르세요)</small></span>
-                <input type="text" id="prodGeminiTextModel" list="geminiTextModelList" placeholder="gemini-flash-latest" />
-                <datalist id="geminiTextModelList">
-                  <option value="gemini-flash-latest"></option>
-                  <option value="gemini-2.5-flash"></option>
-                  <option value="gemini-2.5-pro"></option>
-                  <option value="gemini-2.0-flash"></option>
+                <span class="field-label">이미지 모델</span>
+                <input type="text" id="prodImgModel" list="imgModelList" placeholder="gemini-2.5-flash-image" />
+                <datalist id="imgModelList">
+                  <option value="gemini-2.5-flash-image"></option>
+                  <option value="gemini-2.5-flash-image-preview"></option>
+                  <option value="gemini-2.0-flash-preview-image-generation"></option>
                 </datalist>
               </label>
-              <div class="yt-row" style="margin:0 0 6px">
-                <button type="button" class="btn sm" id="prodLoadGeminiModels">📋 내 키로 되는 모델 불러오기</button>
-                <span id="prodGeminiModelsResult" class="settings-note" style="margin:0"></span>
-              </div>
-              <p class="settings-note">🆓 <b>Gemini(무료)</b>로 대본을 만듭니다. 발급: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> (무료). 키는 반드시 <b>AIza…</b>로 시작(OAuth 클라이언트 ID 아님). <br>"모델 사용 불가" 오류가 나면 <b>📋 내 키로 되는 모델 불러오기</b>를 눌러 목록에서 고르세요.</p>
             </div>
-            <div id="claudeTextField" hidden>
+            <div id="kieFields" hidden>
               <label class="field">
-                <span class="field-label">Anthropic(Claude) API 키 <small>(유료 · 고품질)</small></span>
-                <input type="password" id="prodClaudeKey" placeholder="sk-ant-..." autocomplete="off" />
+                <span class="field-label">KIE.ai API 키 <small>(크레딧으로 이미지 생성)</small></span>
+                <input type="password" id="prodKieKey" placeholder="KIE API Key" autocomplete="off" />
               </label>
-              <p class="settings-note">✍️ <b>Claude(유료)</b>로 고품질 대본. 발급: <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com/settings/keys</a>. 모델은 아래 <b>대본 모델</b>에서 변경.</p>
+              <label class="field">
+                <span class="field-label">KIE 이미지 모델 <small>(출력은 항상 4K)</small></span>
+                <input type="text" id="prodKieModel" list="kieModelList" placeholder="nano-banana-2" />
+                <datalist id="kieModelList">
+                  <option value="nano-banana-2"></option>
+                  <option value="nano-banana-pro"></option>
+                  <option value="nano-banana-2-lite"></option>
+                </datalist>
+              </label>
+              <p class="settings-note">⚠ KIE API는 서버용이라 브라우저에서 막힐(CORS) 수 있어요. 안 되면 KIE 웹에서 이미지를 뽑아 <b>이미지 올리기</b>로 넣으세요.</p>
             </div>
-
-            <div class="key-divider">🖼️ 이미지·영상 생성 API — KIE.ai (유료·선택)</div>
-            <p class="settings-note" style="margin-bottom:8px">글작성 키와 <b>따로</b> 넣습니다. <b>이미지 생성</b>과 <b>인트로 영상 변환</b>을 모두 KIE.ai로 합니다(크레딧 필요). 안 넣어도 무료 사이트에서 만들어 <b>이미지 올리기</b>로 진행할 수 있어요.</p>
+            <div class="key-divider">음성 (선택)</div>
             <label class="field">
-              <span class="field-label">KIE.ai API 키</span>
-              <input type="password" id="prodKieKey" placeholder="KIE API Key" autocomplete="off" />
-            </label>
-            <label class="field">
-              <span class="field-label">KIE 이미지 모델</span>
-              <input type="text" id="prodKieModel" list="kieModelList" placeholder="nano-banana-2" />
-              <datalist id="kieModelList">
-                <option value="nano-banana-2">nano-banana-2</option>
-                <option value="nano-banana-pro">nano-banana-pro</option>
-                <option value="nano-banana-2-lite">nano-banana-2-lite</option>
-              </datalist>
-            </label>
-            <label class="field">
-              <span class="field-label">KIE 이미지 해상도 <small>(4K는 비쌈 · 크레딧 절약하려면 1K~2K)</small></span>
-              <select id="prodKieRes">
-                <option value="1K">1K (가장 저렴)</option>
-                <option value="2K" selected>2K (권장 · 1080p에 충분)</option>
-                <option value="4K">4K (고화질 · 비쌈)</option>
+              <span class="field-label">Gemini 음성 목소리 <small>(브라우저에서 바로 생성 · 이미지용 Google 키 사용 · 추천)</small></span>
+              <select id="prodGeminiVoice">
+                <option value="Kore">Kore — 차분·기본 (여)</option>
+                <option value="Aoede">Aoede — 부드러움 (여)</option>
+                <option value="Leda">Leda — 밝고 또렷 (여)</option>
+                <option value="Callirrhoe">Callirrhoe — 편안함 (여)</option>
+                <option value="Sulafat">Sulafat — 따뜻함 (여)</option>
+                <option value="Charon">Charon — 묵직·낮음 (남)</option>
+                <option value="Puck">Puck — 경쾌 (남)</option>
+                <option value="Fenrir">Fenrir — 강렬 (남)</option>
+                <option value="Orus">Orus — 단단함 (남)</option>
+                <option value="Enceladus">Enceladus — 숨결 섞인 (남)</option>
+                <option value="Iapetus">Iapetus — 담담 (남)</option>
+                <option value="Achernar">Achernar — 또렷 (여)</option>
               </select>
             </label>
-            <label class="field">
-              <span class="field-label">KIE 영상 모델 <small>(인트로 영상 변환)</small></span>
-              <input type="text" id="prodKieVideoModel" list="kieVideoList" placeholder="veo3-fast" />
-              <datalist id="kieVideoList">
-                <option value="veo3-fast"></option>
-                <option value="veo3"></option>
-                <option value="kling-v2"></option>
-                <option value="runway-gen3"></option>
-                <option value="sora-2"></option>
-              </datalist>
-            </label>
-            <p class="settings-note">💰 이미지 약 15~60원/장 · 영상은 모델별로 수백~수천원/편. <br>⚠ KIE API는 서버용이라 <b>웹주소에선 막힐(CORS)</b> 수 있어요. 그럴 땐 <b>수익분석_켜기.bat</b>(로컬 서버)로 열거나, KIE 웹에서 뽑아 <b>올리기</b>로 넣으세요. 영상 모델 이름은 본인 KIE 계정에서 쓰는 이름으로 넣으세요.</p>
+            <p class="settings-note">Gemini 음성은 예비 수단으로 남겨 둡니다. 기본 자동 음성은 아래 Inworld를 사용합니다.</p>
 
-            <div class="key-divider">음성 (선택)</div>
-            <p class="settings-note" style="margin-bottom:8px">🇰🇷 한국어 / 🇯🇵 일본어 목소리를 각각 저장해두면, 언어를 바꿀 때 <b>자동으로 해당 언어 목소리</b>로 생성됩니다. Gemini 음성은 위 <b>글작성 Google AI 키</b>를 함께 씁니다.</p>
-            <div class="editor-row">
-              <label class="field" style="flex:1">
-                <span class="field-label">🇰🇷 Gemini 한국어 목소리</span>
-                <select id="prodGeminiVoiceKo"></select>
-              </label>
-              <label class="field" style="flex:1">
-                <span class="field-label">🇯🇵 Gemini 일본어 목소리</span>
-                <select id="prodGeminiVoiceJa"></select>
-              </label>
-            </div>
-            <p class="settings-note">위 목소리로 음성 단계의 'Gemini 음성' 버튼이 생성됩니다. 아래 타입캐스트는 선택 사항이에요.</p>
+            <div class="key-divider">Inworld TTS (기본 · 감정/속도 자동 적용)</div>
+            <label class="field">
+              <span class="field-label">Inworld API 키 <small>(필수 · Portal → API Keys → Basic/Base64)</small></span>
+              <input type="password" id="prodInworldKey" placeholder="Inworld Basic API Key (Base64 credentials)" autocomplete="off" />
+            </label>
+            <label class="field">
+              <span class="field-label">Inworld 목소리 ID <small>(황태후형 기본 음성 적용됨)</small></span>
+              <input type="text" id="prodInworldVoice" placeholder="default-bbhejrkjoavwpl_ixpg3lw__design-voice-fc2ebf9a" autocomplete="off" />
+            </label>
+            <label class="field">
+              <span class="field-label">Inworld 모델</span>
+              <select id="prodInworldModel">
+                <option value="inworld-tts-2">TTS-2 — 감정 표현·자연어 연출</option>
+                <option value="inworld-tts-1.5-mini">TTS 1.5 Mini — 최저 비용</option>
+                <option value="inworld-tts-1.5-max">TTS 1.5 Max — 안정적 고품질</option>
+              </select>
+            </label>
+            <p class="settings-note">✅ 황태후형 목소리 ID가 기본으로 들어 있습니다. 위에는 Inworld Portal의 <b>API Keys → Basic</b>에서 복사한 Base64 credentials만 넣으세요. 장면별 감정·속도는 자동 적용됩니다.</p>
 
-            <div class="key-divider">타입캐스트 (선택 · 안 되면 업로드 사용)</div>
+            <div class="key-divider">YouTube 로그인·업로드</div>
             <label class="field">
-              <span class="field-label">타입캐스트(Typecast) API 키</span>
-              <input type="password" id="prodTypecastKey" placeholder="Typecast API Key" autocomplete="off" />
+              <span class="field-label">Google OAuth 클라이언트 ID <small>(내 채널 분석·YouTube 업로드 인증)</small></span>
+              <input type="text" id="prodGoogleClientId" placeholder="xxxxx.apps.googleusercontent.com" autocomplete="off" />
             </label>
-            <label class="field">
-              <span class="field-label">목소리 목록에서 골라 언어별로 넣기</span>
-              <div class="yt-row" style="margin:0">
-                <select id="prodTcVoiceSelect" style="flex:1"><option value="">목록을 불러오세요</option></select>
-                <button type="button" class="btn sm" id="prodTcLoadVoices">목소리 불러오기</button>
-              </div>
-              <div class="yt-row" style="margin-top:6px">
-                <button type="button" class="btn sm" id="prodTcToKo">▲ 한국어에 넣기</button>
-                <button type="button" class="btn sm" id="prodTcToJa">▲ 일본어에 넣기</button>
-              </div>
-            </label>
-            <div class="editor-row">
-              <label class="field" style="flex:1">
-                <span class="field-label">🇰🇷 한국어 voice_id</span>
-                <input type="text" id="prodTypecastVoiceKo" placeholder="tc_..." autocomplete="off" />
-              </label>
-              <label class="field" style="flex:1">
-                <span class="field-label">🇯🇵 일본어 voice_id</span>
-                <input type="text" id="prodTypecastVoiceJa" placeholder="tc_..." autocomplete="off" />
-              </label>
-            </div>
-            <p class="settings-note">⭐ 타입캐스트 API는 <b>수익분석_켜기.bat</b>(로컬 서버)로 열 때만 작동해요(CORS 우회). 웹주소에선 <b>음성 올리기</b>를 쓰세요.</p>
+            <p class="settings-note">Google Cloud에서 만든 <b>웹 애플리케이션</b> OAuth 클라이언트 ID를 입력하세요. 클라이언트 보안 비밀번호는 입력하지 않습니다. 저장한 뒤 왼쪽의 <b>내 채널 분석</b>에서 Google 로그인을 진행하세요.</p>
 
             <div class="key-divider">대본 모델</div>
             <label class="field">
               <span class="field-label">대본 생성 모델</span>
               <input type="text" id="prodModel" list="modelList" placeholder="claude-opus-5" />
             </label>
-            <p class="settings-note">키는 이 브라우저에만 저장됩니다. Anthropic: <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> · Google AI: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> · KIE: <a href="https://kie.ai" target="_blank" rel="noopener">kie.ai</a> · Typecast: <a href="https://typecast.ai" target="_blank" rel="noopener">typecast.ai</a></p>
+            <p class="settings-note">키는 이 브라우저에만 저장됩니다. Anthropic: <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> · Google AI: <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> · KIE: <a href="https://kie.ai" target="_blank" rel="noopener">kie.ai</a> · Inworld: <a href="https://platform.inworld.ai" target="_blank" rel="noopener">platform.inworld.ai</a></p>
             <button class="btn btn-primary sm" id="prodSaveKeys">저장</button>
           </div>
 
