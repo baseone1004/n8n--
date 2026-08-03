@@ -22,13 +22,17 @@
     projects: "yeti_projects"
   };
   const INWORLD_TTS_URL = "https://api.inworld.ai/tts/v1/voice";
+  const KIE_VIDEO_MODEL = "kling-2.6/image-to-video";
+  let lastKieAssetUrl = "";
 
   const STEPS = [
     { key: "category", name: "주제 고르기" },
     { key: "topic", name: "주제 추천" },
     { key: "script", name: "대본·정보" },
+    { key: "character", name: "주인공 고정" },
     { key: "prompt", name: "이미지 프롬프트" },
     { key: "image", name: "이미지 생성" },
+    { key: "video", name: "영상 변환" },
     { key: "thumb", name: "썸네일" },
     { key: "voice", name: "음성·자막" },
     { key: "edit", name: "편집·미리보기" },
@@ -57,6 +61,12 @@
   const langDirective = () => project.lang === "ja"
     ? "\n\n중요: 결과의 모든 텍스트(제목·설명·태그·대본 등)는 반드시 자연스러운 '일본어'로 작성한다."
     : "";
+  function formatSeoTitle(title, lang) {
+    title = String(title || "").trim();
+    const suffix = lang === "ja" ? " | 日本昔話 | 怪談 | 朗読" : " | 야담 | 민담 | 옛날이야기 | 오디오북";
+    const core = title.split("|")[0].trim();
+    return core + suffix;
+  }
 
   // 언어별 그림체 프리셋 — 한국: 반실사 웹툰(만화)풍 / 일본: 부드러운 애니 셀화풍
   const STYLE_PRESETS = {
@@ -79,11 +89,12 @@
 
   // 대본 규칙(정제본 v11.3) — 제목 패턴 / 인트로 / 고정 멘트
   const TITLE_PATTERNS =
-    "- 충격 행동 + 반전 궁금증: 장터에서 아기를 100냥에 사온 과부, 그 아이의 정체는?\n" +
-    "- A vs B 대비: 큰 며느리는 땅 갖고 막내 며느리는 시어머니를 가졌다\n" +
-    "- 상황 + 미완성 반응: 세자빈 간택에 거지 차림으로 나온 처자, 모두 비웃었는데..\n" +
-    "- 은혜 행동 + 그날 밤 결과: 흰 뱀을 구한 농부, 그날 밤 문 앞에 나타난 소녀\n" +
-    "- 신분역전 + 운명: 거지 소년을 거둔 과부, 10년 후 벌어진 일";
+    "- 구체적 나이·신분 + 비범한 사건: 11살에 장원급제한 천재 꼬마 사또\n" +
+    "- 사건을 해결했는데 + 더 큰 반복 미스터리: 범인을 잡았는데 다음 날 똑같은 사건이 또\n" +
+    "- 과거의 행동 + 세월 뒤 귀환: 과거에 내쳤는데 벼슬을 마다하고 돌아온 선비\n" +
+    "- 명문가/권력자 + 뜻밖의 인물: 고을 최고 부자를 살려치료한 떠돌이 의원\n" +
+    "- 핵심 제목 뒤 검색형 꼬리표: [사건 제목] | 야담 | 민담 | 옛날이야기 | 오디오북\n" +
+    "규칙: 앞부분에 나이·직업·신분·행동 중 최소 2개를 구체적으로 넣고, 결말은 숨긴다. 낚시성 물음표 남발 금지.";
   const CTA_KO = "구독과 좋아요는 더 좋은 이야기를 만드는 힘이 됩니다. 그럼 지금부터…";
   const OUTRO_KO =
     "다음 영상을 빠르게 만나보시려면 좋아요와 구독을 눌러주세요. " +
@@ -121,6 +132,8 @@
       description: "",
       tags: [],
       style: STYLE_PRESETS[lang][0].tail,
+      visualBible: "",
+      character: { profile: "", imagePrompt: "", imageDataUrl: "", remoteUrl: "" },
       scenes: [],       // {text, imagePrompt, imageDataUrl, audioDataUrl, durationSec, isIntro, zoom}
       watermark: LANG[lang].watermark,
       thumb: { copies: [], chosen: -1, imagePrompt: "", imageDataUrl: "" }
@@ -144,7 +157,7 @@
   const geminiKey = () => localStorage.getItem(LS.gemini) || "";
   const claudeModel = () => localStorage.getItem(LS.model) || "claude-opus-5";
   const imgModel = () => localStorage.getItem(LS.imgModel) || "gemini-2.5-flash-image";
-  const imgProvider = () => localStorage.getItem(LS.provider) || "gemini";
+  const imgProvider = () => localStorage.getItem(LS.provider) || "kie";
   const kieKey = () => localStorage.getItem(LS.kie) || "";
   const kieModel = () => localStorage.getItem(LS.kieModel) || "nano-banana-2";
   const inworldKey = () => localStorage.getItem(LS.inworld) || "";
@@ -204,8 +217,8 @@
   }
 
   // ============ 이미지 생성 (제공자 분기) ============
-  async function genImage(prompt) {
-    return imgProvider() === "kie" ? genImageKIE(prompt) : genImageGemini(prompt);
+  async function genImage(prompt, options) {
+    return imgProvider() === "kie" ? genImageKIE(prompt, options) : genImageGemini(prompt, options);
   }
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   function blobToDataURL(blob) {
@@ -213,7 +226,8 @@
   }
 
   // ---- KIE.ai (createTask → recordInfo 폴링) ----
-  async function genImageKIE(prompt) {
+  async function genImageKIE(prompt, options) {
+    options = options || {};
     const key = kieKey();
     if (!key) throw new Error("NO_KIE_KEY");
     const create = await apiFetch(KIE_CREATE, {
@@ -221,7 +235,11 @@
       headers: { "content-type": "application/json", "authorization": "Bearer " + key },
       body: JSON.stringify({
         model: kieModel(),
-        input: { prompt: prompt + " . 16:9 widescreen cinematic composition, no text, no watermark, no letters.", aspect_ratio: "16:9", output_format: "png" }
+        input: {
+          prompt: prompt + (options.allowText ? " . Render the requested title text exactly, large, bold and readable." : " . no text, no watermark, no letters."),
+          aspect_ratio: "16:9", resolution: "4K", output_format: "png",
+          image_input: (options.referenceUrls || []).filter(Boolean)
+        }
       })
     });
     if (!create.ok) {
@@ -242,6 +260,7 @@
         if (typeof rj === "string") { try { rj = JSON.parse(rj); } catch (e) { rj = {}; } }
         const url = rj.resultUrls?.[0] || rj.result_urls?.[0] || (Array.isArray(rj.resultUrls) ? rj.resultUrls[0] : null);
         if (!url) throw new Error("KIE: 결과 URL 없음");
+        lastKieAssetUrl = url;
         try { const r = await apiFetch(url); return await blobToDataURL(await r.blob()); }
         catch (e) { return url; } // CORS로 바이트 못 가져오면 URL 그대로(미리보기는 됨, ZIP 제외)
       }
@@ -251,12 +270,13 @@
   }
 
   // ---- Google Gemini 직접 ----
-  async function genImageGemini(prompt) {
+  async function genImageGemini(prompt, options) {
+    options = options || {};
     const key = geminiKey();
     if (!key) throw new Error("NO_GEMINI_KEY");
     const model = imgModel();
     const body = {
-      contents: [{ parts: [{ text: prompt + " . 16:9 widescreen cinematic composition, no text, no watermark, no letters." }] }]
+      contents: [{ parts: [{ text: prompt + (options.allowText ? " . Render the requested title text exactly, large, bold and readable." : " . 16:9 widescreen cinematic composition, no text, no watermark, no letters.") }] }]
     };
     if (/2\.0-flash-preview-image/.test(model)) {
       body.generationConfig = { responseModalities: ["TEXT", "IMAGE"] };
@@ -525,7 +545,8 @@
     const key = STEPS[stepIdx].key;
     ({
       category: renderCategory, topic: renderTopic, script: renderScript,
-      prompt: renderPrompt, image: renderImage, thumb: renderThumb, voice: renderVoice,
+      character: renderCharacter, prompt: renderPrompt, image: renderImage, video: renderVideo,
+      thumb: renderThumb, voice: renderVoice,
       edit: renderEdit, export: renderExport
     }[key])(body);
   }
@@ -653,13 +674,13 @@
 ${TITLE_PATTERNS}
 각 주제는 아래 JSON 배열 형식으로만:
 [
-  {"title":"영상 제목 후보(호기심 유발, 25~35자)","hook":"왜 끌리는지 한 줄 훅","why":"떡상 포인트 한 줄","score":85},
+  {"title":"구체적 사건 제목 | 야담 | 민담 | 옛날이야기 | 오디오북","hook":"왜 끌리는지 한 줄 훅","why":"떡상 포인트 한 줄","score":85},
   ... (정확히 10개)
 ]
 ${trend && trend.length ? "★ 최근 30일 실제로 조회수가 높았던 영상들(근거로 삼아라):\n" + trend.map((t) => `- ${t.title} (조회 ${t.views.toLocaleString()})`).join("\n") + "\n위 실제 사례와 소재·후킹이 얼마나 닮았는지를 근거로 score를 매겨라. 실제 대박 영상과 매우 유사하면 높게, 동떨어지면 낮게.\n" : ""}score는 '떡상(대박) 확률' 추정 정수(%)다. 40~95 사이에서 현실적으로 분산(전부 90+ 금지). 클릭률·소재 신선함·감정 강도·위 실제 데이터와의 유사도를 종합.${langDirective()}`;
       const arr = await claudeJSON(sys, usr, 4000);
       project.topics = (Array.isArray(arr) ? arr : []).slice(0, 10)
-        .map((t) => ({ ...t, score: Math.max(0, Math.min(100, parseInt(t.score, 10) || 70)) }))
+        .map((t) => ({ ...t, title: formatSeoTitle(t.title, project.lang), score: Math.max(0, Math.min(100, parseInt(t.score, 10) || 70)) }))
         .sort((a, b) => b.score - a.score);
       project.topicIdx = -1;
       busy = false; goStep("topic");
@@ -718,7 +739,7 @@ ${langDirective()}
 제목은 아래 패턴 중 하나(결말 노출 금지): ${TITLE_PATTERNS}
 JSON만:
 {
- "title":"영상 제목(호기심, 결말 노출 금지)",
+ "title":"구체적 나이·신분·사건이 앞에 오고 뒤에 | 야담 | 민담 | 옛날이야기 | 오디오북을 붙인 제목",
  "titleTag":"제목 옆 태그 2~4개 (${ja ? "#日本昔話 등" : "#야담 #실화 등"})",
  "description":"유튜브 설명란 (4~6문장 + 구독 유도)",
  "tags":["태그","8~12개"],
@@ -726,7 +747,7 @@ JSON만:
 }
 scenes는 정확히 ${SCENE_COUNT}개. 각 beat는 한 컷 이미지로 그릴 수 있는 한 장면. 전체가 이어지는 완결된 이야기.`;
       const pkg = await claudeJSON(sysO, usrO, 6000);
-      project.title = pkg.title || topic.title;
+      project.title = formatSeoTitle(pkg.title || topic.title, project.lang);
       project.titleTag = pkg.titleTag || "";
       project.description = pkg.description || "";
       project.tags = Array.isArray(pkg.tags) ? pkg.tags : [];
@@ -820,7 +841,67 @@ JSON 배열만, 정확히 ${end - b}개: ["장면 대본", ...]`;
     project.scenes.forEach((s, i) => pkg.appendChild(sceneTextCard(s, i)));
     body.appendChild(pkg);
 
-    navBtn("이미지 프롬프트 만들기 →", loadPrompts, true);
+    navBtn("주인공 기준 만들기 →", prepareCharacter, true);
+  }
+
+  async function prepareCharacter() {
+    const body = $("#prodBody");
+    busy = true; loading(body, "주인공 외형과 영상 미술 기준을 고정하는 중…"); renderNav();
+    try {
+      const story = project.scenes.map((s) => s.text).join("\n").slice(0, 12000);
+      const r = await claudeJSON("너는 시대극 캐릭터·미술 설정 감독이다. 반드시 유효한 JSON 객체만 출력한다.",
+`다음 이야기에서 가장 중요한 주인공 한 명을 선정하고 모든 장면에서 절대 바뀌지 않을 외형 기준을 작성하라.
+언어/시대 기준: ${LANG[project.lang].setting}
+선택된 그림체: ${project.style}
+
+JSON 형식:
+{"profile":"이름, 성별, 나이, 얼굴형, 눈, 눈썹, 코, 피부, 머리 모양, 머리색, 체형, 상의, 하의, 외투, 신발, 장신구를 빠짐없이 적은 영어 고정 묘사", "referencePrompt":"정면/측면/전신이 한 화면에 보이는 캐릭터 시트 영어 프롬프트", "visualBible":"전체 영상의 고정 색상 팔레트, 조명, 선화, 질감, 시대 배경 건축과 소품 규칙을 영어로 명시"}
+
+이야기:
+${story}`, 5000);
+      project.character = project.character || {};
+      project.character.profile = r.profile || "";
+      project.character.imagePrompt = `${r.referencePrompt || r.profile}. Character reference sheet, front view, side view and full body, neutral pose, plain warm background. ${project.style}. no text, no labels, no modern objects.`;
+      project.visualBible = r.visualBible || project.style;
+      saveProject(); busy = false; goStep("character");
+    } catch (e) { busy = false; render(); showErr($("#prodBody"), keyMissingMsg(e)); }
+  }
+
+  function renderCharacter(body) {
+    const ch = project.character || (project.character = { profile: "", imagePrompt: "", imageDataUrl: "", remoteUrl: "" });
+    body.appendChild(el("h2", "prod-h", "주인공 이미지 고정"));
+    body.appendChild(el("p", "prod-sub", "먼저 주인공 기준 이미지를 확정합니다. 이후 모든 장면은 이 이미지와 외형·복식·그림체 기준을 참조합니다."));
+    body.appendChild(el("div", "field-label", "기준 이미지 생성 전 그림체 확정"));
+    const styles = el("div", "style-list");
+    stylePresetsFor(project.lang).forEach((preset) => {
+      const chip = el("button", "style-chip" + (project.style === preset.tail ? " sel" : "")); chip.disabled = !!ch.imageDataUrl;
+      chip.innerHTML = `<b>${esc(preset.name)}</b><span>${esc(preset.desc)}</span>`;
+      chip.onclick = () => { project.style = preset.tail; ch.imagePrompt = `${ch.profile}. Character reference sheet, front view, side view and full body, neutral pose, plain warm background. ${project.style}. no text, no labels, no modern objects.`; saveProject(); render(); };
+      styles.appendChild(chip);
+    });
+    body.appendChild(styles);
+    body.appendChild(field("주인공 고정 외형", () => ch.profile || "", true, (v) => { ch.profile = v; saveDebounced(); }));
+    body.appendChild(field("고정 미술·배경 기준", () => project.visualBible || "", true, (v) => { project.visualBible = v; saveDebounced(); }));
+    const card = el("div", "scene"); card.appendChild(el("div", "scene-no", "주인공 기준 이미지 · KIE 4K"));
+    const box = el("div", "scene-img"); box.id = "characterImage"; box.style.maxWidth = "640px";
+    if (ch.imageDataUrl) { const img = el("img"); img.src = ch.imageDataUrl; box.appendChild(img); } else box.textContent = "기준 이미지 생성 전";
+    card.appendChild(box);
+    card.appendChild(field("기준 이미지 프롬프트", () => ch.imagePrompt || "", true, (v) => { ch.imagePrompt = v; saveDebounced(); }));
+    const gen = el("button", "btn btn-primary", ch.imageDataUrl ? "↻ 주인공 이미지 다시 생성" : "주인공 이미지 먼저 생성"); gen.onclick = genCharacterImage; card.appendChild(gen);
+    body.appendChild(card);
+    navBtn("장면 이미지 프롬프트 만들기 →", loadPrompts, true);
+  }
+
+  async function genCharacterImage() {
+    if (!imgKeyOk()) { toast("KIE 이미지 키를 먼저 넣어주세요"); openKeys(); return; }
+    const ch = project.character;
+    if (ch.imageDataUrl && !confirm("주인공 기준 이미지를 다시 생성할까요? KIE 4K 이미지 비용이 다시 발생하며, 이후 장면도 새 기준에 맞춰 다시 생성하는 것이 좋습니다.")) return;
+    const box = $("#characterImage"); if (box) { box.innerHTML = ""; box.appendChild(el("div", "spinner")); }
+    try {
+      ch.imageDataUrl = await genImage(ch.imagePrompt || ch.profile);
+      ch.remoteUrl = imgProvider() === "kie" ? lastKieAssetUrl : "";
+      saveProject(); render(); toast("주인공 기준 이미지를 고정했어요");
+    } catch (e) { toast("주인공 이미지 실패: " + String(e.message).slice(0, 80)); render(); }
   }
 
   async function splitImportedScript(text, btn) {
@@ -869,6 +950,7 @@ ${text}`, 16000);
 
   // ---- 4. 이미지 프롬프트 ----
   async function loadPrompts() {
+    if (!project.character?.imageDataUrl) { toast("먼저 주인공 기준 이미지를 생성해 주세요"); goStep("character"); return; }
     const body = $("#prodBody");
     busy = true; loading(body, "각 장면의 이미지 프롬프트를 만드는 중…"); renderNav();
     try {
@@ -877,10 +959,14 @@ ${text}`, 16000);
       const usr =
 `화풍(STYLE_TAIL): ${project.style}
 인물 기본: ${LANG[project.lang].setting}
+주인공 고정 외형(한 단어도 임의 변경 금지): ${project.character?.profile || ""}
+고정 미술·배경 기준: ${project.visualBible || project.style}
 
 아래 장면들을 각각 위 화풍으로 그릴 영어 이미지 프롬프트로 만들어줘. 규칙:
 - 각 프롬프트는 완결된 영어 문장 2~4개. 콤마 키워드 나열 금지.
 - 인물은 ${LANG[project.lang].setting} 를 명시하고, 같은 인물은 장면마다 같은 복식·머리로 일관되게 묘사(외투/상의/하의 분리).
+- 주인공이 등장하는 모든 프롬프트에는 위 '주인공 고정 외형'을 그대로 반복하고 기준 이미지와 동일 인물임을 명시한다. 나이·얼굴·머리·복식·색상을 바꾸지 않는다.
+- 모든 장면은 위 '고정 미술·배경 기준'의 팔레트·조명·선화·질감·시대 건축을 유지한다. 장면 도중 화풍이나 시대 배경 변경 금지.
 - 장면마다 샷을 다르게(클로즈업/미디엄/롱/투샷/오버숄더/로우앵글/측면 등 이웃 장면과 다르게).
 - 인물 자세를 장면마다 다르게(걷다 멈춤/뒤돌아봄/손 뻗기/기대기/먼 곳 응시/웅크려 살핌 등). '정면에서 두 손 모은' 반복 금지.
 - 배경은 실제 로케이션(마당/논밭/돌담/숲/관아/초가/기와집 등). 회색 스튜디오 배경 금지.
@@ -904,19 +990,7 @@ ${scenes}`;
     body.appendChild(el("h2", "prod-h", "이미지 프롬프트"));
     body.appendChild(el("p", "prod-sub", `그림체를 고르면 모든 장면에 적용돼요. ${project.lang === "ja" ? "일본 민담용 애니 셀화풍" : "한국 야담용 반실사 웹툰풍"} 중에서 선택하세요.`));
 
-    body.appendChild(el("div", "field-label", "그림체 고르기"));
-    const grid = el("div", "style-list");
-    stylePresetsFor(project.lang).forEach((preset) => {
-      const chip = el("button", "style-chip" + (project.style === preset.tail ? " sel" : ""));
-      chip.innerHTML = `<b>${esc(preset.name)}</b><span>${esc(preset.desc)}</span>`;
-      chip.onclick = () => { project.style = preset.tail; saveDebounced(); render(); };
-      grid.appendChild(chip);
-    });
-    body.appendChild(grid);
-
-    const styleF = field("직접 다듬기 (STYLE_TAIL · 영어)", () => project.style, true, (v) => { project.style = v; saveDebounced(); });
-    styleF.style.marginTop = "14px";
-    body.appendChild(styleF);
+    const locked = el("div", "keybar"); locked.innerHTML = "🔒 그림체·배경·주인공 외형이 기준 이미지에 맞춰 잠겼습니다. 변경하려면 ‘주인공 고정’ 단계에서 기준 이미지를 다시 생성하세요."; body.appendChild(locked);
     const pkg = el("div", "pkg");
     project.scenes.forEach((s, i) => {
       const c = el("div", "scene");
@@ -933,11 +1007,11 @@ ${scenes}`;
   function renderImage(body) {
     body.appendChild(el("h2", "prod-h", "이미지 생성"));
     const prov = imgProvider() === "kie" ? "KIE.ai 크레딧" : "Google Gemini(장당 과금)";
-    body.appendChild(el("p", "prod-sub", `현재 이미지 생성 방식: <b>${prov}</b> (⚙ 키 설정에서 변경). 또는 다른 데서 만든 이미지를 <b>올리기</b>로 넣어도 돼요.`));
+    body.appendChild(el("p", "prod-sub", `현재 이미지 생성 방식: <b>${prov}</b> · <b>16:9 4K 고정</b>. 주인공 기준 이미지와 고정 미술 설정을 모든 장면에 적용합니다.`));
 
     const tip = el("div", "keybar");
     tip.style.marginBottom = "18px";
-    tip.innerHTML = "💰 비용 팁 — <b>KIE.ai 크레딧</b> 또는 <b>드롭샷 Pro(나노 바나나 무제한)</b>에서 뽑아 <b>이미지 올리기</b>로 넣으면 저렴/무료. 앱에서 Google 직접 생성은 장당 약 50~60원.";
+    tip.innerHTML = "🎨 일관성 잠금 — 주인공 기준 이미지, 동일 복식·얼굴, 고정 팔레트·조명·그림체를 장면마다 참조합니다. KIE 4K는 장당 과금이므로 재생성 횟수를 확인하세요.";
     body.appendChild(tip);
 
     const pkg = el("div", "pkg");
@@ -945,7 +1019,7 @@ ${scenes}`;
     body.appendChild(pkg);
     navBtn("전체 다시 생성", genAllImages);
     navBtn("이미지 전체 다운로드", downloadImagesZip);
-    navBtn("썸네일 만들기 →", () => { goStep("thumb"); }, true);
+    navBtn("장면 영상으로 변환 →", () => { goStep("video"); }, true);
   }
 
   function sceneImageCard(s, i) {
@@ -962,7 +1036,7 @@ ${scenes}`;
     ta.oninput = () => { s.imagePrompt = ta.value; saveDebounced(); };
     right.appendChild(ta);
     const acts = el("div", "scene-actions");
-    const one = el("button", "btn sm", "🍌 나노바나나 생성");
+    const one = el("button", "btn sm", s.imageDataUrl ? "↻ KIE 4K 다시 생성" : "🍌 KIE 4K 생성");
     one.onclick = () => genOneImage(i);
     acts.appendChild(one);
 
@@ -1018,12 +1092,15 @@ ${scenes}`;
     toast(files.length + "개 이미지를 내려받았어요");
   }
 
-  async function genOneImage(i) {
+  async function genOneImage(i, skipConfirm) {
     const s = project.scenes[i];
+    if (s.imageDataUrl && !skipConfirm && !confirm(`장면 ${i + 1} 이미지를 다시 생성할까요? KIE 4K 이미지 비용이 다시 발생합니다.`)) return;
     const box = $("#img-" + i);
     if (box) { box.innerHTML = ""; box.appendChild(el("div", "spinner")); }
     try {
-      s.imageDataUrl = await genImage(s.imagePrompt || s.text);
+      const refs = project.character?.remoteUrl ? [project.character.remoteUrl] : [];
+      s.imageDataUrl = await genImage(`${s.imagePrompt || s.text}\nCONSISTENCY LOCK: ${project.character?.profile || ""}. VISUAL BIBLE: ${project.visualBible || project.style}`, { referenceUrls: refs });
+      s.imageRemoteUrl = imgProvider() === "kie" ? lastKieAssetUrl : "";
       saveProject();
       if (box) { box.innerHTML = ""; const im = el("img"); im.src = s.imageDataUrl; box.appendChild(im); }
     } catch (e) {
@@ -1034,14 +1111,77 @@ ${scenes}`;
   }
   async function genAllImages() {
     if (!imgKeyOk()) { toast("⚙ 이미지 생성용 키를 먼저 넣어주세요"); openKeys(); return; }
-    for (let i = 0; i < project.scenes.length; i++) { await genOneImage(i); }
+    const hasExisting = project.scenes.some((s) => s.imageDataUrl);
+    if (hasExisting && !confirm("모든 장면 이미지를 다시 생성할까요? 기존 이미지가 교체되고 장면마다 KIE 4K 비용이 다시 발생합니다.")) return;
+    for (let i = 0; i < project.scenes.length; i++) { await genOneImage(i, true); }
     toast("이미지 생성 완료");
   }
 
-  // ---- 5.5 썸네일 ----
+  // ---- 5.5 KIE 이미지 → 영상 ----
+  function renderVideo(body) {
+    body.appendChild(el("h2", "prod-h", "이미지를 영상으로 변환"));
+    body.appendChild(el("p", "prod-sub", "KIE Kling 2.6으로 각 4K 기준 이미지를 5초 영상으로 변환합니다. 원본 인물·복식·배경·그림체를 유지하고 카메라와 작은 동작만 추가합니다."));
+    const warn = el("div", "keybar"); warn.innerHTML = "💰 영상 생성은 이미지보다 비용이 큽니다. 먼저 인트로와 핵심 장면만 개별 생성해 확인한 뒤 전체 생성을 권장합니다."; body.appendChild(warn);
+    const pkg = el("div", "pkg");
+    project.scenes.forEach((s, i) => {
+      const c = el("div", "scene"); c.appendChild(el("div", "scene-no", `장면 ${i + 1}${s.isIntro ? " · 인트로" : ""}`));
+      if (s.videoUrl) { const v = el("video"); v.controls = true; v.src = s.videoUrl; v.style.width = "100%"; v.style.maxWidth = "640px"; c.appendChild(v); }
+      else if (s.imageDataUrl) { const box = el("div", "scene-img"); const im = el("img"); im.src = s.imageDataUrl; box.appendChild(im); c.appendChild(box); }
+      c.appendChild(field("영상 동작 프롬프트", () => s.videoPrompt || defaultVideoPrompt(s), true, (v) => { s.videoPrompt = v; saveDebounced(); }));
+      const acts = el("div", "scene-actions");
+      const gen = el("button", "btn sm btn-primary", s.videoUrl ? "영상 다시 생성" : "🎞 5초 영상 생성"); gen.onclick = () => genOneVideo(i, gen); acts.appendChild(gen);
+      if (s.videoUrl) { const open = el("button", "btn sm", "영상 열기/다운로드"); open.onclick = () => window.open(s.videoUrl, "_blank"); acts.appendChild(open); }
+      c.appendChild(acts); pkg.appendChild(c);
+    });
+    body.appendChild(pkg);
+    navBtn("이미지가 있는 장면 전체 영상 생성", genAllVideos);
+    navBtn("썸네일 만들기 →", () => goStep("thumb"), true);
+  }
+
+  function defaultVideoPrompt(s) {
+    return `Preserve the exact character identity, face, hairstyle, clothing, colors, historical background and illustration style from the source image. Subtle natural blinking and breathing, gentle fabric and environmental movement. Slow cinematic push-in. No morphing, no costume change, no new characters, no text.`;
+  }
+
+  async function genOneVideo(i, btn) {
+    const s = project.scenes[i];
+    if (!kieKey()) { toast("KIE API 키가 필요합니다"); openKeys(); return; }
+    if (!s.imageRemoteUrl) { toast("이 장면을 KIE 이미지로 먼저 생성해야 합니다"); return; }
+    if (btn) { btn.disabled = true; btn.textContent = "영상 생성 중…"; }
+    try {
+      const create = await apiFetch(KIE_CREATE, {
+        method: "POST", headers: { "content-type": "application/json", "authorization": "Bearer " + kieKey() },
+        body: JSON.stringify({ model: KIE_VIDEO_MODEL, input: { prompt: s.videoPrompt || defaultVideoPrompt(s), image_urls: [s.imageRemoteUrl], sound: false, duration: "5" } })
+      });
+      if (!create.ok) throw new Error(`KIE 영상 ${create.status}: ${await create.text()}`);
+      const cj = await create.json(); const taskId = cj.data?.taskId || cj.taskId;
+      if (!taskId) throw new Error("KIE 영상 taskId 없음");
+      for (let n = 0; n < 150; n++) {
+        await sleep(2000);
+        const q = await apiFetch(KIE_RECORD + encodeURIComponent(taskId), { headers: { "authorization": "Bearer " + kieKey() } });
+        if (!q.ok) continue;
+        const qj = await q.json(); const st = qj.data?.state;
+        if (st === "success") {
+          let rj = qj.data.resultJson; if (typeof rj === "string") { try { rj = JSON.parse(rj); } catch (e) { rj = {}; } }
+          s.videoUrl = rj.resultUrls?.[0] || rj.result_urls?.[0];
+          if (!s.videoUrl) throw new Error("KIE 영상 결과 URL 없음");
+          saveProject(); render(); toast(`장면 ${i + 1} 영상 완료`); return;
+        }
+        if (st === "fail") throw new Error(qj.data.failMsg || "KIE 영상 생성 실패");
+      }
+      throw new Error("KIE 영상 생성 시간 초과");
+    } catch (e) { toast("영상 실패: " + String(e.message).slice(0, 90)); if (btn) { btn.disabled = false; btn.textContent = "🎞 5초 영상 생성"; } }
+  }
+
+  async function genAllVideos() {
+    if (!confirm("이미지가 준비된 모든 장면을 5초 영상으로 생성할까요? KIE 영상 크레딧이 장면마다 사용됩니다.")) return;
+    for (let i = 0; i < project.scenes.length; i++) if (project.scenes[i].imageRemoteUrl) await genOneVideo(i);
+    toast("전체 영상 변환을 마쳤습니다");
+  }
+
+  // ---- 6. 썸네일 ----
   function renderThumb(body) {
     body.appendChild(el("h2", "prod-h", "썸네일"));
-    body.appendChild(el("p", "prod-sub", "클릭을 부르는 <b>썸네일 카피 4종</b>을 만들고, 고른 카피에 맞춰 <b>썸네일 이미지</b>(글자 들어갈 자리 비움)를 생성합니다. 글자는 캡컷/편집기에서 얹으세요."));
+    body.appendChild(el("p", "prod-sub", "클릭을 부르는 <b>썸네일 카피 4종</b> 중 하나를 고르면, 선택한 문구를 이미지 안에 직접 넣어 <b>4K 썸네일</b>을 생성합니다."));
 
     const t = project.thumb || (project.thumb = { copies: [], chosen: -1, imagePrompt: "", imageDataUrl: "" });
 
@@ -1074,7 +1214,7 @@ ${scenes}`;
         else imgWrap.textContent = "아직 생성 안 됨";
         box.appendChild(imgWrap);
         const acts = el("div", "scene-actions");
-        const gen = el("button", "btn sm btn-primary", t.imageDataUrl ? "다시 생성" : "썸네일 이미지 생성");
+        const gen = el("button", "btn sm btn-primary", t.imageDataUrl ? "↻ 글자 포함 4K 썸네일 다시 생성" : "글자 포함 4K 썸네일 생성");
         gen.onclick = genThumbImage;
         acts.appendChild(gen);
         if (t.imageDataUrl) {
@@ -1106,20 +1246,23 @@ ${scenes}`;
 
 이 영상의 썸네일 카피 4종과 각 이미지 묘사를 만들어줘.${langDirective()}
 규칙:
-- 1,2번은 '좌측 4줄'(한 줄 5~7자, 줄 안에서 의미 완결), 3,4번은 '하단 2줄'(한 줄 12~16자).
+- 참고 스타일은 인기 야담 채널 썸네일이다: 화면 위쪽에 짧은 대사형 한 줄, 왼쪽/중앙에 사건을 압축한 굵은 3줄.
+- topLine: 등장인물이 실제로 말할 법한 짧은 대사·의문·명령(6~12자). 예: "저 돌을 매우쳐라!", "네가 사또라고?"
+- mainLines: 정확히 3줄. 1줄은 구체적 나이/과거/신분, 2줄은 충격 사건, 3줄은 주인공 정체·직업 훅. 각 7~13자.
+- 문장은 설명문보다 압축된 사건형 문구로 쓰고, 조사와 군더더기를 줄인다.
 - 결말·정체·범인을 알 수 없게. 단서는 1~2개만. 뻔한 완료형 '~했다' 금지.
 - 4개의 사건 골격이 서로 달라야 함.
-- imageKo: 감정이 터지는 순간 한 컷(설명적 전신 금지, 얼굴/시선/동작 정점). 밤이어도 얼굴 보이게.
-- imageEn: 위 장면의 영어 이미지 프롬프트(완결 문장 2~3개). ${LANG[project.lang].setting}. 카피 자리(좌측4줄→왼쪽, 하단2줄→아래)를 비운다. 얼굴 잘 보이게, 어둠으로 덮지 않기. 글자/자막/말풍선 절대 없음.
+- imageKo: 밝고 선명한 조선시대 만화 장면. 주인공 얼굴과 행동을 크게, 주변 인물 반응도 보이게. 글자 영역은 왼쪽과 위쪽을 비운다.
+- imageEn: 밝은 전통 만화/웹툰풍, 강한 표정, 선명한 원색, 인물 크게, 사건이 즉시 이해되는 한 컷. ${LANG[project.lang].setting}. 글자/자막/말풍선 없음.
 JSON만:
 {"copies":[
- {"pos":"좌측 4줄","lines":["..","..","..",".."],"imageKo":"..","imageEn":".."},
- {"pos":"좌측 4줄","lines":["..","..","..",".."],"imageKo":"..","imageEn":".."},
- {"pos":"하단 2줄","lines":["..",".."],"imageKo":"..","imageEn":".."},
- {"pos":"하단 2줄","lines":["..",".."],"imageKo":"..","imageEn":".."}
+ {"pos":"인기 야담형","topLine":"짧은 대사","mainLines":["첫째 줄","둘째 줄","셋째 줄"],"imageKo":"..","imageEn":".."},
+ {"pos":"인기 야담형","topLine":"짧은 대사","mainLines":["첫째 줄","둘째 줄","셋째 줄"],"imageKo":"..","imageEn":".."},
+ {"pos":"인기 야담형","topLine":"짧은 대사","mainLines":["첫째 줄","둘째 줄","셋째 줄"],"imageKo":"..","imageEn":".."},
+ {"pos":"인기 야담형","topLine":"짧은 대사","mainLines":["첫째 줄","둘째 줄","셋째 줄"],"imageKo":"..","imageEn":".."}
 ]}`;
       const r = await claudeJSON(sys, usr, 4000);
-      project.thumb = { copies: (r.copies || []).slice(0, 4), chosen: -1, imagePrompt: "", imageDataUrl: "" };
+      project.thumb = { copies: (r.copies || []).slice(0, 4).map((c) => ({ ...c, lines: [c.topLine || "", ...(c.mainLines || [])].filter(Boolean) })), chosen: -1, imagePrompt: "", imageDataUrl: "" };
       saveProject();
       busy = false; render();
     } catch (e) {
@@ -1130,19 +1273,50 @@ JSON만:
   async function genThumbImage() {
     const t = project.thumb;
     if (t.chosen < 0) { toast("카피를 먼저 고르세요"); return; }
+    if (t.imageDataUrl && !confirm("선택한 문구로 4K 썸네일을 다시 생성할까요? KIE 이미지 비용이 다시 발생합니다.")) return;
     const box = $("#thumbImg");
     if (box) { box.innerHTML = ""; box.appendChild(el("div", "spinner")); }
     try {
       const c = t.copies[t.chosen];
+      const copyText = (c.lines || []).join(" / ");
       const prompt = (c.imageEn || c.imageKo || project.title) +
-        " . emotional climax moment, face clearly visible, warm readable lighting, leave empty space for title text. no text, no letters, no captions, no speech bubbles. " + project.style;
+        ` . emotional climax moment with the exact same protagonist identity and clothing as the reference image. Create a finished YouTube thumbnail composition with clean empty space at ${c.pos || "left"} for this title: "${copyText}". Do not draw any letters because the app overlays the exact title after generation. ` +
+        `Fixed protagonist: ${project.character?.profile || ""}. Fixed visual bible: ${project.visualBible || project.style}.`;
       t.imagePrompt = prompt;
-      t.imageDataUrl = await genImage(prompt);
+      const baseImage = await genImage(prompt, { referenceUrls: project.character?.remoteUrl ? [project.character.remoteUrl] : [] });
+      t.imageDataUrl = await overlayThumbnailText(baseImage, c.lines || [], c.pos || "좌측 4줄");
+      t.remoteUrl = imgProvider() === "kie" ? lastKieAssetUrl : "";
       saveProject(); render();
     } catch (e) {
       if (box) { box.innerHTML = ""; box.textContent = "실패"; }
       toast("썸네일 실패: " + (/NO_(GEMINI|KIE)_KEY/.test(String(e.message)) ? "이미지 키 필요" : String(e.message).slice(0, 60)));
     }
+  }
+
+  function overlayThumbnailText(imageUrl, lines, pos) {
+    return new Promise((resolve, reject) => {
+      const img = new Image(); img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas"); canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d"); ctx.drawImage(img, 0, 0);
+        ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.lineJoin = "round";
+        const topLine = String(lines[0] || ""); const mainLines = lines.slice(1, 4).map(String);
+        const drawFitted = (text, x, y, maxWidth, startSize, color) => {
+          let size = startSize;
+          do { ctx.font = `900 ${Math.round(size)}px "Malgun Gothic", "Nanum Myeongjo", sans-serif`; size *= 0.94; } while (ctx.measureText(text).width > maxWidth && size > canvas.height * 0.055);
+          ctx.lineWidth = Math.max(9, size * 0.18); ctx.strokeStyle = "rgba(0,0,0,.96)"; ctx.fillStyle = color;
+          ctx.shadowColor = "rgba(0,0,0,.45)"; ctx.shadowBlur = size * 0.08; ctx.shadowOffsetY = size * 0.06;
+          ctx.strokeText(text, x, y); ctx.fillText(text, x, y); ctx.shadowColor = "transparent";
+        };
+        drawFitted(topLine, canvas.width * 0.34, canvas.height * 0.14, canvas.width * 0.61, canvas.height * 0.075, "#4dff62");
+        const colors = ["#ffe43b", "#ff7a28", "#63e9ff"];
+        const startY = canvas.height * 0.48; const gap = canvas.height * 0.145;
+        mainLines.forEach((line, i) => drawFitted(line, canvas.width * 0.035, startY + i * gap, canvas.width * 0.91, canvas.height * 0.115, colors[i]));
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.onerror = () => reject(new Error("썸네일 글자 합성용 이미지를 불러오지 못했습니다"));
+      img.src = imageUrl;
+    });
   }
 
   // ---- 6. 음성·자막 ----
@@ -1569,6 +1743,8 @@ JSON만: {"image":"...","video":"..."}`;
     });
     files.push({ name: "timeline.csv", bytes: strBytes("\ufeff" + timeline.join("\n")) });
     files.push({ name: "sfx_cues.csv", bytes: strBytes("\ufeff" + sfx.join("\n")) });
+    const videoLinks = project.scenes.map((s, i) => s.videoUrl ? `장면 ${i + 1}: ${s.videoUrl}` : "").filter(Boolean);
+    if (videoLinks.length) files.push({ name: "video_download_links.txt", bytes: strBytes(videoLinks.join("\n")) });
     files.push({ name: "quality_report.txt", bytes: strBytes(projectQA().length ? projectQA().map((x) => "[확인] " + x).join("\n") : "[통과] 필수 제작 자료가 모두 준비되었습니다.") });
     files.push({ name: "script.txt", bytes: strBytes(project.scenes.map((s, i) => `[장면 ${i + 1}${s.isIntro ? " 인트로" : ""} · 줌:${s.zoom || "in"} · ${(s.durationSec || estDur(s.text)).toFixed(1)}초]\n${s.text}`).join("\n\n")) });
     files.push({

@@ -69,8 +69,8 @@
             <label class="field">
               <span class="field-label">이미지 생성 방식</span>
               <select id="prodProvider">
-                <option value="gemini">Google Gemini 직접 (장당 과금)</option>
-                <option value="kie">KIE.ai (크레딧 사용)</option>
+                <option value="kie">KIE.ai · 16:9 4K 고정 (권장)</option>
+                <option value="gemini">Google Gemini 직접 (예비)</option>
               </select>
             </label>
             <div id="geminiFields">
@@ -94,7 +94,7 @@
                 <input type="password" id="prodKieKey" placeholder="KIE API Key" autocomplete="off" />
               </label>
               <label class="field">
-                <span class="field-label">KIE 이미지 모델</span>
+                <span class="field-label">KIE 이미지 모델 <small>(출력은 항상 4K)</small></span>
                 <input type="text" id="prodKieModel" list="kieModelList" placeholder="nano-banana-2" />
                 <datalist id="kieModelList">
                   <option value="nano-banana-2"></option>
