@@ -19,6 +19,7 @@
     inworldVoice: "yeti_inworld_voice",
     inworldModel: "yeti_inworld_model",
     geminiVoice: "yeti_gemini_voice",
+    googleClientId: "yeti_yt_client_id",
     projects: "yeti_projects"
   };
   const INWORLD_TTS_URL = "https://api.inworld.ai/tts/v1/voice";
@@ -1805,6 +1806,7 @@ JSON만: {"image":"...","video":"..."}`;
       $("#prodInworldKey").value = inworldKey();
       $("#prodInworldVoice").value = inworldVoice();
       $("#prodInworldModel").value = inworldModel();
+      if ($("#prodGoogleClientId")) $("#prodGoogleClientId").value = localStorage.getItem(LS.googleClientId) || "";
       if ($("#prodGeminiVoice")) $("#prodGeminiVoice").value = geminiVoice();
     }
   }
@@ -1840,6 +1842,7 @@ JSON만: {"image":"...","video":"..."}`;
       localStorage.setItem(LS.inworld, $("#prodInworldKey").value.trim().replace(/^Basic\s+/i, ""));
       localStorage.setItem(LS.inworldVoice, $("#prodInworldVoice").value.trim());
       localStorage.setItem(LS.inworldModel, $("#prodInworldModel").value || "inworld-tts-2");
+      if ($("#prodGoogleClientId")) localStorage.setItem(LS.googleClientId, $("#prodGoogleClientId").value.trim());
       if ($("#prodGeminiVoice")) localStorage.setItem(LS.geminiVoice, $("#prodGeminiVoice").value);
       $("#prodKeyPanel").hidden = true;
       render();

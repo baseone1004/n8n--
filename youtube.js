@@ -342,6 +342,11 @@
     if (!$("#panel-benchmark")) return;
     syncKeyInputs();
     $("#ytClientId").value = localStorage.getItem(LS_CID) || "";
+    $("#ytClientId").addEventListener("input", () => {
+      localStorage.setItem(LS_CID, $("#ytClientId").value.trim());
+      const settingsInput = $("#prodGoogleClientId");
+      if (settingsInput) settingsInput.value = $("#ytClientId").value.trim();
+    });
     $("#ytQuery").value = localStorage.getItem("yeti_yt_query") || "야담 옛날이야기";
     const savedRegion = localStorage.getItem("yeti_yt_region"); if (savedRegion) $("#ytRegion").value = savedRegion;
     $("#ytChanQuery").value = localStorage.getItem("yeti_yt_chanq") || "야담 옛날이야기";
