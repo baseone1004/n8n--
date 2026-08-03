@@ -134,13 +134,11 @@
             </label>
             <label class="field">
               <span class="field-label">KIE 영상 모델 <small>(인트로 영상 변환)</small></span>
-              <input type="text" id="prodKieVideoModel" list="kieVideoList" placeholder="veo3-fast" />
+              <input type="text" id="prodKieVideoModel" list="kieVideoList" placeholder="veo3_fast" />
               <datalist id="kieVideoList">
-                <option value="veo3-fast"></option>
+                <option value="veo3_fast"></option>
                 <option value="veo3"></option>
-                <option value="kling-v2"></option>
-                <option value="runway-gen3"></option>
-                <option value="sora-2"></option>
+                <option value="veo3_lite"></option>
               </datalist>
             </label>
             <p class="settings-note">💰 이미지 약 15~60원/장 · 영상은 모델별로 수백~수천원/편. <br>⚠ KIE API는 서버용이라 <b>웹주소에선 막힐(CORS)</b> 수 있어요. 그럴 땐 <b>수익분석_켜기.bat</b>(로컬 서버)로 열거나, KIE 웹에서 뽑아 <b>올리기</b>로 넣으세요. 영상 모델 이름은 본인 KIE 계정에서 쓰는 이름으로 넣으세요.</p>
@@ -456,7 +454,7 @@
   <script src="prompts.js"></script>
   <script src="app.js"></script>
   <script src="studio.js"></script>
-  <script src="producer.js?v=project-recovery-20260804"></script>
+  <script src="producer.js?v=kie-veo31-fix-20260804"></script>
   <script src="youtube.js"></script>
 </body>
 </html>

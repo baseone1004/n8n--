@@ -37,6 +37,8 @@
     projects: "yeti_projects"
   };
   const INWORLD_TTS_URL = "https://api.inworld.ai/tts/v1/voice";
+  const KIE_VEO_GENERATE = "https://api.kie.ai/api/v1/veo/generate";
+  const KIE_VEO_STATUS = "https://api.kie.ai/api/v1/veo/record-info";
   const GEMINI_VOICES = [
     ["Kore", "Kore — 차분·기본 (여)"], ["Aoede", "Aoede — 부드러움 (여)"], ["Leda", "Leda — 밝고 또렷 (여)"],
     ["Callirrhoe", "Callirrhoe — 편안함 (여)"], ["Sulafat", "Sulafat — 따뜻함 (여)"], ["Achernar", "Achernar — 또렷 (여)"],
@@ -188,7 +190,10 @@
   // 이미지·영상 생성 API — KIE.ai 전용 (글작성 키와 분리)
   const kieKey = () => localStorage.getItem(LS.kie) || "";
   const kieModel = () => localStorage.getItem(LS.kieModel) || "nano-banana-2";
-  const kieVideoModel = () => localStorage.getItem(LS.kieVideoModel) || "veo3-fast";
+  const kieVideoModel = () => {
+    const model = localStorage.getItem(LS.kieVideoModel) || "veo3_fast";
+    return ({ "veo3-fast": "veo3_fast", "veo3-lite": "veo3_lite" })[model] || model;
+  };
   const imgKeyOk = () => !!kieKey();
   const imgCostWon = () => IMG_COST[kieModel()] || 30;
   const imgCostText = () => `약 <b>${imgCostWon()}원/장</b> (KIE.ai 크레딧 기준 추정)`;
@@ -468,12 +473,50 @@
   }
 
   // ---- KIE 인트로 영상 생성 (이미지→영상 또는 텍스트→영상) ----
+  async function kieVeoTask(prompt, imageUrl) {
+    const key = kieKey();
+    if (!key) throw new Error("NO_KIE_KEY");
+    const body = {
+      prompt,
+      model: kieVideoModel(),
+      aspect_ratio: "16:9",
+      enableFallback: true,
+      enableTranslation: true,
+      generationType: imageUrl ? "FIRST_AND_LAST_FRAMES_2_VIDEO" : "TEXT_2_VIDEO"
+    };
+    if (imageUrl) body.imageUrls = [imageUrl];
+    const created = await apiFetch(KIE_VEO_GENERATE, {
+      method: "POST",
+      headers: { "content-type": "application/json", "authorization": "Bearer " + key },
+      body: JSON.stringify(body)
+    });
+    const cj = await created.json().catch(() => ({}));
+    if (!created.ok || cj.code !== 200 || !cj.data?.taskId) {
+      throw new Error(`KIE ${created.status}: ${cj.msg || "Veo 영상 작업 생성 실패"}`);
+    }
+    const taskId = cj.data.taskId;
+    for (let n = 0; n < 180; n++) {
+      await sleep(2000);
+      const status = await apiFetch(KIE_VEO_STATUS + "?taskId=" + encodeURIComponent(taskId), {
+        headers: { "authorization": "Bearer " + key }
+      });
+      const sj = await status.json().catch(() => ({}));
+      const data = sj.data || {};
+      if (data.successFlag === 1) {
+        const response = data.response || {};
+        const url = response.resultUrls?.[0] || response.originUrls?.[0] || data.resultUrls?.[0];
+        if (!url) throw new Error("KIE 영상 결과 URL 없음");
+        return url;
+      }
+      if (data.successFlag === 2 || data.successFlag === 3) {
+        throw new Error("KIE 영상 실패: " + (data.errorMessage || sj.msg || "다시 시도해주세요"));
+      }
+    }
+    throw new Error("KIE 영상 생성 시간 초과");
+  }
+
   async function genVideoKIE(prompt, imageUrl) {
-    const input = { prompt: prompt, aspect_ratio: "16:9" };
-    // 인트로 이미지가 공개 URL(http)이면 image-to-video 입력으로 넣는다. (data URL은 못 넣음 → 텍스트→영상)
-    if (imageUrl && /^https?:\/\//.test(imageUrl)) { input.image_urls = [imageUrl]; input.image_url = imageUrl; }
-    const url = await kieTask(kieVideoModel(), input, 180); // 영상은 오래 걸림(최대 6분)
-    return url; // 영상은 URL 그대로 사용(미리보기/다운로드)
+    return kieVeoTask(prompt, imageUrl);
   }
 
   // ============ Gemini TTS ============
@@ -2372,7 +2415,7 @@ JSON만: {"video":"..."}`;
       if ($("#prodKieKey")) localStorage.setItem(LS.kie, $("#prodKieKey").value.trim());
       if ($("#prodKieModel")) localStorage.setItem(LS.kieModel, $("#prodKieModel").value.trim() || "nano-banana-2");
       if ($("#prodKieRes")) localStorage.setItem(LS.kieRes, $("#prodKieRes").value);
-      if ($("#prodKieVideoModel")) localStorage.setItem(LS.kieVideoModel, $("#prodKieVideoModel").value.trim() || "veo3-fast");
+      if ($("#prodKieVideoModel")) localStorage.setItem(LS.kieVideoModel, $("#prodKieVideoModel").value.trim() || "veo3_fast");
       const oldInworldVoiceKo = localStorage.getItem(LS.inworldVoiceKo) || "";
       const newInworldVoiceKo = $("#prodInworldVoiceKo") ? $("#prodInworldVoiceKo").value.trim() : oldInworldVoiceKo;
       if ($("#prodInworldKey")) localStorage.setItem(LS.inworld, $("#prodInworldKey").value.trim().replace(/^Basic\s+/i, ""));
