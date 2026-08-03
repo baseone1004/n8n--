@@ -1192,25 +1192,48 @@ ${scenes}`;
       btn.onclick = genThumbCopies;
       body.appendChild(btn);
     } else {
-      body.appendChild(el("div", "field-label", "카피 고르기 (클릭)"));
+      t.copies = t.copies.slice(0, 4).map((c) => ({
+        ...c,
+        lines: (c.lines && c.lines.length ? c.lines : [c.topLine || "", ...(c.mainLines || [])]).filter(Boolean)
+      }));
+      if (t.chosen < 0 || t.chosen >= t.copies.length) t.chosen = 0;
+      body.appendChild(el("div", "field-label", "썸네일 글자 4개 중 하나를 선택하세요"));
       const list = el("div", "topic-list");
       t.copies.forEach((c, i) => {
         const card = el("div", "topic-card" + (t.chosen === i ? " sel" : ""));
-        card.appendChild(el("div", "topic-rank", c.pos || (i < 2 ? "좌측 4줄" : "하단 2줄")));
+        const selectRow = el("label", "thumb-choice");
+        const radio = el("input"); radio.type = "radio"; radio.name = "thumbCopy"; radio.checked = t.chosen === i;
+        radio.onchange = () => { t.chosen = i; t.imageDataUrl = ""; saveDebounced(); render(); };
+        selectRow.appendChild(radio);
+        selectRow.appendChild(el("b", null, `${i + 1}번 썸네일 글자 선택`));
+        card.appendChild(selectRow);
+        card.appendChild(el("div", "topic-rank", t.chosen === i ? "✓ 선택됨" : (c.pos || "인기 야담형")));
         const lines = el("div", "topic-title");
         lines.style.whiteSpace = "pre-line"; lines.style.fontSize = "18px";
         lines.textContent = (c.lines || []).join("\n");
         card.appendChild(lines);
         if (c.imageKo) card.appendChild(el("div", "topic-hook", "🖼 " + esc(c.imageKo)));
-        card.onclick = () => { t.chosen = i; saveDebounced(); render(); };
+        card.onclick = (e) => { if (e.target !== radio) { t.chosen = i; t.imageDataUrl = ""; saveDebounced(); render(); } };
         list.appendChild(card);
       });
       body.appendChild(list);
 
       if (t.chosen >= 0) {
+        const selected = t.copies[t.chosen];
         const box = el("div", "scene");
         box.style.marginTop = "16px";
-        box.appendChild(el("div", "scene-no", "썸네일 이미지"));
+        box.appendChild(el("div", "scene-no", `${t.chosen + 1}번 선택됨 · 썸네일에 넣을 글자`));
+        const copyEdit = el("textarea");
+        copyEdit.value = (selected.lines || []).join("\n");
+        copyEdit.rows = 4;
+        copyEdit.placeholder = "썸네일 문구를 줄마다 입력하세요";
+        copyEdit.oninput = () => {
+          selected.lines = copyEdit.value.split(/\r?\n/).map((v) => v.trim()).filter(Boolean).slice(0, 4);
+          t.imageDataUrl = "";
+          saveDebounced();
+        };
+        box.appendChild(copyEdit);
+        box.appendChild(el("div", "scene-no", "글자가 합성된 썸네일 이미지"));
         const imgWrap = el("div", "scene-img"); imgWrap.style.width = "100%"; imgWrap.style.maxWidth = "480px"; imgWrap.id = "thumbImg";
         if (t.imageDataUrl) { const im = el("img"); im.src = t.imageDataUrl; imgWrap.appendChild(im); }
         else imgWrap.textContent = "아직 생성 안 됨";
@@ -1264,7 +1287,7 @@ JSON만:
  {"pos":"인기 야담형","topLine":"짧은 대사","mainLines":["첫째 줄","둘째 줄","셋째 줄"],"imageKo":"..","imageEn":".."}
 ]}`;
       const r = await claudeJSON(sys, usr, 4000);
-      project.thumb = { copies: (r.copies || []).slice(0, 4).map((c) => ({ ...c, lines: [c.topLine || "", ...(c.mainLines || [])].filter(Boolean) })), chosen: -1, imagePrompt: "", imageDataUrl: "" };
+      project.thumb = { copies: (r.copies || []).slice(0, 4).map((c) => ({ ...c, lines: [c.topLine || "", ...(c.mainLines || [])].filter(Boolean) })), chosen: 0, imagePrompt: "", imageDataUrl: "" };
       saveProject();
       busy = false; render();
     } catch (e) {
@@ -1329,12 +1352,26 @@ JSON만:
       ? "<b>Inworld TTS</b>로 장면 분위기를 분석해 감정·속도를 자동 적용합니다. 실제 음성 길이와 단어 타임스탬프로 자막을 정리합니다."
       : "Inworld <b>Basic API 키와 목소리 ID</b>를 ⚙에 넣으면 장면별 감정·속도를 자동 적용합니다. Gemini 음성과 파일 업로드도 예비 수단으로 사용할 수 있어요."));
 
-    if (!hasInworld) {
-      const kb = el("div", "keybar"); kb.style.marginBottom = "16px";
-      kb.innerHTML = "💡 Inworld API로 자동 생성하려면 Basic 키와 목소리 ID가 필요해요.";
-      const b = el("button", "btn sm btn-primary", "Inworld 설정 입력"); b.onclick = openKeys;
-      kb.appendChild(b); body.appendChild(kb);
-    }
+    const iwSettings = el("div", "scene");
+    iwSettings.style.marginBottom = "16px";
+    iwSettings.appendChild(el("div", "scene-no", "Inworld 음성 설정 · 여기에서 바로 입력"));
+    const iwKeyField = el("label", "field");
+    iwKeyField.appendChild(el("span", "field-label", "Inworld API 키 (Basic/Base64)"));
+    const iwKeyInput = el("input"); iwKeyInput.type = "password"; iwKeyInput.id = "voiceInworldKey"; iwKeyInput.placeholder = "Inworld Portal → API Keys → Basic"; iwKeyInput.value = inworldKey();
+    iwKeyField.appendChild(iwKeyInput); iwSettings.appendChild(iwKeyField);
+    const iwVoiceField = el("label", "field");
+    iwVoiceField.appendChild(el("span", "field-label", "Inworld 목소리 ID"));
+    const iwVoiceInput = el("input"); iwVoiceInput.type = "text"; iwVoiceInput.id = "voiceInworldVoice"; iwVoiceInput.value = inworldVoice();
+    iwVoiceField.appendChild(iwVoiceInput); iwSettings.appendChild(iwVoiceField);
+    const iwSave = el("button", "btn sm btn-primary", "Inworld 설정 저장");
+    iwSave.onclick = () => {
+      localStorage.setItem(LS.inworld, iwKeyInput.value.trim().replace(/^Basic\s+/i, ""));
+      localStorage.setItem(LS.inworldVoice, iwVoiceInput.value.trim() || DEFAULT_INWORLD_VOICE);
+      toast("Inworld 설정을 저장했어요"); render();
+    };
+    iwSettings.appendChild(iwSave);
+    iwSettings.appendChild(el("p", "settings-note", "API 키는 비밀번호처럼 가려져 표시되며 이 브라우저에만 저장됩니다."));
+    body.appendChild(iwSettings);
 
     const pkg = el("div", "pkg");
     project.scenes.forEach((s, i) => {
